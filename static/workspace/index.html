@@ -1,0 +1,1351 @@
+<!-- route: /client/{client_id} | file: static/workspace/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Рабочее пространство — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .panel h2 { font-size: 1.1rem; margin: 0 0 1rem 0; }
+    .card-actions { display: flex; gap: 0.5rem; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); }
+    label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    input, select { width: 100%; max-width: 280px; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    input.error { border-color: var(--error); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .org-tree { padding: 0; margin: 0; }
+    .org-tree .tree-item {
+      margin: 0.35rem 0; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; display: flex; flex-direction: column; gap: 0.25rem;
+    }
+    .org-tree .tree-item > .tree-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .org-tree .tree-item .code { font-weight: 600; color: var(--accent); }
+    .org-tree .tree-item .unit-type { font-size: 0.8rem; color: var(--text-muted); }
+    .org-tree .tree-node { margin: 0.25rem 0 0 0; padding-left: 1rem; border-left: 2px solid var(--border); }
+    .err { font-size: 0.85rem; color: var(--error); margin-top: 0.5rem; }
+    .row-actions { display: flex; gap: 0.35rem; }
+    .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; }
+    .checkbox-group label { display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer; }
+    .checkbox-group input[type=checkbox] { width: auto; max-width: none; }
+    .hidden { display: none !important; }
+    .header-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .org-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .assign-item:hover { background: rgba(124, 58, 237, 0.15); border-color: var(--accent); }
+    .empty-state { padding: 2rem; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; }
+    .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; }
+    .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+    .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
+    .reg-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .reg-card:hover { border-color: var(--accent); }
+    .reg-card .reg-body { flex: 1; min-width: 0; }
+    .reg-card h3 { margin: 0 0 0.35rem 0; font-size: 1rem; }
+    .reg-card .meta { font-size: 0.85rem; color: var(--text-muted); }
+    .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); }
+    .cr-modal-wide .modal-content { max-width: 520px; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a id="topNavRegulations" href="/regulations" class="sidebar-item" title="Общесистемный нормативный реестр">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;margin:-0.35rem 0 0.5rem 0;line-height:1.35;">Просмотр и правки в разрезе <strong>выбранной</strong> организации</div>
+        <a class="sidebar-item active" data-tab="org">Подразделения</a>
+        <a class="sidebar-item" data-tab="positions">Должности</a>
+        <a class="sidebar-item" data-tab="client-regs">Регламенты и KPI</a>
+        <a class="sidebar-item" data-tab="employees">Сотрудники</a>
+        <a class="sidebar-item" data-tab="accounts">Аккаунты</a>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <div class="header-row">
+          <label for="clientSelector" class="meta" style="margin:0;">Организация:</label>
+          <select id="clientSelector" class="client-select" title="Сменить организацию"></select>
+          <button type="button" class="btn btn-primary" id="btnHeaderClientRegs" title="Регламенты и KPI только этой организации (не глобальный шаблон)">Регламенты и KPI</button>
+          <a id="linkGlobalRegs" class="btn btn-secondary" href="/regulations" style="text-decoration:none;font-size:0.88rem;" title="Общесистемный реестр — шаблоны для всех организаций">Глобальные регламенты →</a>
+        </div>
+      </div>
+      <div class="content">
+    <!-- Подразделения -->
+    <div id="panel-org" class="panel active">
+      <h2>Дерево подразделений</h2>
+      <div class="org-actions">
+        <button class="btn btn-primary" id="btnAddOrg">+ Добавить подразделение</button>
+        <button class="btn btn-secondary" id="btnDeployTemplate">Развернуть типовую оргструктуру</button>
+        <a class="btn btn-secondary" id="exportOrgXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
+      </div>
+      <div id="orgTree" style="margin-top: 1rem;"></div>
+    </div>
+
+    <!-- Должности -->
+    <div id="panel-positions" class="panel">
+      <h2>Должности</h2>
+      <p class="meta" style="margin: -0.5rem 0 1rem 0;">Глобальные шаблоны — в <a id="linkRegulationsHint" href="/regulations">глобальном реестре</a> (верх сайдбара). Регламенты и KPI <strong>этой</strong> организации — кнопка <strong>«Регламенты и KPI»</strong> в шапке или пункт с тем же названием в блоке «Организация» слева.</p>
+      <div class="org-actions">
+        <button class="btn btn-primary" id="btnAddPosition">+ Добавить должность</button>
+        <button class="btn btn-secondary" id="btnDeployTemplatePos">Развернуть типовую оргструктуру</button>
+        <a class="btn btn-secondary" id="exportPositionsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
+      </div>
+      <div id="positionsList" style="margin-top: 1rem;"></div>
+    </div>
+
+    <!-- Регламенты организации (клиентские копии) -->
+    <div id="panel-client-regs" class="panel">
+      <h2>Регламенты и KPI организации</h2>
+      <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
+        Здесь только регламенты <strong>выбранной организации</strong> (копии из <a id="crLinkGlobal" href="/regulations">глобального реестра</a> или созданные вручную).
+        Глобальная страница <code>/regulations</code> — общесистемные шаблоны; эта вкладка — ваши редактируемые карточки.
+      </p>
+      <div class="org-actions" style="flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary" id="btnCrCopy">+ Копировать из глобального реестра</button>
+        <input type="search" id="crSearch" placeholder="Поиск по коду, названию…" style="min-width: 200px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" autocomplete="off">
+        <button type="button" class="btn btn-secondary" id="btnCrRefresh">Обновить</button>
+        <a class="btn btn-secondary" id="exportClientRegsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
+      </div>
+      <p id="crListMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
+      <div id="crList" style="margin-top: 0.75rem;"></div>
+    </div>
+
+    <!-- Modal: Assign employee to position -->
+    <div id="modalAssignPosition" class="modal">
+      <div class="modal-content" style="max-width: 480px;">
+        <h3>Назначить сотрудника на должность</h3>
+        <p class="meta" id="assignPositionLabel" style="margin: 0 0 0.75rem 0;"></p>
+        <label>Поиск по ФИО или email</label>
+        <input type="text" id="assignSearch" placeholder="Например: Авросимов" autocomplete="off">
+        <div id="assignSearchResults" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button class="btn btn-secondary" id="btnAssignCancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Сотрудники -->
+    <div id="panel-employees" class="panel">
+      <h2>Сотрудники</h2>
+      <div class="org-actions">
+        <button class="btn btn-primary" id="btnAddEmployee">+ Добавить сотрудника</button>
+        <a class="btn btn-secondary" id="exportEmployeesXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
+        <button class="btn btn-secondary" id="btnImportExcel">Импорт из Excel</button>
+        <input type="text" id="excelSheetName" placeholder="Лист (пусто = первый)" title="Имя листа или номер (1, 2, 3...). Пусто — первый лист." style="width: 150px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
+        <input type="number" id="excelHeaderRow" placeholder="Строка заголовков" title="Номер строки с заголовками (1, 2, 3...). По умолчанию 1." min="1" style="width: 90px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
+      </div>
+      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none">
+      <div id="employeesList" style="margin-top: 1rem;"></div>
+    </div>
+
+    <!-- Аккаунты -->
+    <div id="panel-accounts" class="panel">
+      <h2>Аккаунты</h2>
+      <div class="org-actions">
+      <button class="btn btn-primary" id="btnAddAccount">+ Добавить аккаунт</button>
+      <a class="btn btn-secondary" id="exportAccountsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
+      </div>
+      <div id="accountsList" style="margin-top: 1rem;"></div>
+    </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: Add/Edit Org Unit -->
+  <div id="modalOrg" class="modal">
+    <div class="modal-content">
+      <h3 id="modalOrgTitle">Добавить подразделение</h3>
+      <div class="err hidden" id="modalOrgErr"></div>
+      <label>Код</label>
+      <input type="text" id="orgCode" placeholder="IT">
+      <label>Название</label>
+      <input type="text" id="orgName" placeholder="IT отдел">
+      <label>Родитель</label>
+      <select id="orgParent"><option value="">— Корень —</option></select>
+      <label>Тип</label>
+      <input type="text" id="orgType" placeholder="department">
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnOrgSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnOrgCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Position -->
+  <div id="modalPositionEdit" class="modal">
+    <div class="modal-content">
+      <h3>Редактировать должность</h3>
+      <div class="err hidden" id="modalPositionEditErr"></div>
+      <input type="hidden" id="posEditId">
+      <label>Код</label>
+      <input type="text" id="posEditCode">
+      <label>Название</label>
+      <input type="text" id="posEditName">
+      <label>Подразделение</label>
+      <select id="posEditOrgUnit"></select>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnPositionEditSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnPositionEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Position -->
+  <div id="modalPosition" class="modal">
+    <div class="modal-content">
+      <h3>Добавить должность</h3>
+      <div class="err hidden" id="modalPositionErr"></div>
+      <label>Код</label>
+      <input type="text" id="posCode" placeholder="DEV">
+      <label>Название</label>
+      <input type="text" id="posName" placeholder="Разработчик">
+      <label>Подразделение</label>
+      <select id="posOrgUnit"></select>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnPositionSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnPositionCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Employee -->
+  <div id="modalEmployeeEdit" class="modal">
+    <div class="modal-content">
+      <h3>Редактировать сотрудника</h3>
+      <div class="err hidden" id="modalEmployeeEditErr"></div>
+      <input type="hidden" id="empEditId">
+      <label>Фамилия</label>
+      <input type="text" id="empEditLastName">
+      <label>Имя</label>
+      <input type="text" id="empEditFirstName">
+      <label>Отчество</label>
+      <input type="text" id="empEditMiddleName">
+      <label>Email</label>
+      <input type="email" id="empEditEmail">
+      <label>Подразделение</label>
+      <select id="empEditOrgUnit"><option value="">— Не выбрано —</option></select>
+      <label>Должность</label>
+      <select id="empEditPosition"><option value="">— Не выбрано —</option></select>
+      <label>Статус занятости</label>
+      <select id="empEditStatus">
+        <option value="active">active</option>
+        <option value="planned">planned</option>
+        <option value="inactive">inactive</option>
+        <option value="dismissed">dismissed</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnEmployeeEditSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnEmployeeEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Employee -->
+  <div id="modalEmployee" class="modal">
+    <div class="modal-content">
+      <h3>Добавить сотрудника</h3>
+      <div class="err hidden" id="modalEmployeeErr"></div>
+      <label>Фамилия</label>
+      <input type="text" id="empLastName">
+      <label>Имя</label>
+      <input type="text" id="empFirstName">
+      <label>Отчество</label>
+      <input type="text" id="empMiddleName">
+      <label>Email</label>
+      <input type="email" id="empEmail">
+      <label>Подразделение</label>
+      <select id="empOrgUnit"><option value="">— Не выбрано —</option></select>
+      <label>Должность</label>
+      <select id="empPosition"><option value="">— Не выбрано —</option></select>
+      <label>Статус занятости</label>
+      <select id="empStatus">
+        <option value="active">active</option>
+        <option value="planned">planned</option>
+        <option value="inactive">inactive</option>
+        <option value="dismissed">dismissed</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnEmployeeSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnEmployeeCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Account -->
+  <div id="modalAccountEdit" class="modal">
+    <div class="modal-content">
+      <h3>Редактировать аккаунт</h3>
+      <div class="err hidden" id="modalAccountEditErr"></div>
+      <input type="hidden" id="accEditId">
+      <label>Логин</label>
+      <input type="text" id="accEditLogin">
+      <label>Новый пароль (оставьте пустым, чтобы не менять)</label>
+      <input type="password" id="accEditPassword" placeholder="••••••••">
+      <label>Роли</label>
+      <div class="checkbox-group" id="accEditRoles"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnAccountEditSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnAccountEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Account -->
+  <div id="modalAccount" class="modal">
+    <div class="modal-content">
+      <h3>Добавить аккаунт</h3>
+      <div class="err hidden" id="modalAccountErr"></div>
+      <label>Сотрудник</label>
+      <select id="accEmployee"></select>
+      <label>Логин</label>
+      <input type="text" id="accLogin" placeholder="ivanov">
+      <label>Пароль</label>
+      <input type="password" id="accPassword" placeholder="••••••••">
+      <label>Роли</label>
+      <div class="checkbox-group" id="accRoles"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnAccountSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnAccountCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: копия регламента из глобального реестра -->
+  <div id="modalCrCopy" class="modal cr-modal-wide">
+    <div class="modal-content">
+      <h3>Копировать из глобального реестра</h3>
+      <p class="meta" style="margin-top:0;">Создаётся карточка только для текущей организации; дальше она не синхронизируется с глобальным шаблоном автоматически.</p>
+      <label>Глобальный регламент</label>
+      <select id="crCopySelect" style="width:100%;max-width:none;"></select>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnCrCopyDo">Копировать</button>
+        <button type="button" class="btn btn-secondary" id="btnCrCopyCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: просмотр клиентского регламента -->
+  <div id="modalCrDetail" class="modal">
+    <div class="modal-content" style="max-width: 560px;">
+      <h3 id="crDetailTitle">Регламент</h3>
+      <div id="crDetailBody" style="font-size:0.9rem;"></div>
+      <input type="hidden" id="crDetailId">
+      <div class="modal-actions" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" id="btnCrDetailClose">Закрыть</button>
+        <button type="button" class="btn btn-primary" id="btnCrDetailEdit">Изменить</button>
+        <button type="button" class="btn btn-danger" id="btnCrDetailDelete">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: редактирование клиентского регламента -->
+  <div id="modalCrEdit" class="modal">
+    <div class="modal-content" style="max-width: 520px;">
+      <h3>Редактировать регламент организации</h3>
+      <div class="err hidden" id="crEditErr"></div>
+      <input type="hidden" id="crEditId">
+      <label>Название</label>
+      <input type="text" id="crEditName" style="max-width:none;width:100%;">
+      <label>Цель (кратко)</label>
+      <textarea id="crEditGoal" rows="2" style="width:100%;max-width:none;"></textarea>
+      <label>ЦКП (кратко)</label>
+      <textarea id="crEditCkp" rows="2" style="width:100%;max-width:none;"></textarea>
+      <label>Ссылка на документ</label>
+      <input type="url" id="crEditDoc" style="max-width:none;width:100%;">
+      <label>Папка инструкций (URL)</label>
+      <input type="url" id="crEditFolder" style="max-width:none;width:100%;">
+      <label>Статус</label>
+      <select id="crEditStatus" style="width:100%;max-width:none;">
+        <option value="draft">draft</option>
+        <option value="on_review">on_review</option>
+        <option value="approved">approved</option>
+        <option value="active">active</option>
+        <option value="archived">archived</option>
+      </select>
+      <label>Действует с</label>
+      <input type="date" id="crEditFrom" style="max-width:none;width:100%;">
+      <label>Действует по</label>
+      <input type="date" id="crEditTo" style="max-width:none;width:100%;">
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;"><input type="checkbox" id="crEditCurrent"> Действующий</label>
+      <label>Код владельца (подразделение)</label>
+      <input type="text" id="crEditOwner" placeholder="Необязательно" style="max-width:none;width:100%;">
+      <label>Заметки</label>
+      <textarea id="crEditNotes" rows="2" style="width:100%;max-width:none;"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnCrEditSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="btnCrEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Org Unit -->
+  <div id="modalOrgEdit" class="modal">
+    <div class="modal-content">
+      <h3>Редактировать подразделение</h3>
+      <div class="err hidden" id="modalOrgEditErr"></div>
+      <input type="hidden" id="orgEditId">
+      <label>Код</label>
+      <input type="text" id="orgEditCode">
+      <label>Название</label>
+      <input type="text" id="orgEditName">
+      <label>Родитель</label>
+      <select id="orgEditParent"><option value="">— Корень —</option></select>
+      <label>Тип</label>
+      <input type="text" id="orgEditType">
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnOrgEditSave">Сохранить</button>
+        <button class="btn btn-secondary" id="btnOrgEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    let clientId = '';
+    let orgUnits = [];
+    let orgTreeData = [];
+    let roles = [];
+
+    function getClientId() {
+      const m = window.location.pathname.match(/^\/client\/([^/]+)/);
+      return m ? m[1] : '';
+    }
+
+    async function fetchApi(path, opts = {}) {
+      const r = await fetch(API + path, opts);
+      const text = await r.text();
+      if (!r.ok) {
+        let detail = text;
+        try { const j = JSON.parse(text); detail = j.detail || j.message || text; } catch (_) {}
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      return text ? JSON.parse(text) : null;
+    }
+
+    function showErr(el, msg) {
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+
+    function regulationsUrl() {
+      return clientId ? '/regulations?from_client=' + encodeURIComponent(clientId) : '/regulations';
+    }
+    function updateGlobalRegulationsLinks() {
+      const u = regulationsUrl();
+      ['topNavRegulations', 'linkGlobalRegs'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.href = u;
+      });
+      const hint = document.getElementById('linkRegulationsHint');
+      if (hint) hint.href = u;
+      const crg = document.getElementById('crLinkGlobal');
+      if (crg) crg.href = u;
+    }
+
+    function updateWorkspaceExportLinks() {
+      const q = clientId ? 'client_id=' + encodeURIComponent(clientId) : '';
+      const setHref = (id, path) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.href = clientId ? path + '?' + q : '#';
+      };
+      setHref('exportOrgXlsx', '/api/org-units/export/excel');
+      setHref('exportPositionsXlsx', '/api/positions/export/excel');
+      setHref('exportEmployeesXlsx', '/api/employees/export/excel');
+      setHref('exportAccountsXlsx', '/api/accounts/export/excel');
+    }
+
+    function activateWorkspaceTab(tab) {
+      const path = window.location.pathname;
+      if (tab === 'client-regs') {
+        if (history.replaceState) history.replaceState(null, '', path + '#client-regs');
+      } else if (history.replaceState) {
+        history.replaceState(null, '', path);
+      }
+      document.querySelectorAll('.sidebar-item[data-tab]').forEach(x => {
+        x.classList.toggle('active', x.dataset.tab === tab);
+      });
+      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+      const panel = document.getElementById('panel-' + tab);
+      if (!panel) return;
+      panel.classList.add('active');
+      if (tab === 'org') loadOrgTree();
+      else if (tab === 'positions') loadPositions();
+      else if (tab === 'client-regs') loadClientRegulations();
+      else if (tab === 'employees') loadEmployees();
+      else if (tab === 'accounts') loadAccounts();
+    }
+
+    document.querySelectorAll('.sidebar-item[data-tab]').forEach(t => {
+      t.onclick = (e) => {
+        e.preventDefault();
+        activateWorkspaceTab(t.dataset.tab);
+      };
+    });
+
+    document.getElementById('btnHeaderClientRegs').onclick = () => {
+      if (!clientId) {
+        alert('Выберите организацию в списке выше.');
+        return;
+      }
+      activateWorkspaceTab('client-regs');
+    };
+
+    let clientsList = [];
+    async function loadClientsForSelector() {
+      try {
+        const data = await fetchApi('/clients');
+        clientsList = data.items || [];
+      } catch (_) { clientsList = []; }
+    }
+
+    async function loadClient() {
+      clientId = getClientId();
+      const selEl = document.getElementById('clientSelector');
+      await loadClientsForSelector();
+      const clientExists = clientId && clientsList.some(c => c.id === clientId);
+      if (clientId && !clientExists) {
+        clientId = '';
+        document.querySelector('.main-header').innerHTML = '<p class="err">Организация не найдена. <a href="/clients">← К списку клиентов</a></p>';
+        return;
+      }
+      if (!clientId && clientsList.length) clientId = clientsList[0].id;
+      selEl.innerHTML = clientsList.length ? clientsList.map(c => '<option value="' + c.id + '"' + (c.id === clientId ? ' selected' : '') + '>' + c.name + ' (' + c.code + ')' + '</option>').join('') : '<option value="">Нет организаций</option>';
+      selEl.onchange = () => { window.location.href = '/client/' + selEl.value; };
+      clientId = selEl.value || clientId;
+      updateGlobalRegulationsLinks();
+      updateWorkspaceExportLinks();
+    }
+
+    function renderTree(nodes, level = 0) {
+      if (!nodes || !nodes.length) return '';
+      return nodes.map(n => {
+        const ch = renderTree(n.children || [], level + 1);
+        const actions = '<span class="card-actions" style="margin-left:auto;"><button class="btn btn-sm btn-secondary" data-edit="' + n.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-delete="' + n.id + '">Удалить</button></span>';
+        const label = '<span class="code">' + n.code + '</span> <span>' + n.name + '</span> <span class="unit-type">(' + (n.unit_type || 'department') + ')</span>';
+        const row = '<div class="tree-row">' + label + actions + '</div>';
+        return '<div class="tree-item">' + row + (ch ? '<div class="tree-node">' + ch + '</div>' : '') + '</div>';
+      }).join('');
+    }
+
+    async function loadOrgTree() {
+      const el = document.getElementById('orgTree');
+      try {
+        orgTreeData = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
+        orgUnits = flattenTree(orgTreeData);
+        el.innerHTML = orgTreeData.length ? '<div class="org-tree">' + renderTree(orgTreeData) + '</div>' : '<p class="meta">Нет подразделений</p>';
+        el.querySelectorAll('[data-edit]').forEach(btn => {
+          btn.onclick = () => openEditOrg(btn.dataset.edit);
+        });
+        el.querySelectorAll('[data-delete]').forEach(btn => {
+          btn.onclick = () => deleteOrgUnit(btn.dataset.delete);
+        });
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+
+    function flattenTree(nodes, out = []) {
+      for (const n of nodes || []) {
+        out.push(n);
+        flattenTree(n.children, out);
+      }
+      return out;
+    }
+
+    function fillOrgSelect(sel, excludeId) {
+      const opts = [{ value: '', text: '— Корень —' }];
+      for (const u of orgUnits) {
+        if (u.id !== excludeId) opts.push({ value: u.id, text: u.code + ' — ' + u.name });
+      }
+      sel.innerHTML = opts.map(o => '<option value="' + o.value + '">' + o.text + '</option>').join('');
+    }
+
+    async function deployTemplate() {
+      if (!clientId) return;
+      try {
+        await fetchApi('/org-units/deploy-template?client_id=' + encodeURIComponent(clientId), {
+          method: 'POST'
+        });
+        await loadOrgTree();
+        await loadPositions();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+    document.getElementById('btnDeployTemplate').onclick = deployTemplate;
+    document.getElementById('btnDeployTemplatePos').onclick = deployTemplate;
+
+    document.getElementById('btnAddOrg').onclick = () => {
+      fillOrgSelect(document.getElementById('orgParent'));
+      document.getElementById('orgCode').value = '';
+      document.getElementById('orgName').value = '';
+      document.getElementById('orgType').value = 'department';
+      showErr(document.getElementById('modalOrgErr'), '');
+      document.getElementById('modalOrg').classList.add('show');
+    };
+
+    document.getElementById('btnOrgSave').onclick = async () => {
+      const code = document.getElementById('orgCode').value.trim();
+      const name = document.getElementById('orgName').value.trim();
+      const parentId = document.getElementById('orgParent').value || null;
+      const unitType = document.getElementById('orgType').value.trim() || 'department';
+      const errEl = document.getElementById('modalOrgErr');
+      if (!code || !name) { showErr(errEl, 'Заполните код и название'); return; }
+      try {
+        await fetchApi('/org-units', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId, code, name, parent_id: parentId, unit_type: unitType })
+        });
+        document.getElementById('modalOrg').classList.remove('show');
+        loadOrgTree();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+
+    document.getElementById('btnOrgCancel').onclick = () => document.getElementById('modalOrg').classList.remove('show');
+
+    function openEditOrg(id) {
+      const u = orgUnits.find(x => x.id === id);
+      if (!u) return;
+      document.getElementById('orgEditId').value = id;
+      document.getElementById('orgEditCode').value = u.code;
+      document.getElementById('orgEditName').value = u.name;
+      document.getElementById('orgEditType').value = u.unit_type || 'department';
+      fillOrgSelect(document.getElementById('orgEditParent'), id);
+      const idx = document.getElementById('orgEditParent').options.length;
+      for (let i = 0; i < idx; i++) {
+        const opt = document.getElementById('orgEditParent').options[i];
+        if (opt.value === (u.parent_id || '')) { opt.selected = true; break; }
+      }
+      showErr(document.getElementById('modalOrgEditErr'), '');
+      document.getElementById('modalOrgEdit').classList.add('show');
+    }
+
+    document.getElementById('btnOrgEditSave').onclick = async () => {
+      const id = document.getElementById('orgEditId').value;
+      const code = document.getElementById('orgEditCode').value.trim();
+      const name = document.getElementById('orgEditName').value.trim();
+      const parentId = document.getElementById('orgEditParent').value || null;
+      const unitType = document.getElementById('orgEditType').value.trim() || 'department';
+      const errEl = document.getElementById('modalOrgEditErr');
+      if (!code || !name) { showErr(errEl, 'Заполните код и название'); return; }
+      try {
+        await fetchApi('/org-units/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, name, parent_id: parentId, unit_type: unitType })
+        });
+        document.getElementById('modalOrgEdit').classList.remove('show');
+        loadOrgTree();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+
+    document.getElementById('btnOrgEditCancel').onclick = () => document.getElementById('modalOrgEdit').classList.remove('show');
+
+    async function deleteOrgUnit(id) {
+      if (!confirm('Удалить подразделение?')) return;
+      try {
+        await fetchApi('/org-units/' + id, { method: 'DELETE' });
+        loadOrgTree();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    // Positions
+    async function loadPositions() {
+      await loadEmployeesForSelect();
+      const el = document.getElementById('positionsList');
+      try {
+        const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
+        const items = data.items || [];
+        positionsCache = items;
+        if (!items.length) {
+          el.innerHTML = '<div class="empty-state"><p class="empty-message">Нет должностей.</p><p class="empty-hint">Нажмите «Развернуть типовую оргструктуру» — создастся дерево подразделений и типовые должности.</p></div>';
+          return;
+        }
+        el.innerHTML = '<table><thead><tr><th>Код</th><th>Название</th><th>Подразделение</th><th>Сотрудник</th><th></th></tr></thead><tbody>' +
+          items.map(p => {
+            const ou = orgUnits.find(x => x.id === p.org_unit_id);
+            const emp = employeesCache.find(x => x.position_id === p.id);
+            const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
+            return '<tr><td>' + p.code + '</td><td>' + p.name + '</td><td>' + (ou ? ou.code : p.org_unit_id) + '</td><td>' + empName + '</td><td class="row-actions"><button class="btn btn-sm btn-primary" data-assign-pos="' + p.id + '">Назначить</button><button class="btn btn-sm btn-secondary" data-edit-pos="' + p.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-pos="' + p.id + '">Удалить</button></td></tr>';
+          }).join('') + '</tbody></table>';
+        el.querySelectorAll('[data-assign-pos]').forEach(btn => { btn.onclick = () => openAssignModal(btn.dataset.assignPos); });
+        el.querySelectorAll('[data-edit-pos]').forEach(btn => { btn.onclick = () => openEditPosition(btn.dataset.editPos); });
+        el.querySelectorAll('[data-del-pos]').forEach(btn => { btn.onclick = () => deletePosition(btn.dataset.delPos); });
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+
+    document.getElementById('btnAddPosition').onclick = () => {
+      const sel = document.getElementById('posOrgUnit');
+      sel.innerHTML = orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
+      if (!orgUnits.length) sel.innerHTML = '<option value="">Нет подразделений</option>';
+      document.getElementById('posCode').value = '';
+      document.getElementById('posName').value = '';
+      showErr(document.getElementById('modalPositionErr'), '');
+      document.getElementById('modalPosition').classList.add('show');
+    };
+
+    document.getElementById('btnPositionSave').onclick = async () => {
+      const code = document.getElementById('posCode').value.trim();
+      const name = document.getElementById('posName').value.trim();
+      const orgUnitId = document.getElementById('posOrgUnit').value;
+      const errEl = document.getElementById('modalPositionErr');
+      if (!code || !name || !orgUnitId) { showErr(errEl, 'Заполните все поля'); return; }
+      try {
+        await fetchApi('/positions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId, org_unit_id: orgUnitId, code, name })
+        });
+        document.getElementById('modalPosition').classList.remove('show');
+        loadPositions();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+
+    document.getElementById('btnPositionCancel').onclick = () => document.getElementById('modalPosition').classList.remove('show');
+
+    function openEditPosition(id) {
+      const p = positionsCache.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('posEditId').value = id;
+      document.getElementById('posEditCode').value = p.code;
+      document.getElementById('posEditName').value = p.name;
+      const sel = document.getElementById('posEditOrgUnit');
+      sel.innerHTML = orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
+      sel.value = p.org_unit_id;
+      showErr(document.getElementById('modalPositionEditErr'), '');
+      document.getElementById('modalPositionEdit').classList.add('show');
+    }
+
+    document.getElementById('btnPositionEditSave').onclick = async () => {
+      const id = document.getElementById('posEditId').value;
+      const code = document.getElementById('posEditCode').value.trim();
+      const name = document.getElementById('posEditName').value.trim();
+      const orgUnitId = document.getElementById('posEditOrgUnit').value;
+      const errEl = document.getElementById('modalPositionEditErr');
+      if (!code || !name || !orgUnitId) { showErr(errEl, 'Заполните все поля'); return; }
+      try {
+        await fetchApi('/positions/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, name, org_unit_id: orgUnitId })
+        });
+        document.getElementById('modalPositionEdit').classList.remove('show');
+        await loadPositionsForSelect();
+        loadPositions();
+      } catch (e) { showErr(errEl, e.message); }
+    };
+
+    document.getElementById('btnPositionEditCancel').onclick = () => document.getElementById('modalPositionEdit').classList.remove('show');
+
+    let assignPositionId = null;
+    let assignSearchTimeout = null;
+    function openAssignModal(positionId) {
+      const p = positionsCache.find(x => x.id === positionId);
+      if (!p) return;
+      assignPositionId = positionId;
+      const ou = orgUnits.find(x => x.id === p.org_unit_id);
+      document.getElementById('assignPositionLabel').textContent = p.name + (ou ? ' (' + ou.code + ')' : '');
+      document.getElementById('assignSearch').value = '';
+      document.getElementById('assignSearchResults').innerHTML = '';
+      document.getElementById('modalAssignPosition').classList.add('show');
+      document.getElementById('assignSearch').focus();
+    }
+    async function searchEmployeesForAssign(q) {
+      if (!q || q.length < 2) return [];
+      const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId) + '&search=' + encodeURIComponent(q) + '&limit=20');
+      return data.items || [];
+    }
+    document.getElementById('assignSearch').oninput = async function() {
+      const q = this.value.trim();
+      clearTimeout(assignSearchTimeout);
+      const el = document.getElementById('assignSearchResults');
+      if (q.length < 2) { el.innerHTML = '<p class="meta">Введите минимум 2 символа</p>'; return; }
+      assignSearchTimeout = setTimeout(async () => {
+        try {
+          const items = await searchEmployeesForAssign(q);
+          if (!items.length) { el.innerHTML = '<p class="meta">Ничего не найдено</p>'; return; }
+          el.innerHTML = items.map(e => {
+            const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+            return '<div class="assign-item" data-id="' + e.id + '" style="padding:0.5rem;cursor:pointer;border-radius:6px;border:1px solid var(--border);margin-bottom:0.25rem;">' + name + (e.email ? ' (' + e.email + ')' : '') + '</div>';
+          }).join('');
+          el.querySelectorAll('.assign-item').forEach(div => {
+            div.onclick = () => assignEmployeeToPosition(div.dataset.id);
+          });
+        } catch (err) {
+          el.innerHTML = '<p class="err">' + err.message + '</p>';
+        }
+      }, 300);
+    };
+    async function assignEmployeeToPosition(employeeId) {
+      if (!assignPositionId) return;
+      const p = positionsCache.find(x => x.id === assignPositionId);
+      if (!p) return;
+      try {
+        await fetchApi('/employees/' + employeeId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ org_unit_id: p.org_unit_id, position_id: assignPositionId })
+        });
+        document.getElementById('modalAssignPosition').classList.remove('show');
+        assignPositionId = null;
+        await loadEmployeesForSelect();
+        loadPositions();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+    document.getElementById('btnAssignCancel').onclick = () => {
+      document.getElementById('modalAssignPosition').classList.remove('show');
+      assignPositionId = null;
+    };
+    document.getElementById('modalAssignPosition').addEventListener('click', (e) => {
+      if (e.target.id === 'modalAssignPosition') document.getElementById('modalAssignPosition').classList.remove('show');
+    });
+
+    async function deletePosition(id) {
+      if (!confirm('Удалить должность?')) return;
+      try {
+        await fetchApi('/positions/' + id, { method: 'DELETE' });
+        await loadPositionsForSelect();
+        loadPositions();
+      } catch (e) { alert(e.message); }
+    }
+
+    // Employees
+    async function loadEmployees() {
+      await loadPositionsForSelect();
+      const el = document.getElementById('employeesList');
+      try {
+        const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId));
+        const items = data.items || [];
+        if (!items.length) { el.innerHTML = '<p class="meta">Нет сотрудников</p>'; return; }
+        employeesCache = items;
+        el.innerHTML = '<table><thead><tr><th>ФИО</th><th>Email</th><th>Подразделение</th><th>Должность</th><th></th></tr></thead><tbody>' +
+          items.map(e => {
+            const ou = orgUnits.find(x => x.id === e.org_unit_id);
+            const pos = positionsCache.find(x => x.id === e.position_id);
+            const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+            return '<tr><td>' + name + '</td><td>' + (e.email || '') + '</td><td>' + (ou ? ou.code : '') + '</td><td>' + (pos ? pos.name : '') + '</td><td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-emp="' + e.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-emp="' + e.id + '">Удалить</button></td></tr>';
+          }).join('') + '</tbody></table>';
+        el.querySelectorAll('[data-edit-emp]').forEach(btn => { btn.onclick = () => openEditEmployee(btn.dataset.editEmp); });
+        el.querySelectorAll('[data-del-emp]').forEach(btn => { btn.onclick = () => deleteEmployee(btn.dataset.delEmp); });
+      } catch (err) {
+        el.innerHTML = '<p class="err">' + err.message + '</p>';
+      }
+    }
+
+    let positionsCache = [];
+    async function loadPositionsForSelect() {
+      try {
+        const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
+        positionsCache = data.items || [];
+      } catch (_) { positionsCache = []; }
+    }
+
+    document.getElementById('btnImportExcel').onclick = () => document.getElementById('fileExcel').click();
+    document.getElementById('fileExcel').onchange = async function() {
+      const file = this.files[0];
+      if (!file) return;
+      this.value = '';
+      const sheetVal = (document.getElementById('excelSheetName').value || '').trim();
+      const headerRowVal = parseInt(document.getElementById('excelHeaderRow').value, 10);
+      let url = API + '/employees/import-excel?client_id=' + encodeURIComponent(clientId);
+      if (sheetVal) {
+        const sheetParam = /^\d+$/.test(sheetVal) ? parseInt(sheetVal, 10) : sheetVal;
+        url += '&sheet=' + encodeURIComponent(sheetParam);
+      }
+      if (headerRowVal >= 1) url += '&header_row=' + headerRowVal;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch(url, {
+          method: 'POST',
+          body: fd
+        });
+        const text = await r.text();
+        if (!r.ok) {
+          let msg = text;
+          try { const j = JSON.parse(text); msg = j.detail || j.message || text; } catch (_) {}
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
+        const created = text ? JSON.parse(text) : [];
+        alert('Импортировано: ' + (Array.isArray(created) ? created.length : 0) + ' сотрудников');
+        await loadEmployeesForSelect();
+        loadEmployees();
+      } catch (e) {
+        alert('Ошибка импорта: ' + e.message);
+      }
+    };
+
+    document.getElementById('btnAddEmployee').onclick = async () => {
+      await loadPositionsForSelect();
+      const ouSel = document.getElementById('empOrgUnit');
+      const posSel = document.getElementById('empPosition');
+      ouSel.innerHTML = '<option value="">— Не выбрано —</option>' + orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
+      posSel.innerHTML = '<option value="">— Не выбрано —</option>' + positionsCache.map(p => '<option value="' + p.id + '">' + p.code + ' — ' + p.name + '</option>').join('');
+      document.getElementById('empLastName').value = '';
+      document.getElementById('empFirstName').value = '';
+      document.getElementById('empMiddleName').value = '';
+      document.getElementById('empEmail').value = '';
+      document.getElementById('empStatus').value = 'active';
+      showErr(document.getElementById('modalEmployeeErr'), '');
+      document.getElementById('modalEmployee').classList.add('show');
+    };
+
+    document.getElementById('btnEmployeeSave').onclick = async () => {
+      const lastName = document.getElementById('empLastName').value.trim();
+      const firstName = document.getElementById('empFirstName').value.trim();
+      const middleName = document.getElementById('empMiddleName').value.trim() || null;
+      const email = document.getElementById('empEmail').value.trim() || null;
+      const orgUnitId = document.getElementById('empOrgUnit').value || null;
+      const positionId = document.getElementById('empPosition').value || null;
+      const status = document.getElementById('empStatus').value;
+      const errEl = document.getElementById('modalEmployeeErr');
+      if (!lastName || !firstName) { showErr(errEl, 'Заполните фамилию и имя'); return; }
+      try {
+        await fetchApi('/employees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId, last_name: lastName, first_name: firstName, middle_name: middleName, email, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
+        });
+        document.getElementById('modalEmployee').classList.remove('show');
+        loadEmployees();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+
+    document.getElementById('btnEmployeeCancel').onclick = () => document.getElementById('modalEmployee').classList.remove('show');
+
+    function openEditEmployee(id) {
+      const e = employeesCache.find(x => x.id === id);
+      if (!e) return;
+      document.getElementById('empEditId').value = id;
+      document.getElementById('empEditLastName').value = e.last_name || '';
+      document.getElementById('empEditFirstName').value = e.first_name || '';
+      document.getElementById('empEditMiddleName').value = e.middle_name || '';
+      document.getElementById('empEditEmail').value = e.email || '';
+      document.getElementById('empEditStatus').value = e.employment_status || 'active';
+      const ouSel = document.getElementById('empEditOrgUnit');
+      ouSel.innerHTML = '<option value="">— Не выбрано —</option>' + orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
+      ouSel.value = e.org_unit_id || '';
+      const posSel = document.getElementById('empEditPosition');
+      posSel.innerHTML = '<option value="">— Не выбрано —</option>' + positionsCache.map(p => '<option value="' + p.id + '">' + p.code + ' — ' + p.name + '</option>').join('');
+      posSel.value = e.position_id || '';
+      showErr(document.getElementById('modalEmployeeEditErr'), '');
+      document.getElementById('modalEmployeeEdit').classList.add('show');
+    }
+
+    document.getElementById('btnEmployeeEditSave').onclick = async () => {
+      const id = document.getElementById('empEditId').value;
+      const lastName = document.getElementById('empEditLastName').value.trim();
+      const firstName = document.getElementById('empEditFirstName').value.trim();
+      const middleName = document.getElementById('empEditMiddleName').value.trim() || null;
+      const email = document.getElementById('empEditEmail').value.trim() || null;
+      const orgUnitId = document.getElementById('empEditOrgUnit').value || null;
+      const positionId = document.getElementById('empEditPosition').value || null;
+      const status = document.getElementById('empEditStatus').value;
+      const errEl = document.getElementById('modalEmployeeEditErr');
+      if (!lastName || !firstName) { showErr(errEl, 'Заполните фамилию и имя'); return; }
+      try {
+        await fetchApi('/employees/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ last_name: lastName, first_name: firstName, middle_name: middleName, email, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
+        });
+        document.getElementById('modalEmployeeEdit').classList.remove('show');
+        await loadEmployeesForSelect();
+        loadEmployees();
+      } catch (e) { showErr(errEl, e.message); }
+    };
+
+    document.getElementById('btnEmployeeEditCancel').onclick = () => document.getElementById('modalEmployeeEdit').classList.remove('show');
+
+    async function deleteEmployee(id) {
+      if (!confirm('Удалить сотрудника?')) return;
+      try {
+        await fetchApi('/employees/' + id, { method: 'DELETE' });
+        await loadEmployeesForSelect();
+        loadEmployees();
+      } catch (e) { alert(e.message); }
+    }
+
+    // Accounts
+    let employeesCache = [];
+    async function loadEmployeesForSelect() {
+      try {
+        const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId));
+        employeesCache = data.items || [];
+      } catch (_) { employeesCache = []; }
+    }
+
+    async function loadRoles() {
+      try {
+        roles = await fetchApi('/roles');
+      } catch (_) { roles = []; }
+    }
+
+    async function loadAccounts() {
+      await loadEmployeesForSelect();
+      const el = document.getElementById('accountsList');
+      try {
+        const data = await fetchApi('/accounts?client_id=' + encodeURIComponent(clientId));
+        const items = data.items || [];
+        if (!items.length) { el.innerHTML = '<p class="meta">Нет аккаунтов</p>'; return; }
+        el.innerHTML = '<table><thead><tr><th>Логин</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody>' +
+          items.map(a => {
+            const emp = employeesCache.find(x => x.id === a.employee_id) || { last_name: '', first_name: '' };
+            const name = [emp.last_name, emp.first_name].filter(Boolean).join(' ');
+            return '<tr><td>' + a.login + '</td><td>' + name + '</td><td>' + a.status + '</td><td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-acc="' + a.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-acc="' + a.id + '">Удалить</button></td></tr>';
+          }).join('') + '</tbody></table>';
+        el.querySelectorAll('[data-edit-acc]').forEach(btn => { btn.onclick = () => openEditAccount(btn.dataset.editAcc); });
+        el.querySelectorAll('[data-del-acc]').forEach(btn => { btn.onclick = () => deleteAccount(btn.dataset.delAcc); });
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+
+    document.getElementById('btnAddAccount').onclick = async () => {
+      await loadEmployeesForSelect();
+      const empSel = document.getElementById('accEmployee');
+      empSel.innerHTML = employeesCache.map(e => {
+        const name = [e.last_name, e.first_name].filter(Boolean).join(' ');
+        return '<option value="' + e.id + '">' + name + (e.email ? ' (' + e.email + ')' : '') + '</option>';
+      }).join('');
+      if (!employeesCache.length) empSel.innerHTML = '<option value="">Нет сотрудников</option>';
+      const rolesEl = document.getElementById('accRoles');
+      rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"> ' + r.name + '</label>').join('');
+      document.getElementById('accLogin').value = '';
+      document.getElementById('accPassword').value = '';
+      showErr(document.getElementById('modalAccountErr'), '');
+      document.getElementById('modalAccount').classList.add('show');
+    };
+
+    document.getElementById('btnAccountSave').onclick = async () => {
+      const employeeId = document.getElementById('accEmployee').value;
+      const login = document.getElementById('accLogin').value.trim();
+      const password = document.getElementById('accPassword').value;
+      const roleCodes = Array.from(document.querySelectorAll('#accRoles input:checked')).map(cb => cb.value);
+      const errEl = document.getElementById('modalAccountErr');
+      if (!employeeId || !login || !password) { showErr(errEl, 'Заполните сотрудника, логин и пароль'); return; }
+      try {
+        const enc = await fetchApi('/accounts/encode-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        await fetchApi('/accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_id: employeeId, login, password_hash: enc.password_hash, status: 'active', role_codes: roleCodes })
+        });
+        document.getElementById('modalAccount').classList.remove('show');
+        await loadEmployeesForSelect();
+        loadAccounts();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+
+    document.getElementById('btnAccountCancel').onclick = () => document.getElementById('modalAccount').classList.remove('show');
+
+    async function openEditAccount(id) {
+      try {
+        const acc = await fetchApi('/accounts/' + id);
+        document.getElementById('accEditId').value = id;
+        document.getElementById('accEditLogin').value = acc.login || '';
+        document.getElementById('accEditPassword').value = '';
+        const rolesEl = document.getElementById('accEditRoles');
+        rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"' + (acc.role_codes && acc.role_codes.includes(r.code) ? ' checked' : '') + '> ' + r.name + '</label>').join('');
+        showErr(document.getElementById('modalAccountEditErr'), '');
+        document.getElementById('modalAccountEdit').classList.add('show');
+      } catch (e) { alert(e.message); }
+    }
+
+    document.getElementById('btnAccountEditSave').onclick = async () => {
+      const id = document.getElementById('accEditId').value;
+      const login = document.getElementById('accEditLogin').value.trim();
+      const password = document.getElementById('accEditPassword').value;
+      const roleCodes = Array.from(document.querySelectorAll('#accEditRoles input:checked')).map(cb => cb.value);
+      const errEl = document.getElementById('modalAccountEditErr');
+      if (!login) { showErr(errEl, 'Заполните логин'); return; }
+      try {
+        const body = { login, role_codes: roleCodes };
+        if (password) {
+          const enc = await fetchApi('/accounts/encode-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+          body.password_hash = enc.password_hash;
+        }
+        await fetchApi('/accounts/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        document.getElementById('modalAccountEdit').classList.remove('show');
+        await loadEmployeesForSelect();
+        loadAccounts();
+      } catch (e) { showErr(errEl, e.message); }
+    };
+
+    document.getElementById('btnAccountEditCancel').onclick = () => document.getElementById('modalAccountEdit').classList.remove('show');
+
+    async function deleteAccount(id) {
+      if (!confirm('Удалить аккаунт?')) return;
+      try {
+        await fetchApi('/accounts/' + id, { method: 'DELETE' });
+        await loadEmployeesForSelect();
+        loadAccounts();
+      } catch (e) { alert(e.message); }
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function loadClientRegulations() {
+      const el = document.getElementById('crList');
+      const meta = document.getElementById('crListMeta');
+      if (!clientId) {
+        el.innerHTML = '<p class="meta">Выберите организацию.</p>';
+        if (meta) meta.classList.add('hidden');
+        return;
+      }
+      try {
+        const q = document.getElementById('crSearch').value.trim();
+        let path = '/client-regulations?client_id=' + encodeURIComponent(clientId) + '&limit=500';
+        if (q) path += '&search=' + encodeURIComponent(q);
+        const data = await fetchApi(path);
+        const items = data.items || [];
+        if (meta) {
+          meta.textContent = 'Записей: ' + (data.total != null ? data.total : items.length);
+          meta.classList.remove('hidden');
+        }
+        if (!items.length) {
+          el.innerHTML = '<p class="meta">Нет регламентов организации. Нажмите «Копировать из глобального реестра» или используйте API <code>POST /api/client-regulations</code>.</p>';
+          return;
+        }
+        el.innerHTML = items.map(r => {
+          const g = r.global_regulation_code
+            ? '<span class="badge-g" title="Историческая связь с глобальным шаблоном">глоб. ' + escapeHtml(r.global_regulation_code) + '</span>'
+            : '<span class="badge-g">своя карточка</span>';
+          return '<div class="reg-card">' +
+            '<div class="reg-body">' +
+            '<h3>' + escapeHtml(r.regulation_name) + '</h3>' +
+            '<div class="meta">' + escapeHtml(r.regulation_code) + ' · ' + escapeHtml(r.position_code) + ' / ' + escapeHtml(r.dept_type_code) + ' · v' + escapeHtml(String(r.version_no)) + ' ' + g + '</div>' +
+            '</div>' +
+            '<div class="row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + r.id + '">Открыть</button>' +
+            '</div></div>';
+        }).join('');
+        el.querySelectorAll('.cr-open').forEach(b => { b.onclick = () => openCrDetail(b.dataset.id); });
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    async function openCrDetail(id) {
+      try {
+        const r = await fetchApi('/client-regulations/' + encodeURIComponent(id));
+        document.getElementById('crDetailId').value = id;
+        document.getElementById('crDetailTitle').textContent = r.regulation_name;
+        let html = '<p class="meta">' + escapeHtml(r.regulation_code) + ' · ' + escapeHtml(r.position_code) + ' / ' + escapeHtml(r.dept_type_code) + ' · v' + escapeHtml(String(r.version_no)) + '</p>';
+        if (r.global_regulation_code) {
+          html += '<p><strong>Источник (глобальный шаблон):</strong> ' + escapeHtml(r.global_regulation_code) + '</p>';
+        } else {
+          html += '<p><strong>Источник:</strong> создано для организации (без копирования из глобального реестра).</p>';
+        }
+        html += '<p><strong>Статус:</strong> ' + escapeHtml(r.status) + (r.is_current ? ' <span style="color:var(--success)">действующий</span>' : '') + '</p>';
+        if (r.goal_summary) html += '<p>' + escapeHtml(r.goal_summary) + '</p>';
+        if (r.ckp_short) html += '<p><strong>ЦКП:</strong> ' + escapeHtml(r.ckp_short) + '</p>';
+        if (r.google_doc_url) html += '<p><a href="' + escapeHtml(r.google_doc_url) + '" target="_blank" rel="noopener">Документ</a></p>';
+        if (r.kpis && r.kpis.length) {
+          html += '<p><strong>KPI</strong></p><ul>';
+          r.kpis.forEach(k => { html += '<li>' + escapeHtml(k.kpi_code) + (k.target_value != null ? ' — ' + k.target_value : '') + '</li>'; });
+          html += '</ul>';
+        }
+        if (r.instructions && r.instructions.length) {
+          html += '<p><strong>Инструкции</strong></p><ul>';
+          r.instructions.forEach(i => {
+            html += '<li>' + (i.instruction_url ? '<a href="' + escapeHtml(i.instruction_url) + '" target="_blank">' + escapeHtml(i.instruction_name) + '</a>' : escapeHtml(i.instruction_name)) + '</li>';
+          });
+          html += '</ul>';
+        }
+        document.getElementById('crDetailBody').innerHTML = html;
+        document.getElementById('modalCrDetail').classList.add('show');
+      } catch (e) { alert(e.message); }
+    }
+
+    async function openCrCopyModal() {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      const sel = document.getElementById('crCopySelect');
+      sel.innerHTML = '<option value="">— загрузка —</option>';
+      document.getElementById('modalCrCopy').classList.add('show');
+      try {
+        const data = await fetchApi('/regulations?limit=500');
+        sel.innerHTML = '<option value="">— выберите глобальный регламент —</option>';
+        (data.items || []).forEach(x => {
+          const opt = document.createElement('option');
+          opt.value = x.regulation_code;
+          opt.textContent = x.regulation_name + ' (' + x.regulation_code + ')';
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        sel.innerHTML = '<option value="">Ошибка</option>';
+        alert(e.message);
+      }
+    }
+
+    function closeCrModals() {
+      document.getElementById('modalCrCopy').classList.remove('show');
+      document.getElementById('modalCrDetail').classList.remove('show');
+      document.getElementById('modalCrEdit').classList.remove('show');
+      showErr(document.getElementById('crEditErr'), '');
+    }
+
+    document.getElementById('btnCrCopy').onclick = openCrCopyModal;
+    document.getElementById('btnCrCopyCancel').onclick = closeCrModals;
+    document.getElementById('btnCrRefresh').onclick = loadClientRegulations;
+    document.getElementById('crSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loadClientRegulations(); }
+    });
+    document.getElementById('btnCrCopyDo').onclick = async () => {
+      const code = document.getElementById('crCopySelect').value;
+      if (!code) { alert('Выберите регламент'); return; }
+      try {
+        await fetchApi('/client-regulations/copy-from-global', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId, global_regulation_code: code }),
+        });
+        closeCrModals();
+        await loadClientRegulations();
+      } catch (e) { alert(e.message); }
+    };
+    document.getElementById('btnCrDetailClose').onclick = closeCrModals;
+    document.getElementById('btnCrDetailEdit').onclick = async () => {
+      const id = document.getElementById('crDetailId').value;
+      if (!id) return;
+      try {
+        const r = await fetchApi('/client-regulations/' + encodeURIComponent(id));
+        document.getElementById('crEditId').value = id;
+        document.getElementById('crEditName').value = r.regulation_name || '';
+        document.getElementById('crEditGoal').value = r.goal_summary || '';
+        document.getElementById('crEditCkp').value = r.ckp_short || '';
+        document.getElementById('crEditDoc').value = r.google_doc_url || '';
+        document.getElementById('crEditFolder').value = r.instructions_folder_url || '';
+        document.getElementById('crEditStatus').value = r.status || 'draft';
+        document.getElementById('crEditFrom').value = r.effective_from ? String(r.effective_from).slice(0, 10) : '';
+        document.getElementById('crEditTo').value = r.effective_to ? String(r.effective_to).slice(0, 10) : '';
+        document.getElementById('crEditCurrent').checked = !!r.is_current;
+        document.getElementById('crEditOwner').value = r.owner_unit_code || '';
+        document.getElementById('crEditNotes').value = r.notes || '';
+        showErr(document.getElementById('crEditErr'), '');
+        document.getElementById('modalCrDetail').classList.remove('show');
+        document.getElementById('modalCrEdit').classList.add('show');
+      } catch (e) { alert(e.message); }
+    };
+    document.getElementById('btnCrEditCancel').onclick = () => {
+      document.getElementById('modalCrEdit').classList.remove('show');
+    };
+    document.getElementById('btnCrEditSave').onclick = async () => {
+      const id = document.getElementById('crEditId').value;
+      const errEl = document.getElementById('crEditErr');
+      const name = document.getElementById('crEditName').value.trim();
+      if (!name) { showErr(errEl, 'Укажите название'); return; }
+      const body = {
+        regulation_name: name,
+        goal_summary: document.getElementById('crEditGoal').value.trim() || null,
+        ckp_short: document.getElementById('crEditCkp').value.trim() || null,
+        google_doc_url: document.getElementById('crEditDoc').value.trim() || null,
+        instructions_folder_url: document.getElementById('crEditFolder').value.trim() || null,
+        status: document.getElementById('crEditStatus').value,
+        effective_from: document.getElementById('crEditFrom').value || null,
+        effective_to: document.getElementById('crEditTo').value || null,
+        is_current: document.getElementById('crEditCurrent').checked,
+        owner_unit_code: document.getElementById('crEditOwner').value.trim() || null,
+        notes: document.getElementById('crEditNotes').value.trim() || null,
+      };
+      try {
+        await fetchApi('/client-regulations/' + encodeURIComponent(id), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        document.getElementById('modalCrEdit').classList.remove('show');
+        await loadClientRegulations();
+      } catch (e) { showErr(errEl, e.message); }
+    };
+    document.getElementById('btnCrDetailDelete').onclick = async () => {
+      const id = document.getElementById('crDetailId').value;
+      if (!id || !confirm('Удалить регламент организации и связанные KPI/инструкции?')) return;
+      try {
+        await fetchApi('/client-regulations/' + encodeURIComponent(id), { method: 'DELETE' });
+        closeCrModals();
+        await loadClientRegulations();
+      } catch (e) { alert(e.message); }
+    };
+    document.getElementById('modalCrCopy').addEventListener('click', (e) => { if (e.target.id === 'modalCrCopy') closeCrModals(); });
+    document.getElementById('modalCrDetail').addEventListener('click', (e) => { if (e.target.id === 'modalCrDetail') closeCrModals(); });
+    document.getElementById('modalCrEdit').addEventListener('click', (e) => { if (e.target.id === 'modalCrEdit') document.getElementById('modalCrEdit').classList.remove('show'); });
+
+    document.getElementById('exportClientRegsXlsx').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!clientId) {
+        alert('Выберите организацию.');
+        return;
+      }
+      const p = new URLSearchParams({ client_id: clientId });
+      const sq = (document.getElementById('crSearch') && document.getElementById('crSearch').value || '').trim();
+      if (sq) p.set('search', sq);
+      window.location.href = '/api/client-regulations/export/excel?' + p.toString();
+    });
+
+    // Init
+    (async () => {
+      clientId = getClientId();
+      await loadClient();
+      await loadRoles();
+      if (clientId) {
+        await loadOrgTree();
+        await loadPositionsForSelect();
+        await loadEmployeesForSelect();
+        const h = (location.hash || '').replace(/^#/, '');
+        if (h === 'client-regs') activateWorkspaceTab('client-regs');
+      }
+    })();
+  </script>
+</body>
+</html>

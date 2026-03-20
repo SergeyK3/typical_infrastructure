@@ -1,0 +1,262 @@
+<!-- route: /clients | file: static/clients/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Клиенты — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .card:hover { border-color: var(--accent); }
+    .card-body { flex: 1; min-width: 0; }
+    .card-body a { text-decoration: none; color: inherit; display: block; }
+    .card-body a:hover { color: var(--accent); }
+    .card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+    .card .meta { font-size: 0.85rem; color: var(--text-muted); }
+    .card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .card-actions .btn { padding: 0.35rem 0.75rem; font-size: 0.85rem; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
+    .btn-danger:hover { background: rgba(248,81,73,0.35); }
+    .empty-state { padding: 2rem; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; }
+    .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; } .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+    .empty-hint a { color: var(--accent); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
+    .modal-content h3 { margin: 0 0 1rem 0; font-size: 1.1rem; }
+    .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
+    .modal-actions .btn { flex: 1; }
+    .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .header-row .btn { flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item active">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item" title="Общесистемный реестр">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Нажмите на карточку клиента — в рабочем пространстве доступны подразделения, должности и регламенты этой организации.</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <div class="header-row">
+          <div>
+            <h1>Клиенты (организации)</h1>
+            <p class="subtitle">Организации — владельцы типовой инфраструктуры</p>
+          </div>
+          <button type="button" class="btn btn-primary" id="btnCreate">Создать</button>
+        </div>
+      </div>
+      <div class="content">
+        <div id="list"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <h3>Создать организацию</h3>
+      <label>Код</label>
+      <input type="text" id="createCode" maxlength="64" placeholder="Например: myorg" />
+      <label>Название</label>
+      <input type="text" id="createName" maxlength="256" placeholder="Название организации" />
+      <label>БИН</label>
+      <input type="text" id="createBin" maxlength="32" placeholder="Необязательно" />
+      <label>Статус</label>
+      <select id="createStatus">
+        <option value="active">active</option>
+        <option value="inactive">inactive</option>
+      </select>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancelCreate">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnSaveCreate">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <h3>Изменить организацию</h3>
+      <input type="hidden" id="editClientId" />
+      <label>Код</label>
+      <input type="text" id="editCode" maxlength="64" />
+      <label>Название</label>
+      <input type="text" id="editName" maxlength="256" />
+      <label>БИН</label>
+      <input type="text" id="editBin" maxlength="32" />
+      <label>Статус</label>
+      <select id="editStatus">
+        <option value="active">active</option>
+        <option value="inactive">inactive</option>
+      </select>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancelEdit">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnSaveEdit">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    async function fetchApi(path, opts = {}) {
+      const r = await fetch(API + path, {
+        method: opts.method || 'GET',
+        headers: opts.headers || {},
+        body: opts.body,
+      });
+      const text = await r.text();
+      if (!r.ok) {
+        let msg = String(r.status);
+        try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch (_) {}
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      }
+      return text ? JSON.parse(text) : null;
+    }
+    async function loadClients() {
+      const list = document.getElementById('list');
+      try {
+        const data = await fetchApi('/clients');
+        const items = data.items || [];
+        if (!items.length) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <p class="empty-message">Нет организаций.</p>
+              <p class="empty-hint">Создать через <a href="/wizard">мастер onboarding</a></p>
+            </div>`;
+          return;
+        }
+        list.innerHTML = items.map(c => `
+          <div class="card" data-id="${c.id}">
+            <div class="card-body">
+              <a href="/client/${c.id}" target="_blank" rel="noopener noreferrer">
+                <h3>${c.name}</h3>
+                <div class="meta">Код: ${c.code} · Статус: ${c.status || 'active'} · Войти в организацию →</div>
+              </a>
+            </div>
+            <div class="card-actions">
+              <button type="button" class="btn btn-secondary btn-edit" data-id="${c.id}">Изменить</button>
+              <button type="button" class="btn btn-danger btn-delete" data-id="${c.id}">Удалить</button>
+            </div>
+          </div>
+        `).join('');
+        list.querySelectorAll('.btn-edit').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.id); });
+        });
+        list.querySelectorAll('.btn-delete').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); deleteClient(btn.dataset.id); });
+        });
+      } catch (e) {
+        list.innerHTML = '<p class="err">Ошибка загрузки: ' + (e.message || 'Неизвестная ошибка') + '. <a href="/clients">Обновить</a></p>';
+      }
+    }
+    function openEditModal(clientId) {
+      fetchApi('/clients/' + clientId).then(c => {
+        document.getElementById('editClientId').value = c.id;
+        document.getElementById('editCode').value = c.code || '';
+        document.getElementById('editName').value = c.name || '';
+        document.getElementById('editBin').value = c.bin || '';
+        document.getElementById('editStatus').value = c.status || 'active';
+        document.getElementById('editModal').classList.add('show');
+      }).catch(e => alert('Ошибка: ' + e.message));
+    }
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+    async function saveEdit() {
+      const id = document.getElementById('editClientId').value;
+      const payload = {
+        code: document.getElementById('editCode').value.trim(),
+        name: document.getElementById('editName').value.trim(),
+        bin: document.getElementById('editBin').value.trim() || null,
+        status: document.getElementById('editStatus').value,
+      };
+      if (!payload.code || !payload.name) {
+        alert('Код и название обязательны');
+        return;
+      }
+      try {
+        await fetchApi('/clients/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        closeEditModal();
+        loadClients();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+    function openCreateModal() {
+      document.getElementById('createCode').value = '';
+      document.getElementById('createName').value = '';
+      document.getElementById('createBin').value = '';
+      document.getElementById('createStatus').value = 'active';
+      document.getElementById('createModal').classList.add('show');
+    }
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.remove('show');
+    }
+    async function saveCreate() {
+      const payload = {
+        code: document.getElementById('createCode').value.trim(),
+        name: document.getElementById('createName').value.trim(),
+        bin: document.getElementById('createBin').value.trim() || null,
+        status: document.getElementById('createStatus').value,
+      };
+      if (!payload.code || !payload.name) {
+        alert('Код и название обязательны');
+        return;
+      }
+      try {
+        await fetchApi('/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        closeCreateModal();
+        loadClients();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+    async function deleteClient(clientId) {
+      if (!confirm('Удалить организацию? Все данные (подразделения, сотрудники, аккаунты) будут удалены.')) return;
+      try {
+        await fetchApi('/clients/' + clientId, { method: 'DELETE' });
+        loadClients();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+    document.getElementById('btnCreate').onclick = openCreateModal;
+    document.getElementById('btnCancelCreate').onclick = closeCreateModal;
+    document.getElementById('btnSaveCreate').onclick = saveCreate;
+    document.getElementById('createModal').addEventListener('click', (e) => {
+      if (e.target.id === 'createModal') closeCreateModal();
+    });
+    document.getElementById('btnCancelEdit').onclick = closeEditModal;
+    document.getElementById('btnSaveEdit').onclick = saveEdit;
+    document.getElementById('editModal').addEventListener('click', (e) => {
+      if (e.target.id === 'editModal') closeEditModal();
+    });
+    loadClients();
+  </script>
+</body>
+</html>

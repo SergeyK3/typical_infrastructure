@@ -1,0 +1,770 @@
+<!-- route: /regulations | file: static/regulations/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Регламенты должностей — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .card:hover { border-color: var(--accent); }
+    .card-body { flex: 1; min-width: 0; }
+    .card-body a { text-decoration: none; color: inherit; display: block; }
+    .card-body a:hover { color: var(--accent); }
+    .card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+    .card .meta { font-size: 0.85rem; color: var(--text-muted); }
+    .card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .card-actions .btn { padding: 0.35rem 0.75rem; font-size: 0.85rem; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); }
+    .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
+    .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+    .filters select { padding: 0.4rem 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+    .filters .search-row { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.25rem; }
+    .filters input[type="search"], .filters input.search-input {
+      flex: 1 1 220px; min-width: 180px; max-width: 420px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;
+    }
+    .catalog-note { font-size: 0.88rem; color: var(--text-muted); margin: 0.35rem 0 0 0; max-width: 52rem; line-height: 1.45; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; overflow: auto; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; }
+    .modal-content.wide { max-width: 640px; }
+    .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; box-sizing: border-box; }
+    .modal-content textarea { min-height: 72px; resize: vertical; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
+    .btn-danger:hover { background: rgba(248,81,73,0.35); }
+    .toolbar-top { margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .modal-content h3 { margin: 0 0 1rem 0; font-size: 1.1rem; }
+    .modal-content .section { margin-top: 1rem; }
+    .modal-content .section-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .modal-content ul { margin: 0; padding-left: 1.25rem; }
+    .modal-content a { color: var(--accent); }
+    .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .header-row .btn { flex-shrink: 0; }
+    .hidden { display: none !important; }
+    /* Просмотр регламента: акцент на «Закрыть», остальное справа и спокойнее */
+    .detail-modal-footer {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .detail-modal-footer-actions { display: flex; gap: 0.4rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+    .btn-detail-quiet {
+      padding: 0.3rem 0.55rem;
+      font-size: 0.78rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 400;
+    }
+    .btn-detail-quiet:hover { color: var(--text); border-color: var(--text-muted); background: var(--surface-hover); }
+    .btn-detail-quiet-danger {
+      padding: 0.3rem 0.55rem;
+      font-size: 0.78rem;
+      background: transparent;
+      border: 1px solid rgba(248,81,73,0.2);
+      color: rgba(248,81,73,0.75);
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 400;
+    }
+    .btn-detail-quiet-danger:hover { color: var(--error); border-color: rgba(248,81,73,0.45); background: rgba(248,81,73,0.08); }
+    /* Один календарь — встроенный у type=date; на тёмном фоне значок в Chrome делаем заметнее */
+    .modal-content input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.85;
+      filter: invert(0.85);
+    }
+    .modal-content input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item active">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+        <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Регламенты и KPI конкретной организации — в <a href="/clients">рабочем пространстве</a> (вкладка «Регламенты и KPI»).</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div id="fromOrgBanner" class="hidden" style="margin: 0 1.5rem; padding: 0.75rem 1rem; background: rgba(124,58,237,0.15); border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;">
+        <div>
+          <a id="backToOrg" href="/clients" style="color: var(--accent); font-weight: 600;">← Вернуться в выбранную организацию</a>
+          <span class="meta" style="margin-left: 0.75rem;">(рабочее пространство организации)</span>
+        </div>
+        <p class="meta" style="margin: 0.6rem 0 0 0; font-size: 0.88rem; line-height: 1.45; max-width: 52rem;">
+          Сейчас открыт <strong>глобальный</strong> реестр (один на всю систему). Ссылка «вернуться» ведёт в рабочее пространство организации: там кнопка <strong>«Регламенты и KPI»</strong> в шапке или одноимённый пункт в блоке <strong>«Организация»</strong> — ваши карточки и KPI.
+        </p>
+      </div>
+      <div class="main-header">
+        <div class="header-row">
+          <div>
+            <h1>Регламенты должностей</h1>
+            <p class="subtitle">Общесистемный нормативный реестр карточек должностей (один на все организации). KPI и инструкции — в карточке.</p>
+            <p class="catalog-note">Перед созданием нового регламента воспользуйтесь поиском по коду, названию, должности или типу подразделения — так проще не дублировать уже заведённые записи.</p>
+            <p class="catalog-note" style="border-left: 3px solid var(--accent); padding-left: 0.75rem;"><strong>Где регламенты организации?</strong> Здесь только <strong>глобальные</strong> шаблоны. Откройте <code>/client/…</code> → кнопка <strong>«Регламенты и KPI»</strong> рядом с выбором организации или тот же пункт в блоке <strong>«Организация»</strong> слева (копирование из этого реестра — кнопка «Копировать из глобального»).</p>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="toolbar-top">
+          <button type="button" class="btn btn-primary" id="btnCreate">+ Создать регламент</button>
+          <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка с учётом фильтров ниже">Скачать Excel</button>
+        </div>
+        <div class="filters">
+          <div class="search-row">
+            <label for="filterSearch" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Поиск по реестру:</label>
+            <input type="search" id="filterSearch" class="search-input" placeholder="Код, название, должность, тип подразделения, фрагмент цели…" autocomplete="off" title="Общесистемный справочник — все организации видят одни и те же регламенты" />
+            <button type="button" class="btn btn-secondary btn-sm" id="btnApply">Найти / применить фильтры</button>
+          </div>
+          <label>Должность:</label>
+          <select id="filterPosition">
+            <option value="">— все —</option>
+          </select>
+          <label>Тип подразделения:</label>
+          <select id="filterDept">
+            <option value="">— все —</option>
+          </select>
+          <label>Статус:</label>
+          <select id="filterStatus">
+            <option value="">— все —</option>
+            <option value="draft">draft</option>
+            <option value="on_review">on_review</option>
+            <option value="approved">approved</option>
+            <option value="active">active</option>
+            <option value="archived">archived</option>
+          </select>
+          <label><input type="checkbox" id="filterCurrent" /> Только действующие</label>
+        </div>
+        <p id="listMeta" class="meta hidden" style="margin: -0.25rem 0 0.75rem 0;"></p>
+        <div id="list"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="detailModal" class="modal">
+    <div class="modal-content">
+      <h3 id="detailTitle">Регламент</h3>
+      <div id="detailBody"></div>
+      <input type="hidden" id="detailCode" />
+      <div class="detail-modal-footer">
+        <button type="button" class="btn btn-primary" id="detailBtnClose">Закрыть</button>
+        <div class="detail-modal-footer-actions">
+          <button type="button" class="btn-detail-quiet" id="detailBtnEdit">Изменить</button>
+          <button type="button" class="btn-detail-quiet-danger" id="detailBtnDelete">Удалить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="formModal" class="modal">
+    <div class="modal-content wide">
+      <h3 id="formTitle">Регламент</h3>
+      <div class="err hidden" id="formErr" style="color: var(--error); margin-bottom: 0.5rem;"></div>
+      <div id="formFieldsCreate">
+        <label>Код регламента *</label>
+        <input type="text" id="f_regulation_code" maxlength="64" placeholder="REG_MY_POSITION_V1" title="Уникален в общесистемном реестре; перед вводом проверьте поиск на странице" />
+        <p class="meta hidden" id="f_regulation_code_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;"></p>
+        <label>Код должности (справочник) *</label>
+        <select id="f_position_code"></select>
+        <label>Тип подразделения *</label>
+        <input type="text" id="f_dept_type_code" maxlength="32" placeholder="HR, SALES, IT" />
+        <label>Версия *</label>
+        <input type="text" id="f_version_no" maxlength="16" placeholder="1" />
+      </div>
+      <label>Название *</label>
+      <input type="text" id="f_regulation_name" maxlength="256" />
+      <label>Цель (кратко)</label>
+      <textarea id="f_goal_summary" maxlength="512"></textarea>
+      <label>ЦКП (кратко)</label>
+      <textarea id="f_ckp_short" maxlength="512"></textarea>
+      <label>ЦКП (полный текст)</label>
+      <textarea id="f_ckp_full"></textarea>
+      <label>Ссылка на документ (Google Doc и т.п.)</label>
+      <input type="url" id="f_google_doc_url" maxlength="512" placeholder="Вставьте в поле ссылку на гугл документ" />
+      <label>Папка с инструкциями (URL)</label>
+      <input type="url" id="f_instructions_folder_url" maxlength="512" placeholder="Например, папка Google Drive с файлами инструкций" />
+      <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Общий адрес папки, где хранятся должностные инструкции (отдельные ссылки — в блоке «Инструкции» при просмотре).</p>
+      <label>Статус</label>
+      <select id="f_status">
+        <option value="draft">draft</option>
+        <option value="on_review">on_review</option>
+        <option value="approved">approved</option>
+        <option value="active">active</option>
+        <option value="archived">archived</option>
+      </select>
+      <label for="f_effective_from">Действует с</label>
+      <input type="date" id="f_effective_from" autocomplete="off" />
+      <label for="f_effective_to">Действует по</label>
+      <input type="date" id="f_effective_to" autocomplete="off" />
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;"><input type="checkbox" id="f_is_current" /> Действующий</label>
+      <div id="formOwnerOrgBlock" class="hidden" aria-hidden="true">
+        <label>Организация (дерево подразделений)</label>
+        <select id="f_owner_client_id" title="Подразделения загружаются для выбранной организации"></select>
+        <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Сначала выберите организацию — затем подразделение или секцию в списке ниже.</p>
+        <label>Владелец: подразделение / секция</label>
+        <select id="f_owner_org_select" title="Иерархия как в организации"></select>
+        <label class="meta" style="margin-top:0.5rem;">Код вручную (если нет в списке)</label>
+        <input type="text" id="f_owner_unit_code_manual" maxlength="64" placeholder="Необязательно, перезапишет выбор выше" />
+      </div>
+      <label>Заметки</label>
+      <textarea id="f_notes" maxlength="512"></textarea>
+      <div class="modal-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary" id="formBtnSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="formBtnCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const p = new URLSearchParams(location.search);
+      const fc = p.get('from_client');
+      if (fc) {
+        const b = document.getElementById('fromOrgBanner');
+        const a = document.getElementById('backToOrg');
+        if (b && a) {
+          b.classList.remove('hidden');
+          a.href = '/client/' + encodeURIComponent(fc);
+        }
+      }
+    })();
+    const REGULATIONS_FROM_CLIENT = new URLSearchParams(location.search).get('from_client') || '';
+    /** Глобальный реестр /regulations — без привязки к организации; владелец подразделения — в рабочем пространстве /client/… (клиентские регламенты). */
+    const SHOW_ORG_OWNER_IN_FORM = false;
+    const API = '/api';
+    let formMode = 'create'; // 'create' | 'edit'
+    let editRegulationCode = '';
+    let formClientsLoaded = false;
+
+    function treeHasOrgCode(nodes, code) {
+      if (!code) return false;
+      for (const n of nodes || []) {
+        if (n.code === code) return true;
+        if (treeHasOrgCode(n.children, code)) return true;
+      }
+      return false;
+    }
+
+    async function ensureFormClientsSelect() {
+      const sel = document.getElementById('f_owner_client_id');
+      if (formClientsLoaded && sel.options.length > 0) return;
+      sel.innerHTML = '<option value="">— выберите организацию —</option>';
+      try {
+        const data = await fetchApi('/clients');
+        (data.items || []).forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.name + ' (' + c.code + ')';
+          sel.appendChild(opt);
+        });
+        formClientsLoaded = true;
+      } catch (_) {}
+    }
+
+    async function pickClientForOwnerCode(ownerCode) {
+      const sel = document.getElementById('f_owner_client_id');
+      if (!sel.options.length) return;
+      if (REGULATIONS_FROM_CLIENT && [...sel.options].some(o => o.value === REGULATIONS_FROM_CLIENT)) {
+        sel.value = REGULATIONS_FROM_CLIENT;
+        return;
+      }
+      if (!ownerCode) {
+        if (sel.options.length > 1) sel.selectedIndex = 1;
+        return;
+      }
+      try {
+        const data = await fetchApi('/clients');
+        for (const c of data.items || []) {
+          const tree = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(c.id));
+          if (treeHasOrgCode(tree, ownerCode)) {
+            sel.value = c.id;
+            return;
+          }
+        }
+      } catch (_) {}
+      if (sel.options.length > 1) sel.selectedIndex = 1;
+    }
+
+    async function refreshOwnerOrgSelect(preserveCode) {
+      const orgSel = document.getElementById('f_owner_org_select');
+      const clientId = document.getElementById('f_owner_client_id').value;
+      const prev = preserveCode !== undefined ? preserveCode : orgSel.value;
+      orgSel.innerHTML = '<option value="">— не выбрано —</option>';
+      if (!clientId) return;
+      try {
+        const tree = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
+        const rows = [];
+        function walk(nodes, depth) {
+          for (const n of nodes || []) {
+            rows.push({ code: n.code, name: n.name, depth, unit_type: n.unit_type || 'department' });
+            walk(n.children || [], depth + 1);
+          }
+        }
+        walk(tree, 0);
+        for (const row of rows) {
+          const opt = document.createElement('option');
+          opt.value = row.code;
+          const indent = '  '.repeat(row.depth);
+          opt.textContent = indent + row.code + ' — ' + row.name + ' (' + row.unit_type + ')';
+          orgSel.appendChild(opt);
+        }
+        if (prev && [...orgSel.options].some(o => o.value === prev)) orgSel.value = prev;
+      } catch (_) {}
+    }
+
+    function getOwnerUnitCodeForSave() {
+      if (!SHOW_ORG_OWNER_IN_FORM) return null;
+      const manual = document.getElementById('f_owner_unit_code_manual').value.trim();
+      if (manual) return manual;
+      const v = document.getElementById('f_owner_org_select').value.trim();
+      return v || null;
+    }
+
+    function syncOwnerOrgBlockVisibility() {
+      const el = document.getElementById('formOwnerOrgBlock');
+      if (!el) return;
+      const show = SHOW_ORG_OWNER_IN_FORM && !!REGULATIONS_FROM_CLIENT;
+      el.classList.toggle('hidden', !show);
+      el.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+    syncOwnerOrgBlockVisibility();
+
+    async function fetchApi(path, opts = {}) {
+      const headers = { ...opts.headers };
+      if (opts.body && typeof opts.body === 'string' && !headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+      const r = await fetch(API + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body,
+      });
+      const text = await r.text();
+      if (!r.ok) {
+        let msg = String(r.status);
+        try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch (_) {}
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      }
+      if (r.status === 204 || !text) return null;
+      return JSON.parse(text);
+    }
+
+    function showFormErr(msg) {
+      const el = document.getElementById('formErr');
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+
+    function regulationFilterBaseParams() {
+      const params = new URLSearchParams();
+      const pos = document.getElementById('filterPosition').value;
+      const dept = document.getElementById('filterDept').value;
+      const status = document.getElementById('filterStatus').value;
+      const current = document.getElementById('filterCurrent').checked;
+      const q = document.getElementById('filterSearch').value.trim();
+      if (pos) params.set('position_code', pos);
+      if (dept) params.set('dept_type_code', dept);
+      if (status) params.set('status', status);
+      if (current) params.set('is_current', 'true');
+      if (q) params.set('search', q);
+      return params;
+    }
+
+    function buildFilterParams() {
+      const params = regulationFilterBaseParams();
+      params.set('limit', '500');
+      return params.toString();
+    }
+
+    async function loadRegulations() {
+      const list = document.getElementById('list');
+      const meta = document.getElementById('listMeta');
+      try {
+        const qs = buildFilterParams();
+        const data = await fetchApi('/regulations' + (qs ? '?' + qs : '?limit=500'));
+        const items = data.items || [];
+        const total = typeof data.total === 'number' ? data.total : items.length;
+        if (meta) {
+          meta.textContent = 'В реестре по текущим условиям: ' + total + ' записей' + (items.length < total ? ' (показаны первые ' + items.length + ')' : '') + '.';
+          meta.classList.remove('hidden');
+        }
+        if (!items.length) {
+          list.innerHTML = '<p class="meta">Нет регламентов по выбранным фильтрам и поиску. Измените запрос или снимите часть условий.</p>';
+          return;
+        }
+        list.innerHTML = items.map(r => `
+          <div class="card" data-code="${r.regulation_code}">
+            <div class="card-body">
+              <a href="#" class="card-link" data-code="${r.regulation_code}">
+                <h3>${r.regulation_name}</h3>
+                <div class="meta">
+                  ${r.regulation_code} · ${r.position_code} / ${r.dept_type_code} · v${r.version_no}
+                  ${r.is_current ? ' <span class="badge current">действующий</span>' : ' <span class="badge">' + r.status + '</span>'}
+                </div>
+              </a>
+            </div>
+            <div class="card-actions">
+              <button type="button" class="btn btn-primary btn-edit" data-code="${r.regulation_code}">Изменить</button>
+              <button type="button" class="btn btn-danger btn-del" data-code="${r.regulation_code}">Удалить</button>
+            </div>
+          </div>
+        `).join('');
+        list.querySelectorAll('.card-link').forEach(a => {
+          a.addEventListener('click', (e) => { e.preventDefault(); openDetail(a.dataset.code); });
+        });
+        list.querySelectorAll('.btn-edit').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); openEditForm(btn.dataset.code); });
+        });
+        list.querySelectorAll('.btn-del').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); deleteRegulation(btn.dataset.code); });
+        });
+      } catch (e) {
+        list.innerHTML = '<p class="err">Ошибка загрузки: ' + (e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></p>';
+      }
+    }
+
+    async function openDetail(code) {
+      try {
+        const r = await fetchApi('/regulations/' + encodeURIComponent(code));
+        document.getElementById('detailCode').value = code;
+        document.getElementById('detailTitle').textContent = r.regulation_name;
+        let html = '<p class="meta">' + r.regulation_code + ' · ' + r.position_code + ' / ' + r.dept_type_code + ' · v' + r.version_no + '</p>';
+        if (r.goal_summary) html += '<p>' + r.goal_summary + '</p>';
+        if (r.ckp_short) html += '<div class="section"><div class="section-title">ЦКП</div><p>' + r.ckp_short + '</p></div>';
+        if (r.google_doc_url) html += '<div class="section"><div class="section-title">Документ</div><p><a href="' + r.google_doc_url + '" target="_blank" rel="noopener">' + r.google_doc_url + '</a></p></div>';
+        if (r.instructions_folder_url) html += '<div class="section"><div class="section-title">Папка с инструкциями</div><p><a href="' + r.instructions_folder_url + '" target="_blank" rel="noopener">' + r.instructions_folder_url + '</a></p></div>';
+        if (r.kpis && r.kpis.length) {
+          html += '<div class="section"><div class="section-title">KPI</div><ul>';
+          r.kpis.forEach(k => html += '<li>' + k.kpi_code + (k.target_value != null ? ' — ' + k.target_value : '') + '</li>');
+          html += '</ul></div>';
+        }
+        if (r.instructions && r.instructions.length) {
+          html += '<div class="section"><div class="section-title">Инструкции</div><ul>';
+          r.instructions.forEach(i => html += '<li>' + (i.instruction_url ? '<a href="' + i.instruction_url + '" target="_blank">' + i.instruction_name + '</a>' : i.instruction_name) + '</li>');
+          html += '</ul></div>';
+        }
+        document.getElementById('detailBody').innerHTML = html;
+        document.getElementById('detailModal').classList.add('show');
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+
+    function closeDetail() {
+      document.getElementById('detailModal').classList.remove('show');
+    }
+
+    async function deleteRegulation(code) {
+      if (!code || !confirm('Удалить регламент «' + code + '»? Связанные KPI и инструкции в этой карточке будут удалены.')) return;
+      try {
+        await fetchApi('/regulations/' + encodeURIComponent(code), { method: 'DELETE' });
+        closeDetail();
+        closeForm();
+        await loadRegulations();
+      } catch (e) {
+        alert('Ошибка удаления: ' + e.message);
+      }
+    }
+
+    function closeForm() {
+      document.getElementById('formModal').classList.remove('show');
+      showFormErr('');
+    }
+
+    async function fillPositionSelect() {
+      const sel = document.getElementById('f_position_code');
+      const cur = sel.value;
+      sel.innerHTML = '';
+      try {
+        const positions = await fetchApi('/regulations/positions/list');
+        (positions || []).forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.position_code;
+          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+          sel.appendChild(opt);
+        });
+        if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+      } catch (_) {}
+    }
+
+    async function openCreateForm() {
+      formMode = 'create';
+      editRegulationCode = '';
+      document.getElementById('formTitle').textContent = 'Новый регламент';
+      document.getElementById('formFieldsCreate').style.display = 'block';
+      showFormErr('');
+      document.getElementById('f_regulation_code').value = '';
+      const rh = document.getElementById('f_regulation_code_hint');
+      if (rh) { rh.textContent = ''; rh.classList.add('hidden'); }
+      document.getElementById('f_dept_type_code').value = '';
+      document.getElementById('f_version_no').value = '1';
+      document.getElementById('f_regulation_name').value = '';
+      document.getElementById('f_goal_summary').value = '';
+      document.getElementById('f_ckp_short').value = '';
+      document.getElementById('f_ckp_full').value = '';
+      document.getElementById('f_google_doc_url').value = '';
+      document.getElementById('f_instructions_folder_url').value = '';
+      document.getElementById('f_status').value = 'draft';
+      document.getElementById('f_effective_from').value = '';
+      document.getElementById('f_effective_to').value = '';
+      document.getElementById('f_is_current').checked = false;
+      document.getElementById('f_owner_org_select').innerHTML = '<option value="">— не выбрано —</option>';
+      document.getElementById('f_owner_unit_code_manual').value = '';
+      document.getElementById('f_notes').value = '';
+      syncOwnerOrgBlockVisibility();
+      if (SHOW_ORG_OWNER_IN_FORM) {
+        await ensureFormClientsSelect();
+        await pickClientForOwnerCode('');
+        await refreshOwnerOrgSelect('');
+      }
+      await fillPositionSelect();
+      document.getElementById('formModal').classList.add('show');
+    }
+
+    async function openEditForm(code) {
+      formMode = 'edit';
+      editRegulationCode = code;
+      document.getElementById('formTitle').textContent = 'Изменить регламент';
+      document.getElementById('formFieldsCreate').style.display = 'none';
+      showFormErr('');
+      try {
+        const r = await fetchApi('/regulations/' + encodeURIComponent(code));
+        document.getElementById('f_regulation_name').value = r.regulation_name || '';
+        document.getElementById('f_goal_summary').value = r.goal_summary || '';
+        document.getElementById('f_ckp_short').value = r.ckp_short || '';
+        document.getElementById('f_ckp_full').value = r.ckp_full || '';
+        document.getElementById('f_google_doc_url').value = r.google_doc_url || '';
+        document.getElementById('f_instructions_folder_url').value = r.instructions_folder_url || '';
+        document.getElementById('f_status').value = r.status || 'draft';
+        document.getElementById('f_effective_from').value = r.effective_from ? String(r.effective_from).slice(0, 10) : '';
+        document.getElementById('f_effective_to').value = r.effective_to ? String(r.effective_to).slice(0, 10) : '';
+        document.getElementById('f_is_current').checked = !!r.is_current;
+        document.getElementById('f_owner_unit_code_manual').value = '';
+        document.getElementById('f_notes').value = r.notes || '';
+        syncOwnerOrgBlockVisibility();
+        if (SHOW_ORG_OWNER_IN_FORM) {
+          await ensureFormClientsSelect();
+          await pickClientForOwnerCode(r.owner_unit_code || '');
+          await refreshOwnerOrgSelect('');
+          const orgSel = document.getElementById('f_owner_org_select');
+          const oc = r.owner_unit_code || '';
+          if (oc && [...orgSel.options].some(o => o.value === oc)) {
+            orgSel.value = oc;
+          } else if (oc) {
+            const opt = document.createElement('option');
+            opt.value = oc;
+            opt.textContent = oc + ' (сохранённый код; нет в дереве выбранной организации)';
+            opt.selected = true;
+            orgSel.appendChild(opt);
+          }
+        }
+        document.getElementById('formModal').classList.add('show');
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+
+    async function saveForm() {
+      showFormErr('');
+      if (formMode === 'create') {
+        const regulation_code = document.getElementById('f_regulation_code').value.trim();
+        const position_code = document.getElementById('f_position_code').value;
+        const dept_type_code = document.getElementById('f_dept_type_code').value.trim();
+        const version_no = document.getElementById('f_version_no').value.trim();
+        const regulation_name = document.getElementById('f_regulation_name').value.trim();
+        if (!regulation_code || !position_code || !dept_type_code || !version_no || !regulation_name) {
+          showFormErr('Заполните обязательные поля: код регламента, должность, тип подразделения, версия, название.');
+          return;
+        }
+        const body = {
+          regulation_code, position_code, dept_type_code, version_no, regulation_name,
+          goal_summary: document.getElementById('f_goal_summary').value.trim() || null,
+          ckp_short: document.getElementById('f_ckp_short').value.trim() || null,
+          ckp_full: document.getElementById('f_ckp_full').value.trim() || null,
+          google_doc_url: document.getElementById('f_google_doc_url').value.trim() || null,
+          instructions_folder_url: document.getElementById('f_instructions_folder_url').value.trim() || null,
+          status: document.getElementById('f_status').value,
+          effective_from: document.getElementById('f_effective_from').value || null,
+          effective_to: document.getElementById('f_effective_to').value || null,
+          is_current: document.getElementById('f_is_current').checked,
+          owner_unit_code: getOwnerUnitCodeForSave(),
+          notes: document.getElementById('f_notes').value.trim() || null,
+        };
+        try {
+          await fetchApi('/regulations', { method: 'POST', body: JSON.stringify(body) });
+          closeForm();
+          await loadRegulations();
+          await loadFilterOptions();
+        } catch (e) {
+          showFormErr(e.message);
+        }
+      } else {
+        const regulation_name = document.getElementById('f_regulation_name').value.trim();
+        if (!regulation_name) {
+          showFormErr('Укажите название регламента.');
+          return;
+        }
+        const patch = {
+          regulation_name,
+          goal_summary: document.getElementById('f_goal_summary').value.trim() || null,
+          ckp_short: document.getElementById('f_ckp_short').value.trim() || null,
+          ckp_full: document.getElementById('f_ckp_full').value.trim() || null,
+          google_doc_url: document.getElementById('f_google_doc_url').value.trim() || null,
+          instructions_folder_url: document.getElementById('f_instructions_folder_url').value.trim() || null,
+          status: document.getElementById('f_status').value,
+          effective_from: document.getElementById('f_effective_from').value || null,
+          effective_to: document.getElementById('f_effective_to').value || null,
+          is_current: document.getElementById('f_is_current').checked,
+          owner_unit_code: getOwnerUnitCodeForSave(),
+          notes: document.getElementById('f_notes').value.trim() || null,
+        };
+        try {
+          await fetchApi('/regulations/' + encodeURIComponent(editRegulationCode), {
+            method: 'PATCH',
+            body: JSON.stringify(patch),
+          });
+          closeForm();
+          await loadRegulations();
+        } catch (e) {
+          showFormErr(e.message);
+        }
+      }
+    }
+
+    async function loadFilterOptions() {
+      try {
+        const [positions, regs] = await Promise.all([
+          fetchApi('/regulations/positions/list'),
+          fetchApi('/regulations?limit=500'),
+        ]);
+        const posSelect = document.getElementById('filterPosition');
+        const posVal = posSelect.value;
+        posSelect.innerHTML = '<option value="">— все —</option>';
+        (positions || []).forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.position_code;
+          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+          posSelect.appendChild(opt);
+        });
+        if (posVal && [...posSelect.options].some(o => o.value === posVal)) posSelect.value = posVal;
+        const deptSet = new Set();
+        (regs.items || []).forEach(r => deptSet.add(r.dept_type_code));
+        const deptSelect = document.getElementById('filterDept');
+        const deptVal = deptSelect.value;
+        deptSelect.innerHTML = '<option value="">— все —</option>';
+        [...deptSet].sort().forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          deptSelect.appendChild(opt);
+        });
+        if (deptVal && [...deptSelect.options].some(o => o.value === deptVal)) deptSelect.value = deptVal;
+      } catch (_) {}
+    }
+
+    document.getElementById('btnApply').onclick = loadRegulations;
+    document.getElementById('btnExportXlsx').onclick = () => {
+      const qs = regulationFilterBaseParams().toString();
+      window.location.href = '/api/regulations/export/excel' + (qs ? '?' + qs : '');
+    };
+    document.getElementById('filterPosition').onchange = loadRegulations;
+    document.getElementById('filterDept').onchange = loadRegulations;
+    document.getElementById('filterStatus').onchange = loadRegulations;
+    document.getElementById('filterCurrent').onchange = loadRegulations;
+    document.getElementById('filterSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loadRegulations(); }
+    });
+
+    let regulationCodeCheckTimer;
+    document.getElementById('f_regulation_code').addEventListener('input', () => {
+      clearTimeout(regulationCodeCheckTimer);
+      const hint = document.getElementById('f_regulation_code_hint');
+      if (!hint) return;
+      if (formMode !== 'create') {
+        hint.classList.add('hidden');
+        return;
+      }
+      const code = document.getElementById('f_regulation_code').value.trim();
+      if (!code) {
+        hint.classList.add('hidden');
+        return;
+      }
+      regulationCodeCheckTimer = setTimeout(async () => {
+        try {
+          const data = await fetchApi('/regulations?search=' + encodeURIComponent(code) + '&limit=20');
+          const items = data.items || [];
+          const exact = items.filter(r => String(r.regulation_code).toLowerCase() === code.toLowerCase());
+          if (exact.length) {
+            hint.textContent = 'Такой код уже есть в общесистемном реестре: «' + exact[0].regulation_name + '». Откройте карточку или задайте другой код.';
+            hint.classList.remove('hidden');
+            return;
+          }
+          if (items.length) {
+            const codes = items.slice(0, 6).map(r => r.regulation_code).join(', ');
+            hint.textContent = 'Похожие записи (' + items.length + '): ' + codes + (items.length > 6 ? '…' : '') + ' — проверьте, нет ли дубликата по смыслу.';
+            hint.classList.remove('hidden');
+          } else {
+            hint.classList.add('hidden');
+          }
+        } catch (_) {
+          hint.classList.add('hidden');
+        }
+      }, 400);
+    });
+    document.getElementById('detailModal').addEventListener('click', (e) => {
+      if (e.target.id === 'detailModal') closeDetail();
+    });
+    document.getElementById('formModal').addEventListener('click', (e) => {
+      if (e.target.id === 'formModal') closeForm();
+    });
+    document.getElementById('detailBtnClose').onclick = closeDetail;
+    document.getElementById('detailBtnEdit').onclick = () => {
+      const c = document.getElementById('detailCode').value;
+      if (c) { closeDetail(); openEditForm(c); }
+    };
+    document.getElementById('detailBtnDelete').onclick = () => {
+      const c = document.getElementById('detailCode').value;
+      if (c) deleteRegulation(c);
+    };
+    document.getElementById('f_owner_client_id').onchange = () => {
+      document.getElementById('f_owner_unit_code_manual').value = '';
+      refreshOwnerOrgSelect('');
+    };
+    document.getElementById('f_owner_org_select').onchange = () => {
+      document.getElementById('f_owner_unit_code_manual').value = '';
+    };
+    document.getElementById('btnCreate').onclick = () => { openCreateForm().catch(e => alert(e.message)); };
+    document.getElementById('formBtnSave').onclick = saveForm;
+    document.getElementById('formBtnCancel').onclick = closeForm;
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeDetail(); closeForm(); }
+    });
+
+    loadFilterOptions().then(loadRegulations);
+  </script>
+</body>
+</html>

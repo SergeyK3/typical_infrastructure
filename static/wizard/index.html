@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One-Click Onboarding — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .wizard-container { max-width: 640px; }
+    .main-header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .main-header .subtitle { margin-bottom: 1.5rem; }
+    .steps {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background 0.2s;
+    }
+    .step-dot.active { background: var(--accent); }
+    .step-dot.done { background: var(--success); }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .panel h2 { font-size: 1rem; margin: 0 0 1rem 0; }
+    label {
+      display: block;
+      margin-top: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    input, select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.25rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    input.error { border-color: var(--error); }
+    .field-error {
+      font-size: 0.8rem;
+      color: var(--error);
+      margin-top: 0.25rem;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    :root { --accent: #58a6ff; --accent-hover: #79b8ff; }
+    .btn-secondary {
+      background: var(--surface-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .preview-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.9rem;
+    }
+    .preview-list li {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .preview-list li:last-child { border-bottom: none; }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    .status-completed { background: rgba(63,185,80,0.2); color: var(--success); }
+    .status-failed { background: rgba(248,81,73,0.2); color: var(--error); }
+    .status-running { background: rgba(88,166,255,0.2); color: var(--accent); }
+    .status-dry_run { background: rgba(210,153,34,0.2); color: var(--warning); }
+    .log { font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    .hidden { display: none !important; }
+    .save-draft { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .save-draft.saved { color: var(--success); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item active">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">После создания организации — справочники в <a href="/clients">/client/…</a></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <h1>One-Click Onboarding</h1>
+        <p class="subtitle">Мастер развёртывания типовой инфраструктуры предприятия</p>
+      </div>
+      <div class="content">
+  <div class="wizard-container">
+
+    <div class="steps" id="stepDots" aria-hidden="true"></div>
+
+    <!-- Step 1: Template -->
+    <div class="panel" id="panel1" data-step="1">
+      <h2>1. Выбор шаблона</h2>
+      <label>Шаблон предприятия</label>
+      <select id="templateCode">
+        <option value="">— Загрузка... —</option>
+      </select>
+      <p class="field-error hidden" id="errTemplate"></p>
+    </div>
+
+    <!-- Step 2: Client -->
+    <div class="panel" id="panel2" data-step="2">
+      <h2>2. Данные клиента</h2>
+      <label>Код клиента *</label>
+      <input type="text" id="clientCode" placeholder="TOO_ALFA" maxlength="64" />
+      <p class="field-error hidden" id="errClientCode"></p>
+      <label>Название *</label>
+      <input type="text" id="clientName" placeholder="ТОО Альфа" maxlength="256" />
+      <p class="field-error hidden" id="errClientName"></p>
+    </div>
+
+    <!-- Step 3: Org structure preview -->
+    <div class="panel" id="panel3" data-step="3">
+      <h2>3. Оргструктура (предпросмотр)</h2>
+      <p class="text-muted" style="color:var(--text-muted);font-size:0.9rem;">Структура будет создана по шаблону.</p>
+      <ul class="preview-list" id="orgUnitsPreview"></ul>
+    </div>
+
+    <!-- Step 4: Positions preview -->
+    <div class="panel" id="panel4" data-step="4">
+      <h2>4. Должности (предпросмотр)</h2>
+      <ul class="preview-list" id="positionsPreview"></ul>
+    </div>
+
+    <!-- Step 5: Admin employee -->
+    <div class="panel" id="panel5" data-step="5">
+      <h2>5. Администратор</h2>
+      <label>Фамилия *</label>
+      <input type="text" id="adminLastName" placeholder="Иванов" maxlength="128" />
+      <p class="field-error hidden" id="errAdminLastName"></p>
+      <label>Имя *</label>
+      <input type="text" id="adminFirstName" placeholder="Иван" maxlength="128" />
+      <p class="field-error hidden" id="errAdminFirstName"></p>
+      <label>Логин *</label>
+      <input type="text" id="adminLogin" placeholder="admin@client.test" maxlength="256" />
+      <p class="field-error hidden" id="errAdminLogin"></p>
+      <label>Пароль (оставьте пустым для автогенерации)</label>
+      <input type="password" id="adminPassword" placeholder="TempPass123!" maxlength="128" />
+      <p class="field-error hidden" id="errAdminPassword"></p>
+      <label>Email</label>
+      <input type="email" id="adminEmail" placeholder="admin@client.test" maxlength="256" />
+    </div>
+
+    <!-- Step 6: Accounts (info) -->
+    <div class="panel" id="panel6" data-step="6">
+      <h2>6. Аккаунты</h2>
+      <p style="color:var(--text-muted);font-size:0.9rem;">Будет создан аккаунт администратора с ролью admin.</p>
+    </div>
+
+    <!-- Step 7: Confirmation -->
+    <div class="panel" id="panel7" data-step="7">
+      <h2>7. Подтверждение</h2>
+      <div id="confirmSummary"></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnDryRun">Запустить Dry-Run</button>
+        <button class="btn btn-primary" id="btnRun">Запустить Onboarding</button>
+      </div>
+      <p class="field-error hidden" id="errRun"></p>
+    </div>
+
+    <!-- Step 8: Progress & Result -->
+    <div class="panel" id="panel8" data-step="8">
+      <h2>8. Прогресс и результат</h2>
+      <div id="runStatus"></div>
+      <div id="runSteps" class="log hidden"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" id="btnPrev">Назад</button>
+      <button class="btn btn-primary" id="btnNext">Далее</button>
+    </div>
+    <p class="save-draft" id="draftHint">Черновик сохраняется автоматически</p>
+  </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API = '/api';
+    const DRAFT_KEY = 'onboarding_wizard_draft';
+    const TOTAL_STEPS = 8;
+
+    let currentStep = 1;
+    let templates = [];
+    let structurePreview = null;
+    let runId = null;
+    let runSubmitted = false;
+
+    function $(id) { return document.getElementById(id); }
+    function showErr(id, msg) {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+    function setInputError(inputId, errId, hasError) {
+      $(inputId)?.classList.toggle('error', !!hasError);
+      if (errId) showErr(errId, hasError || '');
+    }
+
+    function loadDraft() {
+      try {
+        const s = localStorage.getItem(DRAFT_KEY);
+        if (s) {
+          const d = JSON.parse(s);
+          $('templateCode').value = d.template_code || '';
+          $('clientCode').value = d.client_code || '';
+          $('clientName').value = d.client_name || '';
+          $('adminLastName').value = d.admin_last_name || '';
+          $('adminFirstName').value = d.admin_first_name || '';
+          $('adminLogin').value = d.admin_login || '';
+          $('adminPassword').value = d.admin_password || '';
+          $('adminEmail').value = d.admin_email || '';
+        }
+      } catch (_) {}
+    }
+
+    function saveDraft() {
+      const d = {
+        template_code: $('templateCode').value,
+        client_code: $('clientCode').value,
+        client_name: $('clientName').value,
+        admin_last_name: $('adminLastName').value,
+        admin_first_name: $('adminFirstName').value,
+        admin_login: $('adminLogin').value,
+        admin_password: $('adminPassword').value,
+        admin_email: $('adminEmail').value,
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      $('draftHint').classList.add('saved');
+      $('draftHint').textContent = 'Черновик сохранён';
+      setTimeout(() => {
+        $('draftHint').classList.remove('saved');
+        $('draftHint').textContent = 'Черновик сохраняется автоматически';
+      }, 1500);
+    }
+
+    function validateStep(step) {
+      let ok = true;
+      if (step === 1) {
+        const v = $('templateCode').value;
+        setInputError('templateCode', 'errTemplate', !v ? 'Выберите шаблон' : null);
+        ok = !!v;
+      } else if (step === 2) {
+        const code = ($('clientCode').value || '').trim();
+        const name = ($('clientName').value || '').trim();
+        setInputError('clientCode', 'errClientCode', !code ? 'Код обязателен' : null);
+        setInputError('clientName', 'errClientName', !name ? 'Название обязательно' : null);
+        ok = !!code && !!name;
+      } else if (step === 5) {
+        const ln = ($('adminLastName').value || '').trim();
+        const fn = ($('adminFirstName').value || '').trim();
+        const login = ($('adminLogin').value || '').trim();
+        setInputError('adminLastName', 'errAdminLastName', !ln ? 'Фамилия обязательна' : null);
+        setInputError('adminFirstName', 'errAdminFirstName', !fn ? 'Имя обязательно' : null);
+        setInputError('adminLogin', 'errAdminLogin', !login ? 'Логин обязателен' : null);
+        ok = !!ln && !!fn && !!login;
+      }
+      return ok;
+    }
+
+    function userFriendlyError(detail) {
+      if (typeof detail === 'string') return detail;
+      if (detail?.message) return detail.message;
+      if (detail?.code === 'client_code_already_exists') return 'Клиент с таким кодом уже существует.';
+      if (detail?.code === 'login_already_exists') return 'Пользователь с таким логином уже существует.';
+      if (detail?.code === 'template_not_found') return 'Шаблон не найден.';
+      if (detail?.code === 'idempotency_key_conflict') return 'Запрос с таким ключом уже выполнен с другими данными.';
+      if (detail?.code === 'validation_error') {
+        const errs = detail?.details ?? detail?.errors ?? [];
+        if (errs.length) return errs.map(e => (e.field ? e.field + ': ' : '') + (e.message || e.msg)).join('; ');
+      }
+      if (Array.isArray(detail)) return detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+      return JSON.stringify(detail);
+    }
+
+    async function fetchApi(path, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      const { headers: _h, ...rest } = opts;
+      const r = await fetch(API + path, { ...rest, headers });
+      const text = await r.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+      if (!r.ok) {
+        const errDetail = data?.detail ?? data?.error ?? (text ? { message: text } : null);
+        throw { status: r.status, detail: errDetail, raw: data };
+      }
+      return data;
+    }
+
+    async function loadTemplates() {
+      templates = await fetchApi('/enterprise-templates');
+      const sel = $('templateCode');
+      sel.innerHTML = '<option value="">— Выберите шаблон —</option>';
+      templates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.code;
+        opt.textContent = `${t.name} (${t.code})`;
+        sel.appendChild(opt);
+      });
+      loadDraft();
+      if (sel.value) loadStructurePreview();
+    }
+
+    async function loadStructurePreview() {
+      const code = $('templateCode').value;
+      if (!code) return;
+      const t = templates.find(x => x.code === code);
+      const id = t?.id || code;
+      structurePreview = await fetchApi(`/enterprise-templates/${encodeURIComponent(id)}/structure-preview`);
+      const ouList = $('orgUnitsPreview');
+      ouList.innerHTML = (structurePreview.org_units || []).map(
+        ou => `<li>${ou.code}: ${ou.name} (${ou.unit_type})</li>`
+      ).join('');
+      const posList = $('positionsPreview');
+      posList.innerHTML = (structurePreview.positions || []).map(
+        p => `<li>${p.code}: ${p.name} → ${p.org_unit_code}</li>`
+      ).join('');
+    }
+
+    function renderConfirmSummary() {
+      const html = `
+        <ul class="preview-list">
+          <li><strong>Шаблон:</strong> ${$('templateCode').value}</li>
+          <li><strong>Клиент:</strong> ${$('clientCode').value} — ${$('clientName').value}</li>
+          <li><strong>Администратор:</strong> ${$('adminLastName').value} ${$('adminFirstName').value} (${$('adminLogin').value})</li>
+        </ul>
+      `;
+      $('confirmSummary').innerHTML = html;
+    }
+
+    function goToStep(s) {
+      currentStep = Math.max(1, Math.min(TOTAL_STEPS, s));
+      document.querySelectorAll('.panel').forEach(p => {
+        p.classList.toggle('hidden', parseInt(p.dataset.step) !== currentStep);
+      });
+      document.querySelectorAll('.step-dot').forEach((d, i) => {
+        d.classList.toggle('active', i + 1 === currentStep);
+        d.classList.toggle('done', i + 1 < currentStep);
+      });
+      $('btnPrev').classList.toggle('hidden', currentStep === 1);
+      $('btnNext').classList.toggle('hidden', currentStep === TOTAL_STEPS || currentStep === 7);
+      if (currentStep === 7) {
+        renderConfirmSummary();
+        runSubmitted = false;
+        $('btnDryRun').disabled = false;
+        $('btnRun').disabled = false;
+      }
+    }
+
+    async function submitRun(dryRun) {
+      if (runSubmitted) return;
+      runSubmitted = true;
+      $('btnDryRun').disabled = true;
+      $('btnRun').disabled = true;
+      showErr('errRun', '');
+
+      const payload = {
+        template_code: $('templateCode').value,
+        client: { code: ($('clientCode').value || '').trim(), name: ($('clientName').value || '').trim() },
+        admin: {
+          last_name: ($('adminLastName').value || '').trim(),
+          first_name: ($('adminFirstName').value || '').trim(),
+          login: ($('adminLogin').value || '').trim(),
+          password: $('adminPassword').value || null,
+          email: ($('adminEmail').value || '').trim() || null,
+        },
+        idempotency_key: 'wizard-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+      };
+
+      try {
+        const bodyStr = JSON.stringify(payload);
+        const res = await fetchApi('/onboarding-runs?dry_run=' + dryRun, {
+          method: 'POST',
+          body: bodyStr,
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': payload.idempotency_key,
+          },
+        });
+        runId = res.id;
+        goToStep(8);
+        pollRunStatus();
+      } catch (e) {
+        runSubmitted = false;
+        $('btnDryRun').disabled = false;
+        $('btnRun').disabled = false;
+        showErr('errRun', userFriendlyError(e.detail));
+      }
+    }
+
+    async function pollRunStatus() {
+      const statusEl = $('runStatus');
+      const stepsEl = $('runSteps');
+      const terminal = ['completed', 'failed', 'dry_run'];
+      let data;
+      try {
+        data = await fetchApi(`/onboarding-runs/${runId}`);
+      } catch (e) {
+        statusEl.innerHTML = `<span class="status-badge status-failed">Ошибка: ${userFriendlyError(e.detail)}</span>`;
+        return;
+      }
+      const run = data.run || data;
+      const steps = data.steps || [];
+      const statusClass = 'status-' + (run.status || 'running');
+      const navLinks = terminal.includes(run.status) ? `
+        <p style="margin-top:1rem;">
+          <a href="/clients" style="color:var(--accent);">Список клиентов</a> — просмотр организаций
+          &nbsp;|&nbsp;
+          <a href="/wizard" style="color:var(--accent);">Создать ещё клиента</a>
+        </p>
+      ` : '';
+      statusEl.innerHTML = `
+        <p><span class="status-badge ${statusClass}">${run.status}</span></p>
+        ${run.client_id ? `<p>Client ID: ${run.client_id}</p>` : ''}
+        ${run.error_message ? `<p class="field-error">${run.error_message}</p>` : ''}
+        ${navLinks}
+      `;
+      stepsEl.classList.remove('hidden');
+      stepsEl.textContent = steps.map(s => `${s.step_code}: ${s.status}${s.detail ? ' — ' + s.detail : ''}`).join('\n');
+      if (!terminal.includes(run.status)) {
+        setTimeout(pollRunStatus, 1500);
+      }
+    }
+
+    $('templateCode').addEventListener('change', () => { loadStructurePreview(); saveDraft(); });
+    ['clientCode','clientName','adminLastName','adminFirstName','adminLogin','adminPassword','adminEmail'].forEach(id => {
+      $(id)?.addEventListener('input', saveDraft);
+    });
+
+    $('btnPrev').onclick = () => goToStep(currentStep - 1);
+    $('btnNext').onclick = async () => {
+      if (!validateStep(currentStep)) return;
+      saveDraft();
+      if (currentStep === 2 && $('templateCode').value) {
+        try { await loadStructurePreview(); } catch (_) {}
+      }
+      goToStep(currentStep + 1);
+    };
+
+    $('btnDryRun').onclick = () => submitRun(true);
+    $('btnRun').onclick = () => submitRun(false);
+
+    // Step dots
+    const dots = $('stepDots');
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+      const d = document.createElement('div');
+      d.className = 'step-dot' + (i === 0 ? ' active' : '');
+      d.title = `Шаг ${i + 1}`;
+      dots.appendChild(d);
+    }
+
+    loadTemplates().then(() => goToStep(1));
+  </script>
+</body>
+</html>

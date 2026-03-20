@@ -1,0 +1,342 @@
+<!-- route: /users | file: static/users/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пользователи — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); }
+    label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    input, select { width: 100%; max-width: 280px; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .err { font-size: 0.85rem; color: var(--error); margin-top: 0.5rem; }
+    .row-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
+    .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; }
+    .checkbox-group label { display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer; }
+    .checkbox-group input[type=checkbox] { width: auto; max-width: none; margin: 0; }
+    .hidden { display: none !important; }
+    .main-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item active">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Выберите организацию на странице «Клиенты»</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <div class="main-header-row">
+          <div>
+            <h1>Пользователи</h1>
+            <p class="subtitle">Уполномоченные работники клиентов с доступом к системе</p>
+          </div>
+          <button type="button" class="btn btn-primary" id="btnCreateUser">Создать</button>
+        </div>
+      </div>
+      <div class="content">
+        <div id="usersList">Загрузка...</div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modalUserAccount" class="modal">
+    <div class="modal-content">
+      <h3>Новый пользователь</h3>
+      <div class="err hidden" id="modalUserAccountErr"></div>
+      <label>Организация</label>
+      <select id="userAccClient"></select>
+      <label>Сотрудник</label>
+      <select id="userAccEmployee"></select>
+      <label>Логин</label>
+      <input type="text" id="userAccLogin" placeholder="ivanov@company.ru" autocomplete="off">
+      <label>Пароль</label>
+      <input type="password" id="userAccPassword" placeholder="••••••••" autocomplete="new-password">
+      <label>Роли</label>
+      <div class="checkbox-group" id="userAccRoles"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnUserAccountSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="btnUserAccountCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalUserAccountEdit" class="modal">
+    <div class="modal-content">
+      <h3>Изменить пользователя</h3>
+      <div class="err hidden" id="modalUserAccountEditErr"></div>
+      <input type="hidden" id="userAccEditId">
+      <label>Логин</label>
+      <input type="text" id="userAccEditLogin">
+      <label>Новый пароль (оставьте пустым, чтобы не менять)</label>
+      <input type="password" id="userAccEditPassword" placeholder="••••••••" autocomplete="new-password">
+      <label>Роли</label>
+      <div class="checkbox-group" id="userAccEditRoles"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnUserAccountEditSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="btnUserAccountEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let rolesCache = [];
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function errText(j, fallback) {
+      if (j && j.error) return j.error.message || j.error.code || fallback;
+      return fallback;
+    }
+
+    function showErr(el, msg) {
+      if (!el) return;
+      if (!msg) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    async function api(method, path, body) {
+      const opt = { method, headers: {} };
+      if (body !== undefined) {
+        opt.headers['Content-Type'] = 'application/json';
+        opt.body = JSON.stringify(body);
+      }
+      const r = await fetch('/api' + path, opt);
+      const text = await r.text();
+      let j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok) throw new Error(errText(j, text || String(r.status)));
+      return j;
+    }
+
+    async function loadRoles() {
+      try {
+        rolesCache = await api('GET', '/roles') || [];
+      } catch (_) {
+        rolesCache = [];
+      }
+    }
+
+    async function loadClientsForSelect() {
+      const data = await api('GET', '/clients?limit=500&offset=0');
+      const items = data.items || [];
+      const sel = document.getElementById('userAccClient');
+      sel.innerHTML = items.length
+        ? items.map(c => '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name || c.id) + '</option>').join('')
+        : '<option value="">Нет организаций</option>';
+    }
+
+    async function refreshEmployeesForClient() {
+      const clientId = document.getElementById('userAccClient').value;
+      const empSel = document.getElementById('userAccEmployee');
+      if (!clientId) {
+        empSel.innerHTML = '<option value="">Сначала выберите организацию</option>';
+        return;
+      }
+      const [empData, accData] = await Promise.all([
+        api('GET', '/employees?client_id=' + encodeURIComponent(clientId) + '&limit=500&offset=0'),
+        api('GET', '/accounts?client_id=' + encodeURIComponent(clientId) + '&limit=500&offset=0'),
+      ]);
+      const employees = empData.items || [];
+      const withAccount = new Set((accData.items || []).map(a => a.employee_id));
+      const free = employees.filter(e => !withAccount.has(e.id));
+      empSel.innerHTML = free.length
+        ? free.map(e => {
+            const name = [e.last_name, e.first_name].filter(Boolean).join(' ');
+            const label = name + (e.email ? ' (' + e.email + ')' : '');
+            return '<option value="' + escapeHtml(e.id) + '">' + escapeHtml(label || e.id) + '</option>';
+          }).join('')
+        : '<option value="">Нет сотрудников без учётной записи</option>';
+    }
+
+    async function loadUsers() {
+      const el = document.getElementById('usersList');
+      if (!el) return;
+      try {
+        const data = await api('GET', '/users');
+        const items = Array.isArray(data?.items) ? data.items : [];
+        if (!items.length) {
+          el.innerHTML = '<p class="meta">Нет пользователей с доступом к системе.</p>';
+          return;
+        }
+        el.innerHTML = '<table class="data-table"><thead><tr><th>Логин</th><th>Сотрудник</th><th>Организация</th><th>Статус</th><th></th></tr></thead><tbody>' +
+          items.map(u => {
+            const cid = u.client_id || '';
+            return '<tr>' +
+              '<td>' + escapeHtml(u.login || '—') + '</td>' +
+              '<td>' + escapeHtml(u.employee_name || '—') + '</td>' +
+              '<td><a href="/client/' + escapeHtml(cid) + '">' + escapeHtml(u.client_name || '—') + '</a></td>' +
+              '<td>' + escapeHtml(u.status || '—') + '</td>' +
+              '<td class="row-actions">' +
+              '<button type="button" class="btn btn-sm btn-secondary" data-edit-user="' + escapeHtml(u.id) + '">Изменить</button>' +
+              '<button type="button" class="btn btn-sm btn-danger" data-del-user="' + escapeHtml(u.id) + '">Удалить</button>' +
+              '<a href="/client/' + escapeHtml(cid) + '" class="btn btn-sm btn-secondary">В организацию</a>' +
+              '</td></tr>';
+          }).join('') +
+          '</tbody></table>';
+        el.querySelectorAll('[data-edit-user]').forEach(btn => {
+          btn.onclick = () => openEditUser(btn.getAttribute('data-edit-user'));
+        });
+        el.querySelectorAll('[data-del-user]').forEach(btn => {
+          btn.onclick = () => deleteUser(btn.getAttribute('data-del-user'));
+        });
+      } catch (e) {
+        const msg = e && e.message ? String(e.message) : 'Ошибка загрузки.';
+        el.innerHTML = '<p class="err">' + escapeHtml(msg) + ' <a href="/users">Обновить</a></p>';
+      }
+    }
+
+    document.getElementById('btnCreateUser').onclick = async () => {
+      await loadRoles();
+      const errEl = document.getElementById('modalUserAccountErr');
+      showErr(errEl, '');
+      try {
+        await loadClientsForSelect();
+        document.getElementById('userAccLogin').value = '';
+        document.getElementById('userAccPassword').value = '';
+        const rolesEl = document.getElementById('userAccRoles');
+        rolesEl.innerHTML = rolesCache.map(r =>
+          '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"> ' + escapeHtml(r.name) + '</label>'
+        ).join('');
+        await refreshEmployeesForClient();
+        document.getElementById('modalUserAccount').classList.add('show');
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    };
+
+    document.getElementById('userAccClient').onchange = () => {
+      refreshEmployeesForClient().catch(e => alert(e.message));
+    };
+
+    document.getElementById('btnUserAccountCancel').onclick = () => {
+      document.getElementById('modalUserAccount').classList.remove('show');
+    };
+
+    document.getElementById('btnUserAccountSave').onclick = async () => {
+      const employeeId = document.getElementById('userAccEmployee').value;
+      const login = document.getElementById('userAccLogin').value.trim();
+      const password = document.getElementById('userAccPassword').value;
+      const roleCodes = Array.from(document.querySelectorAll('#userAccRoles input:checked')).map(cb => cb.value);
+      const errEl = document.getElementById('modalUserAccountErr');
+      if (!employeeId || !login || !password) {
+        showErr(errEl, 'Заполните организацию, сотрудника без учётной записи, логин и пароль');
+        return;
+      }
+      try {
+        const enc = await api('POST', '/accounts/encode-password', { password });
+        await api('POST', '/accounts', {
+          employee_id: employeeId,
+          login,
+          password_hash: enc.password_hash,
+          status: 'active',
+          role_codes: roleCodes,
+        });
+        document.getElementById('modalUserAccount').classList.remove('show');
+        await loadUsers();
+      } catch (e) {
+        showErr(errEl, e.message || String(e));
+      }
+    };
+
+    async function openEditUser(id) {
+      if (!id) return;
+      await loadRoles();
+      const errEl = document.getElementById('modalUserAccountEditErr');
+      showErr(errEl, '');
+      try {
+        const acc = await api('GET', '/accounts/' + encodeURIComponent(id));
+        document.getElementById('userAccEditId').value = id;
+        document.getElementById('userAccEditLogin').value = acc.login || '';
+        document.getElementById('userAccEditPassword').value = '';
+        const rolesEl = document.getElementById('userAccEditRoles');
+        const codes = acc.role_codes || [];
+        rolesEl.innerHTML = rolesCache.map(r =>
+          '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"' + (codes.includes(r.code) ? ' checked' : '') + '> ' + escapeHtml(r.name) + '</label>'
+        ).join('');
+        document.getElementById('modalUserAccountEdit').classList.add('show');
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    }
+
+    document.getElementById('btnUserAccountEditCancel').onclick = () => {
+      document.getElementById('modalUserAccountEdit').classList.remove('show');
+    };
+
+    document.getElementById('btnUserAccountEditSave').onclick = async () => {
+      const id = document.getElementById('userAccEditId').value;
+      const login = document.getElementById('userAccEditLogin').value.trim();
+      const password = document.getElementById('userAccEditPassword').value;
+      const roleCodes = Array.from(document.querySelectorAll('#userAccEditRoles input:checked')).map(cb => cb.value);
+      const errEl = document.getElementById('modalUserAccountEditErr');
+      if (!login) {
+        showErr(errEl, 'Заполните логин');
+        return;
+      }
+      try {
+        const body = { login, role_codes: roleCodes };
+        if (password) {
+          const enc = await api('POST', '/accounts/encode-password', { password });
+          body.password_hash = enc.password_hash;
+        }
+        await api('PATCH', '/accounts/' + encodeURIComponent(id), body);
+        document.getElementById('modalUserAccountEdit').classList.remove('show');
+        await loadUsers();
+      } catch (e) {
+        showErr(errEl, e.message || String(e));
+      }
+    };
+
+    async function deleteUser(id) {
+      if (!id || !confirm('Удалить пользователя (учётную запись)?')) return;
+      try {
+        const r = await fetch('/api/accounts/' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!r.ok) {
+          const text = await r.text();
+          let j = null;
+          try { j = text ? JSON.parse(text) : null; } catch (_) {}
+          throw new Error(errText(j, text || r.statusText));
+        }
+        await loadUsers();
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    }
+
+    loadRoles().then(() => loadUsers());
+  </script>
+</body>
+</html>

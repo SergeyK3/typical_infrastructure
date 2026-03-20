@@ -1,0 +1,77 @@
+<!-- route: /global | file: static/global/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Глобальные справочники — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .hub-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem;
+      text-decoration: none; color: inherit; display: block; transition: border-color 0.15s;
+    }
+    .hub-card:hover { border-color: var(--accent); }
+    .hub-card h2 { margin: 0 0 0.5rem 0; font-size: 1.05rem; color: var(--accent); }
+    .hub-card p { margin: 0; font-size: 0.88rem; color: var(--text-muted); line-height: 1.45; }
+    .hub-card .hub-export { margin-top: 0.85rem; }
+    .hub-card .hub-export a { display: inline-block; text-decoration: none; }
+    .note { font-size: 0.9rem; color: var(--text-muted); max-width: 48rem; line-height: 1.5; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item active">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Подразделения, должности и регламенты выбранной организации — в рабочем пространстве <a href="/clients">/client/…</a></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <h1>Глобальные справочники</h1>
+        <p class="subtitle">Общесистемные шаблоны и нормативные реестры. Изменения здесь влияют на новые развёртывания и на выбор при копировании в организации.</p>
+        <p class="note">Карточки организации не синхронизируются с глобальными записями автоматически после копирования — правки ведутся отдельно в <code>/client/…</code>.</p>
+      </div>
+      <div class="content">
+        <div class="hub-grid">
+          <a class="hub-card" href="/global/template-org">
+            <h2>Типовая оргструктура</h2>
+            <p>Узлы шаблона в БД (<code>template_org_units</code>): коды, названия, иерархия для onboarding и «из шаблона».</p>
+            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/template-org-units/export/excel?template_code=default">Скачать Excel</a></div>
+          </a>
+          <a class="hub-card" href="/global/positions">
+            <h2>Типовые должности</h2>
+            <p>Глобальный каталог должностей: функция, уровень, привязка к регламенту по умолчанию.</p>
+            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/position-catalog/export/excel">Скачать Excel</a></div>
+          </a>
+          <a class="hub-card" href="/global/kpi">
+            <h2>Шаблоны KPI</h2>
+            <p>Типовые метрики для привязки к регламентам и карточкам.</p>
+            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/kpi-templates/export/excel">Скачать Excel</a></div>
+          </a>
+          <a class="hub-card" href="/regulations">
+            <h2>Регламенты должностей</h2>
+            <p>Полный реестр нормативных карточек, KPI-строки и инструкции внутри карточки.</p>
+            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/regulations/export/excel">Скачать Excel</a></div>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

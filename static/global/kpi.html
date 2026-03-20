@@ -1,0 +1,354 @@
+<!-- route: /global/kpi | file: static/global/kpi.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шаблоны KPI — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .data-table th, .data-table td { padding: 0.45rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .data-table th { color: var(--text-muted); font-weight: 500; }
+    .row-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.78rem; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; }
+    .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); box-sizing: border-box; }
+    .modal-content textarea { min-height: 64px; resize: vertical; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
+    .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
+    .hidden { display: none !important; }
+    .meta { color: var(--text-muted); font-size: 0.88rem; }
+    .th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
+    .th-filter select {
+      margin-top: 0.35rem;
+      width: 100%;
+      min-width: 5.5rem;
+      max-width: 16rem;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.78rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item active">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">KPI в карточках организации настраиваются в <a href="/clients">/client/…</a> → регламенты.</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <h1>Шаблоны KPI (глобально)</h1>
+        <p class="subtitle">Таблица <code>kpi_templates</code>. Шаблон с привязкой к типовой должности — стартовая точка; в карточке регламента у организации к одной должности можно добавить несколько KPI.</p>
+      </div>
+      <div class="content">
+        <div class="toolbar">
+          <button type="button" class="btn btn-secondary" id="btnLoad">Обновить</button>
+          <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Учитываются фильтры в шапке таблицы">Скачать Excel</button>
+          <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить</button>
+        </div>
+        <p id="listMeta" class="meta"></p>
+        <div id="listErr" class="err hidden"></div>
+        <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Код</th>
+            <th>Название</th>
+            <th><label class="th-filter">Отделение<select id="filterDeptCol" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
+            <th><label class="th-filter">Должность<select id="filterPositionCol" title="Фильтр по типовой должности"><option value="">— все —</option></select></label></th>
+            <th>Ед.</th>
+            <th>Период</th>
+            <th>Цель</th>
+            <th>Активен</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Шаблон KPI</h3>
+      <div id="modalErr" class="err hidden"></div>
+      <label>Код KPI</label>
+      <input type="text" id="fCode" placeholder="REV_GROWTH" />
+      <label>Название</label>
+      <input type="text" id="fName" />
+      <label>Единица</label>
+      <input type="text" id="fUnit" value="%" />
+      <label>Тип периода</label>
+      <select id="fPeriod">
+        <option value="month">month</option>
+        <option value="quarter">quarter</option>
+        <option value="year">year</option>
+      </select>
+      <label>Формула / правило</label>
+      <textarea id="fFormula"></textarea>
+      <label>Целевое значение по умолчанию</label>
+      <input type="number" step="any" id="fTarget" placeholder="пусто" />
+      <label>Типовая должность (необязательно)</label>
+      <select id="fPosition">
+        <option value="">— общий шаблон, не привязан к должности —</option>
+      </select>
+      <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Отделение в таблице берётся из основной связи должности с типом подразделения.</p>
+      <label><input type="checkbox" id="fActive" checked /> Активен</label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancel">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function errText(j, fallback) {
+      if (j && j.error) return j.error.message || j.error.code || fallback;
+      return fallback;
+    }
+    async function api(method, path, body) {
+      const opt = { method, headers: {} };
+      if (body !== undefined) {
+        opt.headers['Content-Type'] = 'application/json';
+        opt.body = JSON.stringify(body);
+      }
+      const r = await fetch('/api' + path, opt);
+      const text = await r.text();
+      let j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok) throw new Error(errText(j, text || r.statusText));
+      return j;
+    }
+    let items = [];
+    /** Кэш справочника должностей (с primary_dept_type_code) для фильтра в шапке таблицы */
+    let positionsCatalog = [];
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function loadDeptFilterOptions() {
+      const sel = $('filterDeptCol');
+      const keep = sel.value;
+      try {
+        const codes = await api('GET', '/kpi-templates/department-type-codes');
+        sel.innerHTML = '<option value="">— все —</option>';
+        (codes || []).forEach((c) => {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          sel.appendChild(opt);
+        });
+        if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+      } catch (_) {}
+    }
+
+    function rebuildPositionHeaderFilter() {
+      const sel = $('filterPositionCol');
+      const keep = sel.value;
+      const dept = $('filterDeptCol').value.trim();
+      sel.innerHTML = '<option value="">— все —</option>';
+      const list = dept
+        ? positionsCatalog.filter((p) => p.primary_dept_type_code === dept)
+        : positionsCatalog;
+      list.forEach((p) => {
+        const opt = document.createElement('option');
+        opt.value = p.position_code;
+        opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+        sel.appendChild(opt);
+      });
+      if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+    }
+
+    async function loadPositionsCatalog() {
+      try {
+        positionsCatalog = await api('GET', '/regulations/positions/list') || [];
+      } catch (_) {
+        positionsCatalog = [];
+      }
+      rebuildPositionHeaderFilter();
+    }
+
+    async function fillPositionSelect(preserve) {
+      const sel = $('fPosition');
+      const prev = preserve !== undefined ? preserve : sel.value;
+      sel.innerHTML = '<option value="">— общий шаблон, не привязан к должности —</option>';
+      try {
+        const positions = await api('GET', '/regulations/positions/list');
+        (positions || []).forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.position_code;
+          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+          sel.appendChild(opt);
+        });
+        if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+      } catch (_) {}
+    }
+
+    async function load() {
+      $('listErr').classList.add('hidden');
+      try {
+        const dept = $('filterDeptCol').value.trim();
+        const pos = $('filterPositionCol').value.trim();
+        let qs = 'limit=500&offset=0';
+        if (dept) qs += '&dept_type_code=' + encodeURIComponent(dept);
+        if (pos) qs += '&position_code=' + encodeURIComponent(pos);
+        const data = await api('GET', '/kpi-templates?' + qs);
+        items = data.items || [];
+        const parts = ['Записей: ' + (data.total ?? items.length)];
+        if (dept) parts.push('отделение: ' + dept);
+        if (pos) parts.push('должность: ' + pos);
+        $('listMeta').textContent = parts.join(' · ');
+        const tb = $('tbody');
+        tb.innerHTML = '';
+        for (const row of items) {
+          const tr = document.createElement('tr');
+          const tgt = row.default_target != null ? String(row.default_target) : '—';
+          const dDept = row.primary_dept_type_code ? escapeHtml(row.primary_dept_type_code) : '—';
+          const dPos = row.position_code
+            ? (row.position_name_ru ? escapeHtml(row.position_name_ru) + ' <code>' + escapeHtml(row.position_code) + '</code>' : '<code>' + escapeHtml(row.position_code) + '</code>')
+            : '—';
+          tr.innerHTML = '<td><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.kpi_code) + '">Изменить</button>' +
+            '<button type="button" class="btn btn-danger btn-del" data-code="' + escapeHtml(row.kpi_code) + '">Удалить</button></td>';
+          tb.appendChild(tr);
+        }
+        tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.code));
+        tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.code));
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
+    let editCode = null;
+    function openAdd() {
+      editCode = null;
+      $('modalTitle').textContent = 'Новый шаблон KPI';
+      $('modalErr').classList.add('hidden');
+      $('fCode').disabled = false;
+      $('fCode').value = '';
+      $('fName').value = '';
+      $('fUnit').value = '%';
+      $('fPeriod').value = 'month';
+      $('fFormula').value = '';
+      $('fTarget').value = '';
+      $('fActive').checked = true;
+      fillPositionSelect('');
+      $('modal').classList.add('show');
+    }
+    function openEdit(code) {
+      const row = items.find((x) => x.kpi_code === code);
+      if (!row) return;
+      editCode = code;
+      $('modalTitle').textContent = 'Изменить шаблон KPI';
+      $('modalErr').classList.add('hidden');
+      $('fCode').disabled = true;
+      $('fCode').value = row.kpi_code;
+      $('fName').value = row.kpi_name;
+      $('fUnit').value = row.unit || '%';
+      $('fPeriod').value = row.period_type || 'month';
+      $('fFormula').value = row.formula_or_rule || '';
+      $('fTarget').value = row.default_target != null ? String(row.default_target) : '';
+      $('fActive').checked = !!row.is_active;
+      fillPositionSelect(row.position_code || '');
+      $('modal').classList.add('show');
+    }
+    function closeModal() { $('modal').classList.remove('show'); }
+
+    $('btnLoad').onclick = load;
+    $('btnExportXlsx').onclick = () => {
+      const dept = $('filterDeptCol').value.trim();
+      const pos = $('filterPositionCol').value.trim();
+      const p = new URLSearchParams();
+      if (dept) p.set('dept_type_code', dept);
+      if (pos) p.set('position_code', pos);
+      const q = p.toString();
+      window.location.href = '/api/kpi-templates/export/excel' + (q ? '?' + q : '');
+    };
+    $('btnAdd').onclick = openAdd;
+    $('btnCancel').onclick = closeModal;
+    $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+
+    $('btnSave').onclick = async () => {
+      $('modalErr').classList.add('hidden');
+      const tv = $('fTarget').value.trim();
+      const pos = $('fPosition').value.trim();
+      const body = {
+        kpi_name: $('fName').value.trim(),
+        unit: $('fUnit').value.trim() || '%',
+        period_type: $('fPeriod').value,
+        formula_or_rule: $('fFormula').value.trim() || null,
+        default_target: tv === '' ? null : Number(tv),
+        is_active: $('fActive').checked,
+        position_code: pos ? pos : null,
+      };
+      try {
+        if (editCode) {
+          await api('PATCH', '/kpi-templates/' + encodeURIComponent(editCode), body);
+        } else {
+          const code = $('fCode').value.trim();
+          if (!code) throw new Error('Укажите код KPI');
+          await api('POST', '/kpi-templates', Object.assign({ kpi_code: code }, body));
+        }
+        closeModal();
+        await load();
+      } catch (e) {
+        $('modalErr').textContent = e.message;
+        $('modalErr').classList.remove('hidden');
+      }
+    };
+
+    async function delRow(code) {
+      if (!confirm('Удалить шаблон KPI?')) return;
+      $('listErr').classList.add('hidden');
+      try {
+        await api('DELETE', '/kpi-templates/' + encodeURIComponent(code));
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
+    $('filterDeptCol').onchange = () => {
+      rebuildPositionHeaderFilter();
+      load();
+    };
+    $('filterPositionCol').onchange = () => load();
+
+    (async () => {
+      await loadDeptFilterOptions();
+      await loadPositionsCatalog();
+      await load();
+    })();
+  </script>
+</body>
+</html>

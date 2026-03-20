@@ -1,0 +1,227 @@
+<!-- route: /global/template-org | file: static/global/template-org.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Типовая оргструктура — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+    .toolbar label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+    .toolbar input { padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 140px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .data-table th, .data-table td { padding: 0.45rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .data-table th { color: var(--text-muted); font-weight: 500; }
+    .row-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.78rem; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 440px; width: 100%; max-height: 90vh; overflow: auto; }
+    .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); box-sizing: border-box; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
+    .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
+    .hidden { display: none !important; }
+    .meta { color: var(--text-muted); font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">Typical Infrastructure</div>
+        <a href="/clients" class="sidebar-item">Клиенты</a>
+        <a href="/users" class="sidebar-item">Пользователи</a>
+        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
+        <div class="sidebar-section-label">Глобальные справочники</div>
+        <a href="/global" class="sidebar-item">Обзор</a>
+        <a href="/global/template-org" class="sidebar-item active">Типовая оргструктура</a>
+        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
+        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/docs" class="sidebar-item api-link">API</a>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-section-label">Справочники организации</div>
+        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Дерево подразделений и копии из шаблона — в <a href="/clients">/client/…</a></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-header">
+        <h1>Типовая оргструктура (глобально)</h1>
+        <p class="subtitle">Строки в БД для выбранного <code>template_code</code>. Если таблица пуста для шаблона, используется встроенный список из кода приложения.</p>
+      </div>
+      <div class="content">
+        <div class="toolbar">
+          <label>Код шаблона <input type="text" id="tplCode" value="default" /></label>
+          <button type="button" class="btn btn-secondary" id="btnLoad">Загрузить</button>
+          <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка текущего шаблона в Excel">Скачать Excel</button>
+          <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить узел</button>
+        </div>
+        <p id="listMeta" class="meta"></p>
+        <div id="listErr" class="err hidden"></div>
+        <table class="data-table">
+          <thead><tr><th>Код</th><th>Название</th><th>Родитель</th><th>Тип</th><th>Порядок</th><th></th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Узел шаблона</h3>
+      <div id="modalErr" class="err hidden"></div>
+      <input type="hidden" id="rowId" />
+      <label>Код узла</label>
+      <input type="text" id="fCode" placeholder="IT" />
+      <label>Название</label>
+      <input type="text" id="fName" />
+      <label>Код родителя (пусто = корень)</label>
+      <input type="text" id="fParent" placeholder="" />
+      <label>Тип подразделения</label>
+      <input type="text" id="fType" placeholder="department" />
+      <label>Порядок сортировки</label>
+      <input type="number" id="fSort" value="0" />
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancel">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function errText(j, fallback) {
+      if (j && j.error) return j.error.message || j.error.code || fallback;
+      return fallback;
+    }
+    async function api(method, path, body) {
+      const opt = { method, headers: {} };
+      if (body !== undefined) {
+        opt.headers['Content-Type'] = 'application/json';
+        opt.body = JSON.stringify(body);
+      }
+      const r = await fetch('/api' + path, opt);
+      const text = await r.text();
+      let j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok) throw new Error(errText(j, text || r.statusText));
+      return j;
+    }
+
+    let items = [];
+
+    function tpl() { return $('tplCode').value.trim() || 'default'; }
+
+    async function load() {
+      $('listErr').classList.add('hidden');
+      try {
+        const data = await api('GET', '/template-org-units?template_code=' + encodeURIComponent(tpl()) + '&limit=2000&offset=0');
+        items = data.items || [];
+        $('listMeta').textContent = 'Записей: ' + (data.total ?? items.length);
+        const tb = $('tbody');
+        tb.innerHTML = '';
+        for (const row of items) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td><code>' + escapeHtml(row.code) + '</code></td><td>' + escapeHtml(row.name) + '</td><td>' + escapeHtml(row.parent_code || '—') + '</td><td>' + escapeHtml(row.unit_type) + '</td><td>' + row.sort_order + '</td><td class="row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-edit" data-id="' + escapeHtml(row.id) + '">Изменить</button>' +
+            '<button type="button" class="btn btn-danger btn-del" data-id="' + escapeHtml(row.id) + '">Удалить</button></td>';
+          tb.appendChild(tr);
+        }
+        tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.id));
+        tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.id));
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function openAdd() {
+      $('modalTitle').textContent = 'Новый узел';
+      $('rowId').value = '';
+      $('modalErr').classList.add('hidden');
+      $('fCode').disabled = false;
+      $('fCode').value = '';
+      $('fName').value = '';
+      $('fParent').value = '';
+      $('fType').value = 'department';
+      $('fSort').value = '0';
+      $('modal').classList.add('show');
+    }
+    function openEdit(id) {
+      const row = items.find((x) => x.id === id);
+      if (!row) return;
+      $('modalTitle').textContent = 'Изменить узел';
+      $('rowId').value = row.id;
+      $('modalErr').classList.add('hidden');
+      $('fCode').disabled = true;
+      $('fCode').value = row.code;
+      $('fName').value = row.name;
+      $('fParent').value = row.parent_code || '';
+      $('fType').value = row.unit_type;
+      $('fSort').value = String(row.sort_order);
+      $('modal').classList.add('show');
+    }
+    function closeModal() { $('modal').classList.remove('show'); }
+
+    $('btnLoad').onclick = load;
+    $('btnExportXlsx').onclick = () => {
+      window.location.href = '/api/template-org-units/export/excel?template_code=' + encodeURIComponent(tpl());
+    };
+    $('btnAdd').onclick = openAdd;
+    $('btnCancel').onclick = closeModal;
+    $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+
+    $('btnSave').onclick = async () => {
+      $('modalErr').classList.add('hidden');
+      const id = $('rowId').value;
+      const parentRaw = $('fParent').value.trim();
+      const payload = {
+        name: $('fName').value.trim(),
+        parent_code: parentRaw ? parentRaw : null,
+        unit_type: $('fType').value.trim(),
+        sort_order: parseInt($('fSort').value, 10) || 0,
+      };
+      try {
+        if (id) {
+          await api('PATCH', '/template-org-units/' + encodeURIComponent(id), payload);
+        } else {
+          await api('POST', '/template-org-units', {
+            template_code: tpl(),
+            code: $('fCode').value.trim(),
+            name: payload.name,
+            parent_code: payload.parent_code,
+            unit_type: payload.unit_type,
+            sort_order: payload.sort_order,
+          });
+        }
+        closeModal();
+        await load();
+      } catch (e) {
+        $('modalErr').textContent = e.message;
+        $('modalErr').classList.remove('hidden');
+      }
+    };
+
+    async function delRow(id) {
+      if (!confirm('Удалить узел шаблона? Дочерние узлы должны быть удалены ранее.')) return;
+      $('listErr').classList.add('hidden');
+      try {
+        await api('DELETE', '/template-org-units/' + encodeURIComponent(id));
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
