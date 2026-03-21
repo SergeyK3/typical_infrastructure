@@ -11,6 +11,7 @@ from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import Client, Employee, OrgUnit, Position
 from app.models import PositionCatalog, PositionDeptType
+from app.client_catalog_sync import sync_global_regulations_to_client
 from app.template_org_resolve import resolve_template_structure
 from app.schemas import ListEnvelope, OrgUnitCreate, OrgUnitFromTemplateNode, OrgUnitNode, OrgUnitOut, OrgUnitPatch
 from app.utils import new_id32
@@ -202,6 +203,10 @@ def add_org_unit_from_template(
 def deploy_template(
     client_id: str = Query(...),
     include_positions: bool = Query(True, description="Развернуть типовые должности"),
+    include_regulations: bool = Query(
+        True,
+        description="Скопировать глобальные регламенты и KPI в справочник организации (по развёрнутым должностям)",
+    ),
     db: Session = Depends(get_db),
 ) -> list[OrgUnitOut]:
     """Развернуть типовую оргструктуру (отделения, секции и должности) для организации."""
@@ -260,6 +265,8 @@ def deploy_template(
             db.add(pos)
             db.flush()
             existing_pos[(catalog.position_code, ou_id)] = pos
+    if include_regulations:
+        sync_global_regulations_to_client(db, client_id)
     db.commit()
     rows = db.scalars(
         select(OrgUnit).where(OrgUnit.client_id == client_id).order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc())

@@ -48,8 +48,23 @@ TEMPLATE_SEEDS: list[dict] = [
 # Справочник типовых должностей (формат [FUNCTION]_[ROLE])
 POSITION_CATALOG_SEEDS: list[dict] = [
     {"position_code": "ADM_DIRECTOR", "position_name_ru": "Директор", "function_code": "ADM", "position_level": "DIR", "is_managerial": True},
+    {
+        "position_code": "ADM_ZAMADM",
+        "position_name_ru": "Заместитель директора по административным вопросам",
+        "function_code": "ADM",
+        "position_level": "HEAD",
+        "is_managerial": True,
+    },
     {"position_code": "ADM_SYS_ADMIN", "position_name_ru": "Системный администратор", "function_code": "ADM", "position_level": "SPEC", "is_managerial": False},
+    {
+        "position_code": "INFO_SYSTEM_SUPPORT",
+        "position_name_ru": "Специалист по поддержке информационных систем",
+        "function_code": "ADM",
+        "position_level": "SPEC",
+        "is_managerial": False,
+    },
     {"position_code": "HR_MANAGER", "position_name_ru": "HR-менеджер", "function_code": "HR", "position_level": "MGR", "is_managerial": True},
+    {"position_code": "HR_HEAD", "position_name_ru": "Руководитель отдела кадров", "function_code": "HR", "position_level": "HEAD", "is_managerial": True},
     {"position_code": "HR_RECRUITER", "position_name_ru": "Рекрутер", "function_code": "HR", "position_level": "SPEC", "is_managerial": False},
     {"position_code": "HR_GENERALIST", "position_name_ru": "HR-генералист", "function_code": "HR", "position_level": "SPEC", "is_managerial": False},
     {"position_code": "MKT_MANAGER", "position_name_ru": "Маркетолог", "function_code": "MKT", "position_level": "MGR", "is_managerial": True},
@@ -57,17 +72,35 @@ POSITION_CATALOG_SEEDS: list[dict] = [
     {"position_code": "SALES_MANAGER", "position_name_ru": "Менеджер по продажам", "function_code": "SALES", "position_level": "MGR", "is_managerial": True},
     {"position_code": "SALES_TEAM_LEAD", "position_name_ru": "Руководитель отдела продаж", "function_code": "SALES", "position_level": "HEAD", "is_managerial": True},
     {"position_code": "ACC_ACCOUNTANT", "position_name_ru": "Бухгалтер", "function_code": "ACC", "position_level": "SPEC", "is_managerial": False},
+    {
+        "position_code": "ACC_MATERIAL_ACCOUNTANT",
+        "position_name_ru": "Бухгалтер по учёту материальных ценностей",
+        "function_code": "ACC",
+        "position_level": "SPEC",
+        "is_managerial": False,
+    },
+    {"position_code": "ACC_CHIEF_ACCOUNTANT", "position_name_ru": "Главный бухгалтер", "function_code": "ACC", "position_level": "HEAD", "is_managerial": True},
     {"position_code": "PROD_SUPERVISOR", "position_name_ru": "Начальник производства", "function_code": "PROD", "position_level": "HEAD", "is_managerial": True},
+    {
+        "position_code": "PROD_TECH_DIR",
+        "position_name_ru": "Заместитель директора по производству (технический директор)",
+        "function_code": "PROD",
+        "position_level": "HEAD",
+        "is_managerial": True,
+    },
     {"position_code": "QUAL_SPECIALIST", "position_name_ru": "Специалист по контролю качества", "function_code": "QUAL", "position_level": "SPEC", "is_managerial": False},
     {"position_code": "QUAL_HEAD", "position_name_ru": "Начальник ОКК", "function_code": "QUAL", "position_level": "HEAD", "is_managerial": True},
-    {"position_code": "PR_MEDIA_SPECIALIST", "position_name_ru": "Специалист по связям со СМИ", "function_code": "PR", "position_level": "SPEC", "is_managerial": False},
+    {"position_code": "PR_SPECIALIST", "position_name_ru": "Специалист по связям с общественностью", "function_code": "PR", "position_level": "SPEC", "is_managerial": False},
 ]
 
 # Связь должность ↔ тип подразделения (dept_type_code = код отделения)
 POSITION_DEPT_TYPE_SEEDS: list[tuple[str, str, bool]] = [
     ("ADM_DIRECTOR", "ADM", True),
+    ("ADM_ZAMADM", "ADM", True),
     ("ADM_SYS_ADMIN", "ADM", True),
+    ("INFO_SYSTEM_SUPPORT", "ADM", True),
     ("HR_MANAGER", "HR", True),
+    ("HR_HEAD", "HR", True),
     ("HR_RECRUITER", "HR", True),
     ("HR_GENERALIST", "HR", True),
     ("MKT_MANAGER", "MKT", True),
@@ -75,11 +108,26 @@ POSITION_DEPT_TYPE_SEEDS: list[tuple[str, str, bool]] = [
     ("SALES_MANAGER", "SALES", True),
     ("SALES_TEAM_LEAD", "SALES", True),
     ("ACC_ACCOUNTANT", "ACC", True),
+    ("ACC_MATERIAL_ACCOUNTANT", "ACC", True),
+    ("ACC_CHIEF_ACCOUNTANT", "ACC", True),
     ("PROD_SUPERVISOR", "PROD", True),
+    ("PROD_TECH_DIR", "PROD", True),
     ("QUAL_SPECIALIST", "QUAL", True),
     ("QUAL_HEAD", "QUAL", True),
-    ("PR_MEDIA_SPECIALIST", "PR", True),
+    ("PR_SPECIALIST", "PR", True),
 ]
+
+
+def _regulation_code_for_position(position_code: str) -> str:
+    """Код глобального регламента (совпадает с regulations_enrichment.json / DOCX)."""
+    aliases = {
+        "ADM_DIRECTOR": "REG_DIRECTOR_V1",
+        "ADM_SYS_ADMIN": "REG_SYSADMIN_V1",
+        "SALES_MANAGER": "REG_SALES_MGR_V1",
+    }
+    if position_code in aliases:
+        return aliases[position_code]
+    return f"REG_{position_code}_V1"
 
 
 def _position_regulation_seeds() -> list[dict]:
@@ -104,8 +152,9 @@ def _position_regulation_seeds() -> list[dict]:
         pcode = pc["position_code"]
         dept = pos_dept[pcode]
         name_ru = pc["position_name_ru"]
+        reg_code = _regulation_code_for_position(pcode)
         row: dict = {
-            "regulation_code": f"REG_{pcode}_V1",
+            "regulation_code": reg_code,
             "position_code": pcode,
             "dept_type_code": dept,
             "regulation_name": f"Регламент: {name_ru}",
@@ -137,13 +186,13 @@ KPI_TEMPLATE_SEEDS: list[dict] = [
 
 REGULATION_KPI_SEEDS: list[dict] = [
     {"regulation_code": "REG_HR_RECRUITER_V1", "kpi_code": "KPI_RECRUIT_TIME", "target_value": 30.0, "weight": 1.0},
-    {"regulation_code": "REG_SALES_MANAGER_V1", "kpi_code": "KPI_SALES_PLAN", "target_value": 100.0, "weight": 0.5},
-    {"regulation_code": "REG_SALES_MANAGER_V1", "kpi_code": "KPI_CONVERSION", "target_value": 25.0, "weight": 0.5},
+    {"regulation_code": "REG_SALES_MGR_V1", "kpi_code": "KPI_SALES_PLAN", "target_value": 100.0, "weight": 0.5},
+    {"regulation_code": "REG_SALES_MGR_V1", "kpi_code": "KPI_CONVERSION", "target_value": 25.0, "weight": 0.5},
 ]
 
 REGULATION_INSTRUCTION_SEEDS: list[dict] = [
     {"regulation_code": "REG_HR_RECRUITER_V1", "instruction_code": "INS_RECRUIT", "instruction_name": "Процедура подбора", "instruction_url": "https://docs.google.com/...", "sort_order": 1},
-    {"regulation_code": "REG_SALES_MANAGER_V1", "instruction_code": "INS_SALES", "instruction_name": "Работа с клиентами", "instruction_url": "https://docs.google.com/...", "sort_order": 1},
+    {"regulation_code": "REG_SALES_MGR_V1", "instruction_code": "INS_SALES", "instruction_name": "Работа с клиентами", "instruction_url": "https://docs.google.com/...", "sort_order": 1},
 ]
 
 CLIENT_SEEDS: list[dict] = [

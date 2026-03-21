@@ -24,6 +24,12 @@ from app.seed import (
     seed_roles,
     seed_template_org_units,
 )
+from app.universal_seed import (
+    apply_regulation_enrichment_json,
+    link_regulation_kpis_from_templates,
+    merge_kpi_templates_from_xlsx,
+    merge_position_regulations_from_client_xlsx,
+)
 from app.settings import settings
 
 # Configure app logger
@@ -187,7 +193,11 @@ def _startup() -> None:
         seed_enterprise_templates(db)
         seed_position_catalog(db)
         seed_kpi_templates(db)
+        merge_kpi_templates_from_xlsx(db)
         seed_regulations(db)
+        apply_regulation_enrichment_json(db)
+        merge_position_regulations_from_client_xlsx(db)
+        link_regulation_kpis_from_templates(db)
         seed_template_org_units(db)
         # seed_clients отключён — удалённые клиенты не восстанавливаются
     finally:

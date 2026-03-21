@@ -583,9 +583,12 @@
     async function deployTemplate() {
       if (!clientId) return;
       try {
-        await fetchApi('/org-units/deploy-template?client_id=' + encodeURIComponent(clientId), {
-          method: 'POST'
-        });
+        await fetchApi(
+          '/org-units/deploy-template?client_id=' +
+            encodeURIComponent(clientId) +
+            '&include_regulations=true',
+          { method: 'POST' }
+        );
         await loadOrgTree();
         await loadPositions();
       } catch (e) {
