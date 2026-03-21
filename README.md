@@ -1,5 +1,7 @@
 ## Typical infrastructure (MVP backend)
 
+**Текущая версия ядра:** см. файл [`VERSION`](VERSION). Релизы в Git помечаются тегами (`v1.0.0`, …).
+
 ### Run
 
 ```bash
