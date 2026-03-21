@@ -44,18 +44,64 @@
     .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; }
     .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
     .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
-    .reg-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-    .reg-card:hover { border-color: var(--accent); }
-    .reg-card .reg-body { flex: 1; min-width: 0; }
-    .reg-card h3 { margin: 0 0 0.35rem 0; font-size: 1rem; }
-    .reg-card .meta { font-size: 0.85rem; color: var(--text-muted); }
-    .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); }
+    .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
+    .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+    .cr-table th, .cr-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .cr-table th { color: var(--text-muted); font-weight: 500; }
+    .cr-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-table .td-name a { color: var(--accent); text-decoration: none; }
+    .cr-table .td-name a:hover { text-decoration: underline; }
+    .cr-table th:nth-child(1), .cr-table td:nth-child(1) { width: 13%; }
+    .cr-table th:nth-child(2), .cr-table td:nth-child(2) { width: 20%; }
+    .cr-table th:nth-child(3), .cr-table td:nth-child(3) { width: 11%; }
+    .cr-table th:nth-child(4), .cr-table td:nth-child(4) { width: 6%; }
+    .cr-table th:nth-child(5), .cr-table td:nth-child(5) { width: 4%; }
+    .cr-table th:nth-child(6), .cr-table td:nth-child(6) { width: 12%; }
+    .cr-table th:nth-child(7), .cr-table td:nth-child(7) { width: 11%; }
+    .cr-table th:nth-child(8), .cr-table td:nth-child(8) { width: 9rem; min-width: 9rem; max-width: 9rem; white-space: nowrap; }
+    .cr-table .row-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
+    .cr-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+    .ws-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+    .ws-table th, .ws-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .ws-table th { color: var(--text-muted); font-weight: 500; font-size: 0.82rem; }
+    .ws-table .td-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ws-table .row-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
+    .ws-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+    .cr-th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
+    .cr-th-filter select {
+      margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%;
+      padding: 0.35rem 0.45rem; font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); box-sizing: border-box;
+    }
+    .cr-filter-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.35rem; }
+    .cr-filter-toolbar label { font-size: 0.88rem; color: var(--text-muted); }
     .cr-modal-wide .modal-content { max-width: 520px; }
+    /* Фокус сайдбара: org — скрыт верх; apps — скрыты верх и середина */
+    .workspace-sidebar .sidebar-expand-full {
+      display: block; width: 100%; padding: 0.4rem 0.65rem; margin: 0;
+      font-size: 0.72rem; text-align: left;
+      background: rgba(124, 58, 237, 0.12);
+      border: none; border-bottom: 1px solid var(--border);
+      color: var(--accent); cursor: pointer; flex-shrink: 0;
+    }
+    .workspace-sidebar .sidebar-expand-full:hover { background: rgba(124, 58, 237, 0.22); }
+    .workspace-sidebar .sidebar-expand-full[hidden] { display: none !important; }
+    .workspace-sidebar.sidebar-focus-org .sidebar-top { display: none !important; }
+    .workspace-sidebar.sidebar-focus-apps .sidebar-top,
+    .workspace-sidebar.sidebar-focus-apps .sidebar-middle,
+    .workspace-sidebar.sidebar-focus-apps .sidebar-divider { display: none !important; }
+    .workspace-sidebar.sidebar-focus-apps .sidebar-apps {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: none; padding-top: 1rem;
+    }
+    .workspace-sidebar.sidebar-focus-apps { border-top: 1px solid var(--border); }
+    .workspace-sidebar #sidebarApps { cursor: pointer; }
+    .workspace-sidebar.sidebar-focus-apps #sidebarApps { cursor: default; outline: 1px solid rgba(124, 58, 237, 0.35); outline-offset: -2px; border-radius: 6px; }
   </style>
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar">
+    <aside class="sidebar workspace-sidebar" id="workspaceSidebar">
+      <button type="button" class="sidebar-expand-full" id="btnWorkspaceSidebarExpand" hidden title="Показать глобальное меню и полный список разделов">▴ Весь меню</button>
       <div class="sidebar-top">
         <div class="sidebar-brand">Typical Infrastructure</div>
         <a href="/clients" class="sidebar-item">Клиенты</a>
@@ -69,7 +115,7 @@
         <a id="topNavRegulations" href="/regulations" class="sidebar-item" title="Общесистемный нормативный реестр">Регламенты должностей</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
       </div>
-      <div class="sidebar-bottom">
+      <div class="sidebar-middle">
         <div class="sidebar-section-label">Справочники организации</div>
         <div class="sidebar-muted" style="font-size:0.78rem;margin:-0.35rem 0 0.5rem 0;line-height:1.35;">Просмотр и правки в разрезе <strong>выбранной</strong> организации</div>
         <a class="sidebar-item active" data-tab="org">Подразделения</a>
@@ -77,6 +123,11 @@
         <a class="sidebar-item" data-tab="client-regs">Регламенты и KPI</a>
         <a class="sidebar-item" data-tab="employees">Сотрудники</a>
         <a class="sidebar-item" data-tab="accounts">Аккаунты</a>
+      </div>
+      <div class="sidebar-divider" aria-hidden="true"></div>
+      <div class="sidebar-apps" id="sidebarApps" role="region" aria-label="Приложения">
+        <div class="sidebar-section-label">Приложения</div>
+        <div class="sidebar-apps-placeholder">Раздел в разработке. Здесь появятся подключаемые приложения для организации.</div>
       </div>
     </aside>
     <main class="main">
@@ -125,8 +176,37 @@
         <button type="button" class="btn btn-secondary" id="btnCrRefresh">Обновить</button>
         <a class="btn btn-secondary" id="exportClientRegsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
+      <div class="cr-filter-toolbar">
+        <label><input type="checkbox" id="crFilterCurrent" /> Только действующие</label>
+      </div>
       <p id="crListMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
-      <div id="crList" style="margin-top: 0.75rem;"></div>
+      <p id="crNoClient" class="meta hidden" style="margin-top:0.75rem;">Выберите организацию.</p>
+      <div id="crTableMount" class="hidden" style="margin-top: 0.75rem;">
+        <div style="overflow-x:auto;">
+          <table class="cr-table" id="crTable">
+            <thead>
+              <tr>
+                <th>Код</th>
+                <th>Название</th>
+                <th><label class="cr-th-filter">Должность<select id="crFilterPosition" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
+                <th><label class="cr-th-filter">Тип подразделения<select id="crFilterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
+                <th>Вер.</th>
+                <th>Источник</th>
+                <th><label class="cr-th-filter">Статус<select id="crFilterStatus" title="Фильтр по статусу">
+                  <option value="">— все —</option>
+                  <option value="draft">draft</option>
+                  <option value="on_review">on_review</option>
+                  <option value="approved">approved</option>
+                  <option value="active">active</option>
+                  <option value="archived">archived</option>
+                </select></label></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="crTbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Modal: Assign employee to position -->
@@ -154,7 +234,24 @@
         <input type="number" id="excelHeaderRow" placeholder="Строка заголовков" title="Номер строки с заголовками (1, 2, 3...). По умолчанию 1." min="1" style="width: 90px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
       </div>
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none">
-      <div id="employeesList" style="margin-top: 1rem;"></div>
+      <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;line-height:1.45;">Импорт: колонки Фамилия, Имя (+ опционально Отчество, Email, телефон, Telegram, код подразделения, код должности). Коды должны совпадать с подразделениями и должностями этой организации.</p>
+      <div style="overflow-x:auto;margin-top:0.75rem;">
+        <table class="ws-table" id="empTable">
+          <thead>
+            <tr>
+              <th style="width:14%;">ФИО</th>
+              <th style="width:12%;">Email</th>
+              <th style="width:9%;">Телефон</th>
+              <th style="width:9%;">Telegram</th>
+              <th style="width:14%;"><label class="cr-th-filter">Подразделение<select id="empFilterOrg" title="Фильтр по подразделению"><option value="">— все —</option></select></label></th>
+              <th style="width:14%;"><label class="cr-th-filter">Должность<select id="empFilterPos" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
+              <th style="width:12%;">Логин (корп.)</th>
+              <th style="width:9rem;"></th>
+            </tr>
+          </thead>
+          <tbody id="empTbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Аккаунты -->
@@ -164,7 +261,25 @@
       <button class="btn btn-primary" id="btnAddAccount">+ Добавить аккаунт</button>
       <a class="btn btn-secondary" id="exportAccountsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
-      <div id="accountsList" style="margin-top: 1rem;"></div>
+      <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;">Пароль в списке не показывается; задайте при создании аккаунта или в форме «Изменить» (новый пароль заменит старый).</p>
+      <div style="overflow-x:auto;margin-top:0.75rem;">
+        <table class="ws-table" id="accTable">
+          <thead>
+            <tr>
+              <th style="width:12%;">Логин</th>
+              <th style="width:12%;">Сотрудник</th>
+              <th style="width:8%;">Телефон</th>
+              <th style="width:8%;">Telegram</th>
+              <th style="width:12%;"><label class="cr-th-filter">Подразделение<select id="accFilterOrg" title="Фильтр"><option value="">— все —</option></select></label></th>
+              <th style="width:12%;"><label class="cr-th-filter">Должность<select id="accFilterPos" title="Фильтр"><option value="">— все —</option></select></label></th>
+              <th style="width:7%;" title="Пароль хранится в виде хэша; смена — в форме редактирования">Пароль</th>
+              <th style="width:7%;">Статус</th>
+              <th style="width:9rem;"></th>
+            </tr>
+          </thead>
+          <tbody id="accTbody"></tbody>
+        </table>
+      </div>
     </div>
       </div>
     </main>
@@ -241,6 +356,10 @@
       <input type="text" id="empEditMiddleName">
       <label>Email</label>
       <input type="email" id="empEditEmail">
+      <label>Телефон (моб.)</label>
+      <input type="text" id="empEditPhone" placeholder="+7…" maxlength="32">
+      <label>Telegram (id или @username)</label>
+      <input type="text" id="empEditTelegram" placeholder="@user или числовой id" maxlength="128">
       <label>Подразделение</label>
       <select id="empEditOrgUnit"><option value="">— Не выбрано —</option></select>
       <label>Должность</label>
@@ -272,6 +391,10 @@
       <input type="text" id="empMiddleName">
       <label>Email</label>
       <input type="email" id="empEmail">
+      <label>Телефон (моб.)</label>
+      <input type="text" id="empPhone" placeholder="+7…" maxlength="32">
+      <label>Telegram (id или @username)</label>
+      <input type="text" id="empTelegram" placeholder="необязательно" maxlength="128">
       <label>Подразделение</label>
       <select id="empOrgUnit"><option value="">— Не выбрано —</option></select>
       <label>Должность</label>
@@ -424,6 +547,10 @@
     let orgUnits = [];
     let orgTreeData = [];
     let roles = [];
+    /** Полный список сотрудников (для должностей, аккаунтов, выпадающих списков). */
+    let employeesAllCache = [];
+    /** Текущая выборка на вкладке «Сотрудники» (с учётом фильтров). */
+    let employeesTableCache = [];
 
     function getClientId() {
       const m = window.location.pathname.match(/^\/client\/([^/]+)/);
@@ -446,6 +573,13 @@
       el.classList.toggle('hidden', !msg);
     }
 
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
     function regulationsUrl() {
       return clientId ? '/regulations?from_client=' + encodeURIComponent(clientId) : '/regulations';
     }
@@ -462,19 +596,56 @@
     }
 
     function updateWorkspaceExportLinks() {
-      const q = clientId ? 'client_id=' + encodeURIComponent(clientId) : '';
-      const setHref = (id, path) => {
+      const setHref = (id, path, query) => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.href = clientId ? path + '?' + q : '#';
+        el.href = clientId && query != null ? path + '?' + query : '#';
       };
-      setHref('exportOrgXlsx', '/api/org-units/export/excel');
-      setHref('exportPositionsXlsx', '/api/positions/export/excel');
-      setHref('exportEmployeesXlsx', '/api/employees/export/excel');
-      setHref('exportAccountsXlsx', '/api/accounts/export/excel');
+      const qBase = clientId ? 'client_id=' + encodeURIComponent(clientId) : '';
+      setHref('exportOrgXlsx', '/api/org-units/export/excel', qBase);
+      setHref('exportPositionsXlsx', '/api/positions/export/excel', qBase);
+      if (!clientId) {
+        setHref('exportEmployeesXlsx', '/api/employees/export/excel', null);
+        setHref('exportAccountsXlsx', '/api/accounts/export/excel', null);
+        return;
+      }
+      const pEmp = new URLSearchParams({ client_id: clientId });
+      const ouE = document.getElementById('empFilterOrg') && document.getElementById('empFilterOrg').value;
+      const posE = document.getElementById('empFilterPos') && document.getElementById('empFilterPos').value;
+      if (ouE) pEmp.set('org_unit_id', ouE);
+      if (posE) pEmp.set('position_id', posE);
+      setHref('exportEmployeesXlsx', '/api/employees/export/excel', pEmp.toString());
+      const pAcc = new URLSearchParams({ client_id: clientId });
+      const ouA = document.getElementById('accFilterOrg') && document.getElementById('accFilterOrg').value;
+      const posA = document.getElementById('accFilterPos') && document.getElementById('accFilterPos').value;
+      if (ouA) pAcc.set('org_unit_id', ouA);
+      if (posA) pAcc.set('position_id', posA);
+      setHref('exportAccountsXlsx', '/api/accounts/export/excel', pAcc.toString());
+    }
+
+    const WORKSPACE_SIDEBAR_FOCUS_KEY = 'workspaceSidebarFocus';
+
+    function applyWorkspaceSidebarFocus(mode) {
+      const el = document.getElementById('workspaceSidebar');
+      const btn = document.getElementById('btnWorkspaceSidebarExpand');
+      if (!el) return;
+      el.classList.remove('sidebar-focus-org', 'sidebar-focus-apps');
+      if (mode === 'org') el.classList.add('sidebar-focus-org');
+      if (mode === 'apps') el.classList.add('sidebar-focus-apps');
+      if (btn) btn.hidden = mode === 'full';
+      try { localStorage.setItem(WORKSPACE_SIDEBAR_FOCUS_KEY, mode); } catch (_) {}
+    }
+
+    function getStoredWorkspaceSidebarFocus() {
+      try {
+        const v = localStorage.getItem(WORKSPACE_SIDEBAR_FOCUS_KEY);
+        if (v === 'full' || v === 'org' || v === 'apps') return v;
+      } catch (_) {}
+      return 'org';
     }
 
     function activateWorkspaceTab(tab) {
+      applyWorkspaceSidebarFocus('org');
       const path = window.location.pathname;
       if (tab === 'client-regs') {
         if (history.replaceState) history.replaceState(null, '', path + '#client-regs');
@@ -490,7 +661,7 @@
       panel.classList.add('active');
       if (tab === 'org') loadOrgTree();
       else if (tab === 'positions') loadPositions();
-      else if (tab === 'client-regs') loadClientRegulations();
+      else if (tab === 'client-regs') loadCrFilterOptions().then(() => loadClientRegulations());
       else if (tab === 'employees') loadEmployees();
       else if (tab === 'accounts') loadAccounts();
     }
@@ -500,6 +671,13 @@
         e.preventDefault();
         activateWorkspaceTab(t.dataset.tab);
       };
+    });
+
+    document.getElementById('btnWorkspaceSidebarExpand').onclick = () => applyWorkspaceSidebarFocus('full');
+
+    document.getElementById('sidebarApps').addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      applyWorkspaceSidebarFocus('apps');
     });
 
     document.getElementById('btnHeaderClientRegs').onclick = () => {
@@ -694,7 +872,7 @@
         el.innerHTML = '<table><thead><tr><th>Код</th><th>Название</th><th>Подразделение</th><th>Сотрудник</th><th></th></tr></thead><tbody>' +
           items.map(p => {
             const ou = orgUnits.find(x => x.id === p.org_unit_id);
-            const emp = employeesCache.find(x => x.position_id === p.id);
+            const emp = employeesAllCache.find(x => x.position_id === p.id);
             const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
             return '<tr><td>' + p.code + '</td><td>' + p.name + '</td><td>' + (ou ? ou.code : p.org_unit_id) + '</td><td>' + empName + '</td><td class="row-actions"><button class="btn btn-sm btn-primary" data-assign-pos="' + p.id + '">Назначить</button><button class="btn btn-sm btn-secondary" data-edit-pos="' + p.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-pos="' + p.id + '">Удалить</button></td></tr>';
           }).join('') + '</tbody></table>';
@@ -845,26 +1023,67 @@
       } catch (e) { alert(e.message); }
     }
 
+    function fillEmployeeAccountFilters() {
+      const keepEmpOrg = document.getElementById('empFilterOrg') ? document.getElementById('empFilterOrg').value : '';
+      const keepEmpPos = document.getElementById('empFilterPos') ? document.getElementById('empFilterPos').value : '';
+      const keepAccOrg = document.getElementById('accFilterOrg') ? document.getElementById('accFilterOrg').value : '';
+      const keepAccPos = document.getElementById('accFilterPos') ? document.getElementById('accFilterPos').value : '';
+      const ouOpts = '<option value="">— все —</option>' + orgUnits.map(u => '<option value="' + u.id + '">' + escapeHtml(u.code) + '</option>').join('');
+      ['empFilterOrg', 'accFilterOrg'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = ouOpts;
+        el.value = id === 'empFilterOrg' ? keepEmpOrg : keepAccOrg;
+      });
+      const posOpts = '<option value="">— все —</option>' + positionsCache.map(p => '<option value="' + p.id + '">' + escapeHtml(p.code) + ' — ' + escapeHtml(p.name) + '</option>').join('');
+      ['empFilterPos', 'accFilterPos'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = posOpts;
+        el.value = id === 'empFilterPos' ? keepEmpPos : keepAccPos;
+      });
+    }
+
     // Employees
     async function loadEmployees() {
       await loadPositionsForSelect();
-      const el = document.getElementById('employeesList');
+      if (!orgUnits.length) await loadOrgTree();
+      fillEmployeeAccountFilters();
+      const tbody = document.getElementById('empTbody');
+      if (!tbody) return;
       try {
-        const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId));
+        let url = '/employees?client_id=' + encodeURIComponent(clientId) + '&limit=2000';
+        const fo = document.getElementById('empFilterOrg') && document.getElementById('empFilterOrg').value;
+        const fp = document.getElementById('empFilterPos') && document.getElementById('empFilterPos').value;
+        if (fo) url += '&org_unit_id=' + encodeURIComponent(fo);
+        if (fp) url += '&position_id=' + encodeURIComponent(fp);
+        const data = await fetchApi(url);
         const items = data.items || [];
-        if (!items.length) { el.innerHTML = '<p class="meta">Нет сотрудников</p>'; return; }
-        employeesCache = items;
-        el.innerHTML = '<table><thead><tr><th>ФИО</th><th>Email</th><th>Подразделение</th><th>Должность</th><th></th></tr></thead><tbody>' +
-          items.map(e => {
-            const ou = orgUnits.find(x => x.id === e.org_unit_id);
-            const pos = positionsCache.find(x => x.id === e.position_id);
-            const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
-            return '<tr><td>' + name + '</td><td>' + (e.email || '') + '</td><td>' + (ou ? ou.code : '') + '</td><td>' + (pos ? pos.name : '') + '</td><td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-emp="' + e.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-emp="' + e.id + '">Удалить</button></td></tr>';
-          }).join('') + '</tbody></table>';
-        el.querySelectorAll('[data-edit-emp]').forEach(btn => { btn.onclick = () => openEditEmployee(btn.dataset.editEmp); });
-        el.querySelectorAll('[data-del-emp]').forEach(btn => { btn.onclick = () => deleteEmployee(btn.dataset.delEmp); });
+        employeesTableCache = items;
+        updateWorkspaceExportLinks();
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="meta" style="padding:1rem;">Нет сотрудников</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map((e) => {
+          const ou = orgUnits.find(x => x.id === e.org_unit_id);
+          const pos = positionsCache.find(x => x.id === e.position_id);
+          const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+          return '<tr>' +
+            '<td class="td-ellipsis">' + escapeHtml(name) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(e.email || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(e.phone || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(e.telegram_id || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(ou ? ou.code : '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(e.account_login || '') + '</td>' +
+            '<td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-emp="' + e.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-emp="' + e.id + '">Удалить</button></td>' +
+            '</tr>';
+        }).join('');
+        tbody.querySelectorAll('[data-edit-emp]').forEach((btn) => { btn.onclick = () => openEditEmployee(btn.dataset.editEmp); });
+        tbody.querySelectorAll('[data-del-emp]').forEach((btn) => { btn.onclick = () => deleteEmployee(btn.dataset.delEmp); });
       } catch (err) {
-        el.innerHTML = '<p class="err">' + err.message + '</p>';
+        tbody.innerHTML = '<tr><td colspan="8" class="err" style="padding:1rem;">' + escapeHtml(err.message) + '</td></tr>';
       }
     }
 
@@ -921,6 +1140,8 @@
       document.getElementById('empFirstName').value = '';
       document.getElementById('empMiddleName').value = '';
       document.getElementById('empEmail').value = '';
+      document.getElementById('empPhone').value = '';
+      document.getElementById('empTelegram').value = '';
       document.getElementById('empStatus').value = 'active';
       showErr(document.getElementById('modalEmployeeErr'), '');
       document.getElementById('modalEmployee').classList.add('show');
@@ -931,6 +1152,8 @@
       const firstName = document.getElementById('empFirstName').value.trim();
       const middleName = document.getElementById('empMiddleName').value.trim() || null;
       const email = document.getElementById('empEmail').value.trim() || null;
+      const phone = document.getElementById('empPhone').value.trim() || null;
+      const telegramId = document.getElementById('empTelegram').value.trim() || null;
       const orgUnitId = document.getElementById('empOrgUnit').value || null;
       const positionId = document.getElementById('empPosition').value || null;
       const status = document.getElementById('empStatus').value;
@@ -940,7 +1163,7 @@
         await fetchApi('/employees', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: clientId, last_name: lastName, first_name: firstName, middle_name: middleName, email, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
+          body: JSON.stringify({ client_id: clientId, last_name: lastName, first_name: firstName, middle_name: middleName, email, phone, telegram_id: telegramId, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
         });
         document.getElementById('modalEmployee').classList.remove('show');
         loadEmployees();
@@ -952,13 +1175,15 @@
     document.getElementById('btnEmployeeCancel').onclick = () => document.getElementById('modalEmployee').classList.remove('show');
 
     function openEditEmployee(id) {
-      const e = employeesCache.find(x => x.id === id);
+      const e = employeesTableCache.find(x => x.id === id);
       if (!e) return;
       document.getElementById('empEditId').value = id;
       document.getElementById('empEditLastName').value = e.last_name || '';
       document.getElementById('empEditFirstName').value = e.first_name || '';
       document.getElementById('empEditMiddleName').value = e.middle_name || '';
       document.getElementById('empEditEmail').value = e.email || '';
+      document.getElementById('empEditPhone').value = e.phone || '';
+      document.getElementById('empEditTelegram').value = e.telegram_id || '';
       document.getElementById('empEditStatus').value = e.employment_status || 'active';
       const ouSel = document.getElementById('empEditOrgUnit');
       ouSel.innerHTML = '<option value="">— Не выбрано —</option>' + orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
@@ -976,6 +1201,8 @@
       const firstName = document.getElementById('empEditFirstName').value.trim();
       const middleName = document.getElementById('empEditMiddleName').value.trim() || null;
       const email = document.getElementById('empEditEmail').value.trim() || null;
+      const phone = document.getElementById('empEditPhone').value.trim() || null;
+      const telegramId = document.getElementById('empEditTelegram').value.trim() || null;
       const orgUnitId = document.getElementById('empEditOrgUnit').value || null;
       const positionId = document.getElementById('empEditPosition').value || null;
       const status = document.getElementById('empEditStatus').value;
@@ -985,7 +1212,7 @@
         await fetchApi('/employees/' + id, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ last_name: lastName, first_name: firstName, middle_name: middleName, email, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
+          body: JSON.stringify({ last_name: lastName, first_name: firstName, middle_name: middleName, email, phone, telegram_id: telegramId, org_unit_id: orgUnitId, position_id: positionId, employment_status: status })
         });
         document.getElementById('modalEmployeeEdit').classList.remove('show');
         await loadEmployeesForSelect();
@@ -1005,12 +1232,11 @@
     }
 
     // Accounts
-    let employeesCache = [];
     async function loadEmployeesForSelect() {
       try {
-        const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId));
-        employeesCache = data.items || [];
-      } catch (_) { employeesCache = []; }
+        const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId) + '&limit=2000');
+        employeesAllCache = data.items || [];
+      } catch (_) { employeesAllCache = []; }
     }
 
     async function loadRoles() {
@@ -1020,33 +1246,57 @@
     }
 
     async function loadAccounts() {
+      await loadPositionsForSelect();
+      if (!orgUnits.length) await loadOrgTree();
+      fillEmployeeAccountFilters();
       await loadEmployeesForSelect();
-      const el = document.getElementById('accountsList');
+      const tbody = document.getElementById('accTbody');
+      if (!tbody) return;
       try {
-        const data = await fetchApi('/accounts?client_id=' + encodeURIComponent(clientId));
+        let url = '/accounts?client_id=' + encodeURIComponent(clientId) + '&limit=2000';
+        const fo = document.getElementById('accFilterOrg') && document.getElementById('accFilterOrg').value;
+        const fp = document.getElementById('accFilterPos') && document.getElementById('accFilterPos').value;
+        if (fo) url += '&org_unit_id=' + encodeURIComponent(fo);
+        if (fp) url += '&position_id=' + encodeURIComponent(fp);
+        const data = await fetchApi(url);
         const items = data.items || [];
-        if (!items.length) { el.innerHTML = '<p class="meta">Нет аккаунтов</p>'; return; }
-        el.innerHTML = '<table><thead><tr><th>Логин</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody>' +
-          items.map(a => {
-            const emp = employeesCache.find(x => x.id === a.employee_id) || { last_name: '', first_name: '' };
-            const name = [emp.last_name, emp.first_name].filter(Boolean).join(' ');
-            return '<tr><td>' + a.login + '</td><td>' + name + '</td><td>' + a.status + '</td><td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-acc="' + a.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-acc="' + a.id + '">Удалить</button></td></tr>';
-          }).join('') + '</tbody></table>';
-        el.querySelectorAll('[data-edit-acc]').forEach(btn => { btn.onclick = () => openEditAccount(btn.dataset.editAcc); });
-        el.querySelectorAll('[data-del-acc]').forEach(btn => { btn.onclick = () => deleteAccount(btn.dataset.delAcc); });
+        updateWorkspaceExportLinks();
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет аккаунтов</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map((a) => {
+          const emp = employeesAllCache.find(x => x.id === a.employee_id) || { last_name: '', first_name: '', middle_name: '' };
+          const ou = orgUnits.find(x => x.id === emp.org_unit_id);
+          const pos = positionsCache.find(x => x.id === emp.position_id);
+          const name = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
+          return '<tr>' +
+            '<td class="td-ellipsis">' + escapeHtml(a.login) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(name) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(emp.phone || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(emp.telegram_id || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(ou ? ou.code : '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
+            '<td class="meta" title="Задаётся при создании или в форме «Изменить»">—</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(a.status || '') + '</td>' +
+            '<td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-acc="' + a.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-acc="' + a.id + '">Удалить</button></td>' +
+            '</tr>';
+        }).join('');
+        tbody.querySelectorAll('[data-edit-acc]').forEach((btn) => { btn.onclick = () => openEditAccount(btn.dataset.editAcc); });
+        tbody.querySelectorAll('[data-del-acc]').forEach((btn) => { btn.onclick = () => deleteAccount(btn.dataset.delAcc); });
       } catch (e) {
-        el.innerHTML = '<p class="err">' + e.message + '</p>';
+        tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
     document.getElementById('btnAddAccount').onclick = async () => {
       await loadEmployeesForSelect();
       const empSel = document.getElementById('accEmployee');
-      empSel.innerHTML = employeesCache.map(e => {
+      empSel.innerHTML = employeesAllCache.map(e => {
         const name = [e.last_name, e.first_name].filter(Boolean).join(' ');
         return '<option value="' + e.id + '">' + name + (e.email ? ' (' + e.email + ')' : '') + '</option>';
       }).join('');
-      if (!employeesCache.length) empSel.innerHTML = '<option value="">Нет сотрудников</option>';
+      if (!employeesAllCache.length) empSel.innerHTML = '<option value="">Нет сотрудников</option>';
       const rolesEl = document.getElementById('accRoles');
       rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"> ' + r.name + '</label>').join('');
       document.getElementById('accLogin').value = '';
@@ -1131,51 +1381,121 @@
       } catch (e) { alert(e.message); }
     }
 
-    function escapeHtml(s) {
-      if (s == null) return '';
-      const d = document.createElement('div');
-      d.textContent = s;
-      return d.innerHTML;
+    ['empFilterOrg', 'empFilterPos'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => loadEmployees());
+    });
+    ['accFilterOrg', 'accFilterPos'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => loadAccounts());
+    });
+
+    async function loadCrFilterOptions() {
+      if (!clientId) return;
+      const posSel = document.getElementById('crFilterPosition');
+      const deptSel = document.getElementById('crFilterDept');
+      if (!posSel || !deptSel) return;
+      const keepP = posSel.value;
+      const keepD = deptSel.value;
+      try {
+        const positions = await fetchApi('/regulations/positions/list') || [];
+        posSel.innerHTML = '<option value="">— все —</option>';
+        positions.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.position_code;
+          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+          posSel.appendChild(opt);
+        });
+        if (keepP && [...posSel.options].some((o) => o.value === keepP)) posSel.value = keepP;
+      } catch (_) {}
+      try {
+        const data = await fetchApi('/client-regulations?client_id=' + encodeURIComponent(clientId) + '&limit=500');
+        const deptSet = new Set();
+        (data.items || []).forEach((r) => {
+          if (r.dept_type_code) deptSet.add(r.dept_type_code);
+        });
+        deptSel.innerHTML = '<option value="">— все —</option>';
+        [...deptSet].sort().forEach((d) => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          deptSel.appendChild(opt);
+        });
+        if (keepD && [...deptSel.options].some((o) => o.value === keepD)) deptSel.value = keepD;
+      } catch (_) {}
+    }
+
+    function buildClientRegQueryParams() {
+      const p = new URLSearchParams();
+      p.set('client_id', clientId);
+      p.set('limit', '500');
+      const q = document.getElementById('crSearch').value.trim();
+      if (q) p.set('search', q);
+      const fp = document.getElementById('crFilterPosition').value.trim();
+      if (fp) p.set('position_code', fp);
+      const fd = document.getElementById('crFilterDept').value.trim();
+      if (fd) p.set('dept_type_code', fd);
+      const fs = document.getElementById('crFilterStatus').value.trim();
+      if (fs) p.set('status', fs);
+      if (document.getElementById('crFilterCurrent').checked) p.set('is_current', 'true');
+      return p;
+    }
+
+    function bindCrTableActions(tbody) {
+      tbody.querySelectorAll('.cr-open-link').forEach((a) => {
+        a.addEventListener('click', (e) => { e.preventDefault(); openCrDetail(a.dataset.id); });
+      });
+      tbody.querySelectorAll('.cr-open').forEach((b) => {
+        b.addEventListener('click', () => openCrDetail(b.dataset.id));
+      });
     }
 
     async function loadClientRegulations() {
-      const el = document.getElementById('crList');
+      const tbody = document.getElementById('crTbody');
       const meta = document.getElementById('crListMeta');
+      const noClient = document.getElementById('crNoClient');
+      const mount = document.getElementById('crTableMount');
       if (!clientId) {
-        el.innerHTML = '<p class="meta">Выберите организацию.</p>';
+        if (noClient) noClient.classList.remove('hidden');
+        if (mount) mount.classList.add('hidden');
         if (meta) meta.classList.add('hidden');
         return;
       }
+      if (noClient) noClient.classList.add('hidden');
+      if (mount) mount.classList.remove('hidden');
+      if (!tbody) return;
       try {
-        const q = document.getElementById('crSearch').value.trim();
-        let path = '/client-regulations?client_id=' + encodeURIComponent(clientId) + '&limit=500';
-        if (q) path += '&search=' + encodeURIComponent(q);
-        const data = await fetchApi(path);
+        const data = await fetchApi('/client-regulations?' + buildClientRegQueryParams().toString());
         const items = data.items || [];
         if (meta) {
           meta.textContent = 'Записей: ' + (data.total != null ? data.total : items.length);
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          el.innerHTML = '<p class="meta">Нет регламентов организации. Нажмите «Копировать из глобального реестра» или используйте API <code>POST /api/client-regulations</code>.</p>';
+          tbody.innerHTML = '<tr><td colspan="8" class="meta" style="padding:1rem;">Нет регламентов организации по условиям. Нажмите «Копировать из глобального реестра» или измените фильтры.</td></tr>';
           return;
         }
-        el.innerHTML = items.map(r => {
-          const g = r.global_regulation_code
+        tbody.innerHTML = items.map((r) => {
+          const rid = String(r.id);
+          const src = r.global_regulation_code
             ? '<span class="badge-g" title="Историческая связь с глобальным шаблоном">глоб. ' + escapeHtml(r.global_regulation_code) + '</span>'
             : '<span class="badge-g">своя карточка</span>';
-          return '<div class="reg-card">' +
-            '<div class="reg-body">' +
-            '<h3>' + escapeHtml(r.regulation_name) + '</h3>' +
-            '<div class="meta">' + escapeHtml(r.regulation_code) + ' · ' + escapeHtml(r.position_code) + ' / ' + escapeHtml(r.dept_type_code) + ' · v' + escapeHtml(String(r.version_no)) + ' ' + g + '</div>' +
-            '</div>' +
-            '<div class="row-actions">' +
-            '<button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + r.id + '">Открыть</button>' +
-            '</div></div>';
+          const statusHtml = escapeHtml(r.status || '') +
+            (r.is_current ? ' <span class="badge-g" style="background:rgba(63,185,80,0.2);color:var(--success);">действующий</span>' : '');
+          return '<tr>' +
+            '<td><code>' + escapeHtml(r.regulation_code) + '</code></td>' +
+            '<td class="td-name"><a href="#" class="cr-open-link" data-id="' + rid + '">' + escapeHtml(r.regulation_name) + '</a></td>' +
+            '<td><code>' + escapeHtml(r.position_code) + '</code></td>' +
+            '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
+            '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
+            '<td>' + src + '</td>' +
+            '<td class="td-status">' + statusHtml + '</td>' +
+            '<td class="row-actions"><button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + rid + '">Открыть</button></td>' +
+            '</tr>';
         }).join('');
-        el.querySelectorAll('.cr-open').forEach(b => { b.onclick = () => openCrDetail(b.dataset.id); });
+        bindCrTableActions(tbody);
       } catch (e) {
-        el.innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
+        tbody.innerHTML = '<tr><td colspan="8" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
@@ -1240,10 +1560,18 @@
 
     document.getElementById('btnCrCopy').onclick = openCrCopyModal;
     document.getElementById('btnCrCopyCancel').onclick = closeCrModals;
-    document.getElementById('btnCrRefresh').onclick = loadClientRegulations;
+    document.getElementById('btnCrRefresh').onclick = () => {
+      loadCrFilterOptions().then(() => loadClientRegulations());
+    };
     document.getElementById('crSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); loadClientRegulations(); }
     });
+    ['crFilterPosition', 'crFilterDept', 'crFilterStatus'].forEach((fid) => {
+      const el = document.getElementById(fid);
+      if (el) el.onchange = () => loadClientRegulations();
+    });
+    const crCur = document.getElementById('crFilterCurrent');
+    if (crCur) crCur.onchange = () => loadClientRegulations();
     document.getElementById('btnCrCopyDo').onclick = async () => {
       const code = document.getElementById('crCopySelect').value;
       if (!code) { alert('Выберите регламент'); return; }
@@ -1254,6 +1582,7 @@
           body: JSON.stringify({ client_id: clientId, global_regulation_code: code }),
         });
         closeCrModals();
+        await loadCrFilterOptions();
         await loadClientRegulations();
       } catch (e) { alert(e.message); }
     };
@@ -1330,10 +1659,7 @@
         alert('Выберите организацию.');
         return;
       }
-      const p = new URLSearchParams({ client_id: clientId });
-      const sq = (document.getElementById('crSearch') && document.getElementById('crSearch').value || '').trim();
-      if (sq) p.set('search', sq);
-      window.location.href = '/api/client-regulations/export/excel?' + p.toString();
+      window.location.href = '/api/client-regulations/export/excel?' + buildClientRegQueryParams().toString();
     });
 
     // Init
@@ -1342,6 +1668,7 @@
       await loadClient();
       await loadRoles();
       if (clientId) {
+        applyWorkspaceSidebarFocus(getStoredWorkspaceSidebarFocus());
         await loadOrgTree();
         await loadPositionsForSelect();
         await loadEmployeesForSelect();

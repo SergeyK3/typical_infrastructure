@@ -7,16 +7,26 @@
   <title>Глобальные справочники — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <style>
-    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    /* Нельзя вкладывать <a> в <a> — иначе браузер ломает сетку; карточка = div, ссылка и выгрузка отдельно */
     .hub-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem;
-      text-decoration: none; color: inherit; display: block; transition: border-color 0.15s;
+      display: flex; flex-direction: column; min-height: 100%;
+      transition: border-color 0.15s;
     }
     .hub-card:hover { border-color: var(--accent); }
+    .hub-card-main {
+      text-decoration: none; color: inherit; display: block; flex: 1 1 auto;
+    }
+    .hub-card-main:hover h2 { text-decoration: underline; }
     .hub-card h2 { margin: 0 0 0.5rem 0; font-size: 1.05rem; color: var(--accent); }
     .hub-card p { margin: 0; font-size: 0.88rem; color: var(--text-muted); line-height: 1.45; }
-    .hub-card .hub-export { margin-top: 0.85rem; }
-    .hub-card .hub-export a { display: inline-block; text-decoration: none; }
+    .hub-export {
+      margin-top: 1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+    .hub-export a { display: inline-block; text-decoration: none; }
     .note { font-size: 0.9rem; color: var(--text-muted); max-width: 48rem; line-height: 1.5; margin-top: 0.5rem; }
   </style>
 </head>
@@ -49,26 +59,42 @@
       </div>
       <div class="content">
         <div class="hub-grid">
-          <a class="hub-card" href="/global/template-org">
-            <h2>Типовая оргструктура</h2>
-            <p>Узлы шаблона в БД (<code>template_org_units</code>): коды, названия, иерархия для onboarding и «из шаблона».</p>
-            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/template-org-units/export/excel?template_code=default">Скачать Excel</a></div>
-          </a>
-          <a class="hub-card" href="/global/positions">
-            <h2>Типовые должности</h2>
-            <p>Глобальный каталог должностей: функция, уровень, привязка к регламенту по умолчанию.</p>
-            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/position-catalog/export/excel">Скачать Excel</a></div>
-          </a>
-          <a class="hub-card" href="/global/kpi">
-            <h2>Шаблоны KPI</h2>
-            <p>Типовые метрики для привязки к регламентам и карточкам.</p>
-            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/kpi-templates/export/excel">Скачать Excel</a></div>
-          </a>
-          <a class="hub-card" href="/regulations">
-            <h2>Регламенты должностей</h2>
-            <p>Полный реестр нормативных карточек, KPI-строки и инструкции внутри карточки.</p>
-            <div class="hub-export" onclick="event.preventDefault(); event.stopPropagation();"><a class="btn btn-secondary btn-sm" href="/api/regulations/export/excel">Скачать Excel</a></div>
-          </a>
+          <div class="hub-card">
+            <a class="hub-card-main" href="/global/template-org">
+              <h2>Типовая оргструктура</h2>
+              <p>Узлы шаблона в БД (<code>template_org_units</code>): коды, названия, иерархия для onboarding и «из шаблона».</p>
+            </a>
+            <div class="hub-export">
+              <a class="btn btn-secondary btn-sm" href="/api/template-org-units/export/excel?template_code=default">Скачать Excel</a>
+            </div>
+          </div>
+          <div class="hub-card">
+            <a class="hub-card-main" href="/global/positions">
+              <h2>Типовые должности</h2>
+              <p>Глобальный каталог должностей: функция, уровень, привязка к регламенту по умолчанию.</p>
+            </a>
+            <div class="hub-export">
+              <a class="btn btn-secondary btn-sm" href="/api/position-catalog/export/excel">Скачать Excel</a>
+            </div>
+          </div>
+          <div class="hub-card">
+            <a class="hub-card-main" href="/global/kpi">
+              <h2>Шаблоны KPI</h2>
+              <p>Типовые метрики для привязки к регламентам и карточкам.</p>
+            </a>
+            <div class="hub-export">
+              <a class="btn btn-secondary btn-sm" href="/api/kpi-templates/export/excel">Скачать Excel</a>
+            </div>
+          </div>
+          <div class="hub-card">
+            <a class="hub-card-main" href="/regulations">
+              <h2>Регламенты должностей</h2>
+              <p>Полный реестр нормативных карточек, KPI-строки и инструкции внутри карточки.</p>
+            </a>
+            <div class="hub-export">
+              <a class="btn btn-secondary btn-sm" href="/api/regulations/export/excel">Скачать Excel</a>
+            </div>
+          </div>
         </div>
       </div>
     </main>

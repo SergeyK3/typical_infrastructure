@@ -200,6 +200,7 @@ class EmployeeBase(BaseModel):
     middle_name: str | None = None
     email: str | None = None
     phone: str | None = None
+    telegram_id: str | None = None
     org_unit_id: str | None = None
     position_id: str | None = None
     employment_status: str
@@ -216,6 +217,7 @@ class EmployeePatch(BaseModel):
     middle_name: str | None = None
     email: str | None = None
     phone: str | None = None
+    telegram_id: str | None = None
     org_unit_id: str | None = None
     position_id: str | None = None
     employment_status: str | None = None
@@ -227,6 +229,12 @@ class EmployeeOut(EmployeeBase):
     id: str
     created_at: datetime
     updated_at: datetime
+
+
+class EmployeeListOut(EmployeeOut):
+    """Список сотрудников: дополнительно логин корпоративной учётной записи (если есть)."""
+
+    account_login: str | None = None
 
 
 class RoleOut(BaseModel):
@@ -261,6 +269,18 @@ class AccountPatch(BaseModel):
 class AccountOut(AccountBase):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AccountListItem(BaseModel):
+    """Элемент списка аккаунтов без password_hash."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    employee_id: str
+    login: str
+    status: str
     created_at: datetime
     updated_at: datetime
 

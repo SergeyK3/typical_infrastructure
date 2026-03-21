@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import Client, Employee, OrgUnit, Position
-from app.schemas import EmployeeCreate, EmployeeOut, EmployeePatch, ListEnvelope
+from app.models import Account, Client, Employee, OrgUnit, Position
+from app.schemas import EmployeeCreate, EmployeeListOut, EmployeeOut, EmployeePatch, ListEnvelope
 from app.utils import new_id32
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -34,7 +34,7 @@ def _assert_position(db: Session, client_id: str, position_id: str | None) -> No
         raise HTTPException(status_code=400, detail="position_not_found")
 
 
-@router.get("", response_model=ListEnvelope[EmployeeOut])
+@router.get("", response_model=ListEnvelope[EmployeeListOut])
 def list_employees(
     client_id: str = Query(...),
     org_unit_id: str | None = Query(None),
@@ -43,7 +43,7 @@ def list_employees(
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
-) -> ListEnvelope[EmployeeOut]:
+) -> ListEnvelope[EmployeeListOut]:
     q = select(Employee).where(Employee.client_id == client_id)
     if org_unit_id:
         q = q.where(Employee.org_unit_id == org_unit_id)
@@ -57,12 +57,27 @@ def list_employees(
                 Employee.first_name.ilike(term),
                 Employee.middle_name.ilike(term),
                 Employee.email.ilike(term),
+                func.coalesce(Employee.phone, "").ilike(term),
+                func.coalesce(Employee.telegram_id, "").ilike(term),
             )
         )
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.order_by(Employee.created_at.desc()).limit(limit).offset(offset)).all()
-    return ListEnvelope[EmployeeOut](
-        items=[EmployeeOut.model_validate(r) for r in rows],
+    emp_ids = [r.id for r in rows]
+    logins: dict[str, str] = {}
+    if emp_ids:
+        for acc in db.scalars(select(Account).where(Account.employee_id.in_(emp_ids))).all():
+            if acc.employee_id not in logins:
+                logins[acc.employee_id] = acc.login
+    items = [
+        EmployeeListOut(
+            **EmployeeOut.model_validate(r).model_dump(),
+            account_login=logins.get(r.id),
+        )
+        for r in rows
+    ]
+    return ListEnvelope[EmployeeListOut](
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
@@ -92,42 +107,61 @@ def export_employees_excel(
                 Employee.first_name.ilike(term),
                 Employee.middle_name.ilike(term),
                 Employee.email.ilike(term),
+                func.coalesce(Employee.phone, "").ilike(term),
+                func.coalesce(Employee.telegram_id, "").ilike(term),
             )
         )
     rows = db.scalars(q.order_by(Employee.created_at.desc()).limit(5000)).all()
+    emp_ids = [r.id for r in rows]
+    logins: dict[str, str] = {}
+    if emp_ids:
+        for acc in db.scalars(select(Account).where(Account.employee_id.in_(emp_ids))).all():
+            if acc.employee_id not in logins:
+                logins[acc.employee_id] = acc.login
     headers = [
-        "id",
-        "client_id",
         "last_name",
         "first_name",
         "middle_name",
         "email",
         "phone",
-        "org_unit_id",
-        "position_id",
+        "telegram_id",
+        "org_unit_code",
+        "position_code",
         "employment_status",
         "is_manager",
+        "account_login",
+        "id",
+        "org_unit_id",
+        "position_id",
+        "client_id",
         "created_at",
         "updated_at",
     ]
-    data = [
-        [
-            r.id,
-            r.client_id,
-            r.last_name,
-            r.first_name,
-            r.middle_name,
-            r.email,
-            r.phone,
-            r.org_unit_id,
-            r.position_id,
-            r.employment_status,
-            r.is_manager,
-            r.created_at,
-            r.updated_at,
-        ]
-        for r in rows
-    ]
+    data = []
+    for r in rows:
+        ou = db.get(OrgUnit, r.org_unit_id) if r.org_unit_id else None
+        pos = db.get(Position, r.position_id) if r.position_id else None
+        data.append(
+            [
+                r.last_name,
+                r.first_name,
+                r.middle_name,
+                r.email,
+                r.phone,
+                r.telegram_id,
+                ou.code if ou else None,
+                pos.code if pos else None,
+                r.employment_status,
+                r.is_manager,
+                logins.get(r.id),
+                r.id,
+                r.org_unit_id,
+                r.position_id,
+                r.client_id,
+                r.created_at,
+                r.updated_at,
+            ]
+        )
     return xlsx_file_response(
         download_name=f"employees_{client_id}.xlsx",
         sheet_title="employees",
@@ -156,6 +190,7 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
         middle_name=payload.middle_name,
         email=payload.email,
         phone=payload.phone,
+        telegram_id=payload.telegram_id,
         org_unit_id=payload.org_unit_id,
         position_id=payload.position_id,
         employment_status=payload.employment_status,
@@ -250,6 +285,10 @@ def import_employees_excel(
             ("first_name", ["first_name", "firstname", "first name", "имя", "name", "imya"]),
             ("middle_name", ["middle_name", "middlename", "middle name", "отчество", "patronymic", "otchestvo"]),
             ("email", ["email", "почта", "e-mail", "mail", "эл.почта", "электронная почта"]),
+            ("phone", ["phone", "телефон", "mobile", "мобильный", "сотовый", "мобтел"]),
+            ("telegram_id", ["telegram_id", "telegram", "телеграм", "tg", "telegram id"]),
+            ("org_unit_code", ["org_unit_code", "кодподразделения", "код_подразделения", "orgunitcode"]),
+            ("position_code", ["position_code", "коддолжности", "код_должности", "positioncode"]),
             ("fio", ["сотрудник", "фИО", "ф.и.о.", "fio", "employee", "full name", "fullname", "фио"]),
         ]:
             for a in alt:
@@ -334,6 +373,30 @@ def import_employees_excel(
         email = None
         if "email" in col_map and col_map["email"] is not None and col_map["email"] < len(row) and row[col_map["email"]]:
             email = str(row[col_map["email"]]).strip() or None
+        phone = None
+        if "phone" in col_map and col_map["phone"] is not None and col_map["phone"] < len(row) and row[col_map["phone"]]:
+            phone = str(row[col_map["phone"]]).strip() or None
+        telegram_id = None
+        if "telegram_id" in col_map and col_map["telegram_id"] is not None and col_map["telegram_id"] < len(row) and row[col_map["telegram_id"]]:
+            telegram_id = str(row[col_map["telegram_id"]]).strip() or None
+        org_unit_id = None
+        if "org_unit_code" in col_map and col_map["org_unit_code"] is not None and col_map["org_unit_code"] < len(row) and row[col_map["org_unit_code"]]:
+            ou_code = str(row[col_map["org_unit_code"]]).strip()
+            if ou_code:
+                ou = db.scalar(
+                    select(OrgUnit).where(OrgUnit.client_id == client_id, OrgUnit.code == ou_code)
+                )
+                if ou:
+                    org_unit_id = ou.id
+        position_id = None
+        if "position_code" in col_map and col_map["position_code"] is not None and col_map["position_code"] < len(row) and row[col_map["position_code"]]:
+            p_code = str(row[col_map["position_code"]]).strip()
+            if p_code:
+                pos = db.scalar(
+                    select(Position).where(Position.client_id == client_id, Position.code == p_code)
+                )
+                if pos:
+                    position_id = pos.id
         obj = Employee(
             id=new_id32(),
             client_id=client_id,
@@ -341,9 +404,10 @@ def import_employees_excel(
             first_name=first_name,
             middle_name=middle_name,
             email=email,
-            phone=None,
-            org_unit_id=None,
-            position_id=None,
+            phone=phone,
+            telegram_id=telegram_id,
+            org_unit_id=org_unit_id,
+            position_id=position_id,
             employment_status="active",
             is_manager=False,
         )
@@ -369,6 +433,7 @@ def bulk_upsert_employees(items: list[EmployeeCreate], db: Session = Depends(get
             obj.middle_name = it.middle_name
             obj.email = it.email
             obj.phone = it.phone
+            obj.telegram_id = it.telegram_id
             obj.org_unit_id = it.org_unit_id
             obj.position_id = it.position_id
             obj.employment_status = it.employment_status
@@ -382,6 +447,7 @@ def bulk_upsert_employees(items: list[EmployeeCreate], db: Session = Depends(get
                 middle_name=it.middle_name,
                 email=it.email,
                 phone=it.phone,
+                telegram_id=it.telegram_id,
                 org_unit_id=it.org_unit_id,
                 position_id=it.position_id,
                 employment_status=it.employment_status,

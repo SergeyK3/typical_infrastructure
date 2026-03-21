@@ -101,6 +101,16 @@ def migrate_positions_is_detached() -> None:
         conn.commit()
 
 
+def migrate_employees_telegram_id() -> None:
+    if not _table_exists("employees"):
+        return
+    if _column_exists("employees", "telegram_id"):
+        return
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE employees ADD COLUMN telegram_id VARCHAR(128) NULL"))
+        conn.commit()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -108,3 +118,4 @@ def run_migrations() -> None:
     migrate_org_units_catalog_detached()
     migrate_kpi_templates_position_code()
     migrate_positions_is_detached()
+    migrate_employees_telegram_id()

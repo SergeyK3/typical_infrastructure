@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import EnterpriseTemplate
-from app.org_structures import get_template_positions
+from app.org_structures import list_positions_from_position_catalog
 from app.template_org_resolve import resolve_template_structure
 from app.schemas import EnterpriseTemplateOut
 
@@ -47,10 +47,7 @@ def get_structure_preview(template_id: str, db: Session = Depends(get_db)) -> di
 
     template_code = obj.code
     structure = resolve_template_structure(db, template_code)
-    ids_by_code: dict[str, str] = {}
-    for s in structure:
-        ids_by_code[s["code"]] = s["code"]  # placeholder for preview
-    positions = get_template_positions(template_code, ids_by_code)
+    positions = list_positions_from_position_catalog(db)
 
     return {
         "template_id": obj.id,

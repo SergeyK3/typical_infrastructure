@@ -9,6 +9,11 @@
     .wizard-container { max-width: 640px; }
     .main-header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .main-header .subtitle { margin-bottom: 1.5rem; }
+    .panel-step-subtitle {
+      margin: -0.35rem 0 1rem 0;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
     .steps {
       display: flex;
       gap: 0.25rem;
@@ -107,6 +112,15 @@
     .save-draft.saved { color: var(--success); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    .wizard-help {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+      margin: 0 0 0.85rem 0;
+      max-width: 38rem;
+    }
+    .wizard-help strong { color: var(--text); font-weight: 600; }
+    .wizard-help code { font-size: 0.85em; background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -171,12 +185,15 @@
     <!-- Step 4: Positions preview -->
     <div class="panel" id="panel4" data-step="4">
       <h2>4. Должности (предпросмотр)</h2>
+      <p class="wizard-help">Ниже — все типовые должности из <strong>глобального каталога</strong> с привязкой к типу подразделения (код справа: ADM, HR, SALES и т.д.). При запуске onboarding для каждой такой связки будет создана штатная позиция на соответствующем узле оргструктуры — по той же логике, что кнопка «Развернуть типовую оргструктуру» в карточке клиента.</p>
       <ul class="preview-list" id="positionsPreview"></ul>
     </div>
 
     <!-- Step 5: Admin employee -->
     <div class="panel" id="panel5" data-step="5">
-      <h2>5. Администратор</h2>
+      <h2>5. Администратор организации</h2>
+      <p class="panel-step-subtitle">Ввод представителя клиента</p>
+      <p class="wizard-help">Это <strong>первый пользователь создаваемой организации</strong> (клиента), а не «общий администратор всей платформы». Уполномоченный представитель клиента: будет создан сотрудник в этой организации и учётная запись с указанным логином (логин должен быть уникален в системе). Дальше этот пользователь работает с данными той организации, которую вы задали на шаге 2.</p>
       <label>Фамилия *</label>
       <input type="text" id="adminLastName" placeholder="Иванов" maxlength="128" />
       <p class="field-error hidden" id="errAdminLastName"></p>
@@ -196,12 +213,14 @@
     <!-- Step 6: Accounts (info) -->
     <div class="panel" id="panel6" data-step="6">
       <h2>6. Аккаунты</h2>
-      <p style="color:var(--text-muted);font-size:0.9rem;">Будет создан аккаунт администратора с ролью admin.</p>
+      <p class="wizard-help">Будет создана учётная запись для сотрудника с шага 5 и назначена роль <code>admin</code> в системе ролей. Это не «суперпользователь платформы», а роль доступа, привязанная к <strong>этому клиенту</strong> через сотрудника: администрирование данных выбранной организации.</p>
     </div>
 
     <!-- Step 7: Confirmation -->
     <div class="panel" id="panel7" data-step="7">
       <h2>7. Подтверждение</h2>
+      <p class="wizard-help"><strong>Шаблон</strong> (например, default) — готовый сценарий развёртывания типовой оргструктуры из справочников; отдельная сущность «шаблон организации» не копируется — создаётся сама организация по этому шаблону.</p>
+      <p class="wizard-help">Нажатие любой из кнопок ниже запускает <strong>предварительные проверки готовности</strong> введённых данных к развёртыванию (код клиента, шаблон, уникальность логина и т.д.). <strong>Запустить Dry-Run</strong> — только эти проверки, <em>без</em> записи в базу: оргструктура для клиента не создаётся. <strong>Запустить Onboarding</strong> — те же проверки и затем <strong>развёртывание структуры для клиента</strong>: запись клиента, подразделений, должностей, сотрудника и учётной записи администратора. После нажатия откроется шаг 8 с ходом выполнения.</p>
       <div id="confirmSummary"></div>
       <div class="actions">
         <button class="btn btn-primary" id="btnDryRun">Запустить Dry-Run</button>
@@ -213,6 +232,7 @@
     <!-- Step 8: Progress & Result -->
     <div class="panel" id="panel8" data-step="8">
       <h2>8. Прогресс и результат</h2>
+      <p class="wizard-help" id="runHelpStatic">Ниже — статус запуска и список шагов. Сразу после нажатия кнопки на шаге 7 здесь появится сообщение о том, что идёт проверка или развёртывание. Для Dry-Run все шаги затем помечаются как пропущенные: данных в базе нет — это нормально. Для успешного Onboarding появится идентификатор клиента и ссылки внизу.</p>
       <div id="runStatus"></div>
       <div id="runSteps" class="log hidden"></div>
     </div>
@@ -432,6 +452,21 @@
         });
         runId = res.id;
         goToStep(8);
+        const statusEl = $('runStatus');
+        const stepsEl = $('runSteps');
+        if (dryRun) {
+          statusEl.innerHTML = `
+            <p><span class="status-badge status-running">running</span></p>
+            <p class="wizard-help" style="margin-top:0.75rem;">Выполняются предварительные проверки (dry-run, без записи в базу). Дождитесь статуса <code>dry_run</code> и журнала шагов ниже.</p>
+          `;
+        } else {
+          statusEl.innerHTML = `
+            <p><span class="status-badge status-running">running</span></p>
+            <p class="wizard-help" style="margin-top:0.75rem;">Идёт создание клиента и развёртывание оргструктуры (подразделения, должности, учётная запись администратора). Дождитесь статуса <code>completed</code> и журнала шагов ниже.</p>
+          `;
+        }
+        stepsEl.classList.remove('hidden');
+        stepsEl.textContent = 'Загрузка журнала шагов…';
         pollRunStatus();
       } catch (e) {
         runSubmitted = false;
@@ -462,8 +497,19 @@
           <a href="/wizard" style="color:var(--accent);">Создать ещё клиента</a>
         </p>
       ` : '';
+      let explain = '';
+      if (run.status === 'running') {
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Выполняется: проверки и (при полном Onboarding) запись структуры клиента в базу. Ниже обновляется журнал шагов.</p>';
+      } else if (run.status === 'dry_run') {
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Пробный запуск: в базу ничего не записано. Строки вида «skipped — dry_run» — ожидаемое поведение (шаги намеренно не выполнялись).</p>';
+      } else if (run.status === 'completed') {
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Клиент и оргструктура созданы. Войти можно под логином администратора с шага 5; сохраните Client ID при интеграциях.</p>';
+      } else if (run.status === 'failed') {
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Создание не завершилось. Исправьте указанную ошибку и повторите запуск (при необходимости сначала Dry-Run).</p>';
+      }
       statusEl.innerHTML = `
         <p><span class="status-badge ${statusClass}">${run.status}</span></p>
+        ${explain}
         ${run.client_id ? `<p>Client ID: ${run.client_id}</p>` : ''}
         ${run.error_message ? `<p class="field-error">${run.error_message}</p>` : ''}
         ${navLinks}

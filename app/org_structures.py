@@ -1,10 +1,15 @@
 r"""Справочники оргструктур для шаблонов предприятий.
 
 Иерархия: company → отделения (department) → секции (section).
-Загрузка по template_code: get_template_structure(), get_template_positions().
+Загрузка по template_code: get_template_structure(); list_positions_from_position_catalog() для полного каталога.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 # Структура: отделения + секции (Step 6 update)
 DEFAULT_ORG_UNITS: list[dict] = [
@@ -61,9 +66,43 @@ def get_template_structure(template_code: str) -> list[dict]:
 
 
 def get_template_positions(template_code: str, org_unit_ids_by_code: dict[str, str]) -> list[dict]:
-    """Возвращает список должностей для шаблона с привязкой к org_unit."""
+    """Устаревший список из 8 должностей; для превью и onboarding используйте list_positions_from_position_catalog."""
     if template_code == "default":
         positions = DEFAULT_POSITIONS.copy()
     else:
         positions = DEFAULT_POSITIONS.copy()
     return positions
+
+
+def list_positions_from_position_catalog(db: "Session") -> list[dict]:
+    """
+    Все пары «типовая должность ↔ тип подразделения» из глобального каталога (position_catalog × position_dept_types).
+    Совпадает с логикой «Развернуть типовую оргструктуру» в рабочем пространстве клиента.
+    """
+    from sqlalchemy import select
+
+    from app.models import PositionCatalog, PositionDeptType
+
+    catalog_by_code = {
+        r.position_code: r
+        for r in db.scalars(select(PositionCatalog).where(PositionCatalog.is_active == True)).all()
+    }
+    rows: list[dict] = []
+    for link in db.scalars(select(PositionDeptType)).all():
+        catalog = catalog_by_code.get(link.position_code)
+        if not catalog:
+            continue
+        rows.append(
+            {
+                "code": catalog.position_code,
+                "name": catalog.position_name_ru,
+                "org_unit_code": link.dept_type_code,
+                "grade": None,
+                "is_active": True,
+                "function_code": catalog.function_code,
+                "position_level": catalog.position_level,
+                "is_managerial": catalog.is_managerial,
+            }
+        )
+    rows.sort(key=lambda x: (x["org_unit_code"], x["code"]))
+    return rows

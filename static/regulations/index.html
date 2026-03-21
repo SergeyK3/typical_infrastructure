@@ -7,23 +7,39 @@
   <title>Регламенты должностей — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <style>
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-    .card:hover { border-color: var(--accent); }
-    .card-body { flex: 1; min-width: 0; }
-    .card-body a { text-decoration: none; color: inherit; display: block; }
-    .card-body a:hover { color: var(--accent); }
-    .card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
-    .card .meta { font-size: 0.85rem; color: var(--text-muted); }
-    .card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
-    .card-actions .btn { padding: 0.35rem 0.75rem; font-size: 0.85rem; }
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
-    .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
-    .filters select { padding: 0.4rem 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
-    .filters .search-row { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.25rem; }
-    .filters input[type="search"], .filters input.search-input {
+    .filters-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
+    .filters-toolbar .search-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; flex: 1 1 100%; }
+    .filters-toolbar input[type="search"], .filters-toolbar input.search-input {
       flex: 1 1 220px; min-width: 180px; max-width: 420px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;
     }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+    .data-table th, .data-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table th { color: var(--text-muted); font-weight: 500; }
+    .data-table td.td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table td.td-name a { color: var(--accent); text-decoration: none; }
+    .data-table td.td-name a:hover { text-decoration: underline; }
+    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 13%; }
+    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 24%; }
+    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 11%; }
+    .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 6%; }
+    .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 4%; }
+    .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 12%; }
+    .data-table th:nth-child(7), .data-table td:nth-child(7) {
+      width: 11.5rem; min-width: 11.5rem; max-width: 11.5rem; white-space: nowrap;
+    }
+    .td-status { font-size: 0.82rem; }
+    .row-actions { display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
+    .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+    .th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
+    .th-filter select {
+      margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%;
+      padding: 0.35rem 0.45rem; font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); box-sizing: border-box;
+    }
+    .th-filter-inline { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+    .th-filter-inline input { margin-right: 0.35rem; vertical-align: middle; }
     .catalog-note { font-size: 0.88rem; color: var(--text-muted); margin: 0.35rem 0 0 0; max-width: 52rem; line-height: 1.45; }
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; overflow: auto; }
     .modal.show { display: flex; }
@@ -132,35 +148,40 @@
       <div class="content">
         <div class="toolbar-top">
           <button type="button" class="btn btn-primary" id="btnCreate">+ Создать регламент</button>
-          <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка с учётом фильтров ниже">Скачать Excel</button>
+          <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка с учётом поиска и фильтров в шапке таблицы">Скачать Excel</button>
         </div>
-        <div class="filters">
+        <div class="filters-toolbar">
           <div class="search-row">
             <label for="filterSearch" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Поиск по реестру:</label>
             <input type="search" id="filterSearch" class="search-input" placeholder="Код, название, должность, тип подразделения, фрагмент цели…" autocomplete="off" title="Общесистемный справочник — все организации видят одни и те же регламенты" />
             <button type="button" class="btn btn-secondary btn-sm" id="btnApply">Найти / применить фильтры</button>
+            <label class="th-filter-inline"><input type="checkbox" id="filterCurrent" /> Только действующие</label>
           </div>
-          <label>Должность:</label>
-          <select id="filterPosition">
-            <option value="">— все —</option>
-          </select>
-          <label>Тип подразделения:</label>
-          <select id="filterDept">
-            <option value="">— все —</option>
-          </select>
-          <label>Статус:</label>
-          <select id="filterStatus">
-            <option value="">— все —</option>
-            <option value="draft">draft</option>
-            <option value="on_review">on_review</option>
-            <option value="approved">approved</option>
-            <option value="active">active</option>
-            <option value="archived">archived</option>
-          </select>
-          <label><input type="checkbox" id="filterCurrent" /> Только действующие</label>
         </div>
-        <p id="listMeta" class="meta hidden" style="margin: -0.25rem 0 0.75rem 0;"></p>
-        <div id="list"></div>
+        <p id="listMeta" class="meta hidden" style="margin: 0 0 0.75rem 0;"></p>
+        <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Код</th>
+              <th>Название</th>
+              <th><label class="th-filter">Должность<select id="filterPosition" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
+              <th><label class="th-filter">Тип подразделения<select id="filterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
+              <th>Вер.</th>
+              <th><label class="th-filter">Статус<select id="filterStatus" title="Фильтр по статусу">
+                <option value="">— все —</option>
+                <option value="draft">draft</option>
+                <option value="on_review">on_review</option>
+                <option value="approved">approved</option>
+                <option value="active">active</option>
+                <option value="archived">archived</option>
+              </select></label></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        </div>
       </div>
     </main>
   </div>
@@ -400,8 +421,12 @@
       return params.toString();
     }
 
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     async function loadRegulations() {
-      const list = document.getElementById('list');
+      const tbody = document.getElementById('tbody');
       const meta = document.getElementById('listMeta');
       try {
         const qs = buildFilterParams();
@@ -413,37 +438,38 @@
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          list.innerHTML = '<p class="meta">Нет регламентов по выбранным фильтрам и поиску. Измените запрос или снимите часть условий.</p>';
+          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет регламентов по выбранным фильтрам и поиску. Измените запрос или снимите часть условий.</td></tr>';
           return;
         }
-        list.innerHTML = items.map(r => `
-          <div class="card" data-code="${r.regulation_code}">
-            <div class="card-body">
-              <a href="#" class="card-link" data-code="${r.regulation_code}">
-                <h3>${r.regulation_name}</h3>
-                <div class="meta">
-                  ${r.regulation_code} · ${r.position_code} / ${r.dept_type_code} · v${r.version_no}
-                  ${r.is_current ? ' <span class="badge current">действующий</span>' : ' <span class="badge">' + r.status + '</span>'}
-                </div>
-              </a>
-            </div>
-            <div class="card-actions">
-              <button type="button" class="btn btn-primary btn-edit" data-code="${r.regulation_code}">Изменить</button>
-              <button type="button" class="btn btn-danger btn-del" data-code="${r.regulation_code}">Удалить</button>
-            </div>
-          </div>
-        `).join('');
-        list.querySelectorAll('.card-link').forEach(a => {
+        tbody.innerHTML = items.map((r) => {
+          const code = r.regulation_code;
+          const codeEsc = escapeHtml(code);
+          const nameEsc = escapeHtml(r.regulation_name);
+          const statusHtml = escapeHtml(r.status || '') +
+            (r.is_current ? ' <span class="badge current">действующий</span>' : '' );
+          return '<tr>' +
+            '<td><code>' + codeEsc + '</code></td>' +
+            '<td class="td-name"><a href="#" class="row-title-link" data-code="' + codeEsc + '" title="' + nameEsc + '">' + nameEsc + '</a></td>' +
+            '<td><code>' + escapeHtml(r.position_code) + '</code></td>' +
+            '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
+            '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
+            '<td class="td-status">' + statusHtml + '</td>' +
+            '<td class="row-actions">' +
+            '<button type="button" class="btn btn-primary btn-edit" data-code="' + codeEsc + '">Изменить</button>' +
+            '<button type="button" class="btn btn-danger btn-del" data-code="' + codeEsc + '">Удалить</button>' +
+            '</td></tr>';
+        }).join('');
+        tbody.querySelectorAll('.row-title-link').forEach((a) => {
           a.addEventListener('click', (e) => { e.preventDefault(); openDetail(a.dataset.code); });
         });
-        list.querySelectorAll('.btn-edit').forEach(btn => {
+        tbody.querySelectorAll('.btn-edit').forEach((btn) => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); openEditForm(btn.dataset.code); });
         });
-        list.querySelectorAll('.btn-del').forEach(btn => {
+        tbody.querySelectorAll('.btn-del').forEach((btn) => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); deleteRegulation(btn.dataset.code); });
         });
       } catch (e) {
-        list.innerHTML = '<p class="err">Ошибка загрузки: ' + (e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></p>';
+        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">Ошибка загрузки: ' + escapeHtml(e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></td></tr>';
       }
     }
 

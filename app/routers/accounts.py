@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import Account, AccountRole, Client, Employee, Role
+from app.models import Account, AccountRole, Client, Employee, OrgUnit, Position, Role
 from app.schemas import (
     AccountBulkCreateRequest,
     AccountBulkCreateResult,
     AccountCreate,
+    AccountListItem,
     AccountOut,
     AccountPatch,
     AccountWithRolesOut,
@@ -80,18 +81,35 @@ def _assign_roles(db: Session, account_id: str, role_codes: list[str]) -> None:
     db.flush()
 
 
-@router.get("", response_model=ListEnvelope[AccountOut])
+@router.get("", response_model=ListEnvelope[AccountListItem])
 def list_accounts(
     client_id: str = Query(...),
+    org_unit_id: str | None = Query(None),
+    position_id: str | None = Query(None),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
-) -> ListEnvelope[AccountOut]:
+) -> ListEnvelope[AccountListItem]:
     q = select(Account).join(Employee, Account.employee_id == Employee.id).where(Employee.client_id == client_id)
+    if org_unit_id:
+        q = q.where(Employee.org_unit_id == org_unit_id)
+    if position_id:
+        q = q.where(Employee.position_id == position_id)
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.order_by(Account.created_at.desc()).limit(limit).offset(offset)).all()
-    return ListEnvelope[AccountOut](
-        items=[AccountOut.model_validate(r) for r in rows],
+    items = [
+        AccountListItem(
+            id=r.id,
+            employee_id=r.employee_id,
+            login=r.login,
+            status=r.status,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
+        for r in rows
+    ]
+    return ListEnvelope[AccountListItem](
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
@@ -101,25 +119,59 @@ def list_accounts(
 @router.get("/export/excel")
 def export_accounts_excel(
     client_id: str = Query(...),
+    org_unit_id: str | None = Query(None),
+    position_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> Response:
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
     q = select(Account).join(Employee, Account.employee_id == Employee.id).where(Employee.client_id == client_id)
+    if org_unit_id:
+        q = q.where(Employee.org_unit_id == org_unit_id)
+    if position_id:
+        q = q.where(Employee.position_id == position_id)
     rows = db.scalars(q.order_by(Account.created_at.desc()).limit(5000)).all()
-    headers = ["id", "employee_id", "login", "status", "role_codes", "created_at", "updated_at"]
-    data = [
-        [
-            r.id,
-            r.employee_id,
-            r.login,
-            r.status,
-            ",".join(_get_role_codes_for_account(db, r.id)),
-            r.created_at,
-            r.updated_at,
-        ]
-        for r in rows
+    headers = [
+        "last_name",
+        "first_name",
+        "middle_name",
+        "email",
+        "phone",
+        "telegram_id",
+        "org_unit_code",
+        "position_code",
+        "login",
+        "status",
+        "role_codes",
+        "employee_id",
+        "account_id",
+        "created_at",
+        "updated_at",
     ]
+    data = []
+    for r in rows:
+        emp = db.get(Employee, r.employee_id)
+        ou = db.get(OrgUnit, emp.org_unit_id) if emp and emp.org_unit_id else None
+        pos = db.get(Position, emp.position_id) if emp and emp.position_id else None
+        data.append(
+            [
+                emp.last_name if emp else None,
+                emp.first_name if emp else None,
+                emp.middle_name if emp else None,
+                emp.email if emp else None,
+                emp.phone if emp else None,
+                emp.telegram_id if emp else None,
+                ou.code if ou else None,
+                pos.code if pos else None,
+                r.login,
+                r.status,
+                ",".join(_get_role_codes_for_account(db, r.id)),
+                r.employee_id,
+                r.id,
+                r.created_at,
+                r.updated_at,
+            ]
+        )
     return xlsx_file_response(
         download_name=f"accounts_{client_id}.xlsx",
         sheet_title="accounts",

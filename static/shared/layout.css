@@ -19,10 +19,42 @@ body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--t
 .sidebar {
   width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; flex-shrink: 0;
+  min-height: 100vh;
+  align-self: stretch;
 }
 .sidebar-top { padding: 1rem 0; flex: 0 0 auto; }
 .sidebar-bottom {
   padding: 1rem 0; border-top: 1px solid var(--border); flex: 0 0 auto;
+}
+/* Рабочее пространство клиента: справочники по центру сайдбара, «Приложения» сразу под ними (без растягивания пустоты) */
+.sidebar-middle {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+}
+.sidebar-divider {
+  flex: 0 0 auto;
+  margin: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  opacity: 0.95;
+}
+.sidebar-apps {
+  flex: 0 0 auto;
+  padding: 0.75rem 0 1rem;
+  border-top: 1px solid var(--border);
+}
+.sidebar-apps-placeholder {
+  margin: 0.35rem 0.75rem 0;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px dashed var(--border);
 }
 .sidebar-brand {
   padding: 0 1rem 1rem; font-size: 0.95rem; font-weight: 600; color: var(--text);

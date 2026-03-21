@@ -110,6 +110,10 @@ def _insert_children(
 def list_client_regulations(
     client_id: str = Query(..., description="ID организации"),
     search: str | None = Query(None, max_length=200),
+    position_code: str | None = Query(None, max_length=64),
+    dept_type_code: str | None = Query(None, max_length=32),
+    status: str | None = Query(None, max_length=16),
+    is_current: bool | None = Query(None, description="Только действующие, если true"),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -118,6 +122,14 @@ def list_client_regulations(
     filters = [ClientPositionRegulation.client_id == client_id]
     if search and (s := search.strip()):
         filters.append(_ilike_client_reg_search(s))
+    if position_code:
+        filters.append(ClientPositionRegulation.position_code == position_code)
+    if dept_type_code:
+        filters.append(ClientPositionRegulation.dept_type_code == dept_type_code)
+    if status:
+        filters.append(ClientPositionRegulation.status == status)
+    if is_current is not None:
+        filters.append(ClientPositionRegulation.is_current == is_current)
     q = select(ClientPositionRegulation)
     count_q = select(func.count()).select_from(ClientPositionRegulation)
     for f in filters:
@@ -145,12 +157,24 @@ def list_client_regulations(
 def export_client_regulations_excel(
     client_id: str = Query(..., description="ID организации"),
     search: str | None = Query(None, max_length=200),
+    position_code: str | None = Query(None, max_length=64),
+    dept_type_code: str | None = Query(None, max_length=32),
+    status: str | None = Query(None, max_length=16),
+    is_current: bool | None = Query(None),
     db: Session = Depends(get_db),
 ) -> Response:
     _assert_client(db, client_id)
     filters = [ClientPositionRegulation.client_id == client_id]
     if search and (s := search.strip()):
         filters.append(_ilike_client_reg_search(s))
+    if position_code:
+        filters.append(ClientPositionRegulation.position_code == position_code)
+    if dept_type_code:
+        filters.append(ClientPositionRegulation.dept_type_code == dept_type_code)
+    if status:
+        filters.append(ClientPositionRegulation.status == status)
+    if is_current is not None:
+        filters.append(ClientPositionRegulation.is_current == is_current)
     q = select(ClientPositionRegulation)
     for f in filters:
         q = q.where(f)

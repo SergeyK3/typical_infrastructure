@@ -157,6 +157,7 @@ class Employee(Base, TimestampMixin):
     middle_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     email: Mapped[str | None] = mapped_column(String(256), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    telegram_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     org_unit_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     position_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     employment_status: Mapped[str] = mapped_column(String(32), nullable=False)

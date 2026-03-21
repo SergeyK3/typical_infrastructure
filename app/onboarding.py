@@ -32,7 +32,7 @@ from app.onboarding_constants import (
     STEP_STATUS_RUNNING,
     STEP_STATUS_SKIPPED,
 )
-from app.org_structures import ADMIN_ORG_UNIT_CODE, get_template_positions
+from app.org_structures import ADMIN_ORG_UNIT_CODE, list_positions_from_position_catalog
 from app.template_org_resolve import resolve_template_structure
 from app.utils import generate_temp_password, hash_password, new_id32
 
@@ -295,18 +295,22 @@ def run_onboarding_bootstrap(
 
         _start_step(steps["deploy_positions"])
         position_ids: list[str] = []
-        for p in get_template_positions(template_code, ids_by_code):
+        for p in list_positions_from_position_catalog(db):
             ou_id = ids_by_code.get(p["org_unit_code"])
             if not ou_id:
-                raise RuntimeError(f"missing_org_unit:{p['org_unit_code']}")
+                continue
             pos = Position(
                 id=new_id32(),
                 client_id=client.id,
                 org_unit_id=ou_id,
                 code=p["code"],
                 name=p["name"],
-                grade=p["grade"],
-                is_active=bool(p["is_active"]),
+                grade=p.get("grade"),
+                is_active=bool(p.get("is_active", True)),
+                position_catalog_code=p["code"],
+                function_code=p.get("function_code"),
+                position_level=p.get("position_level"),
+                is_managerial=p.get("is_managerial"),
                 is_detached=True,
             )
             db.add(pos)
@@ -324,6 +328,7 @@ def run_onboarding_bootstrap(
             middle_name=None,
             email=admin_email,
             phone=None,
+            telegram_id=None,
             org_unit_id=ids_by_code.get(ADMIN_ORG_UNIT_CODE),
             position_id=None,
             employment_status="active",
