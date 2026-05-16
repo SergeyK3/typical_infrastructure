@@ -43,6 +43,7 @@
     .empty-state { padding: 2rem; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; }
     .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; }
     .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+    .module-placeholder { max-width: 48rem; text-align: left; }
     .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
     .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -96,40 +97,37 @@
     .workspace-sidebar.sidebar-focus-apps { border-top: 1px solid var(--border); }
     .workspace-sidebar #sidebarApps { cursor: pointer; }
     .workspace-sidebar.sidebar-focus-apps #sidebarApps { cursor: default; outline: 1px solid rgba(124, 58, 237, 0.35); outline-offset: -2px; border-radius: 6px; }
+    .workspace-sidebar .sidebar-section { margin: 0.15rem 0; }
+    .workspace-sidebar .sidebar-section.active > .sidebar-section-toggle { color: var(--accent); }
+    .workspace-sidebar .sidebar-section-toggle {
+      display: flex; align-items: center; gap: 0.35rem; width: 100%;
+      padding: 0.35rem 1rem; border: 0; background: transparent;
+      color: var(--text-muted); cursor: pointer; text-align: left;
+      font: inherit; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .workspace-sidebar .sidebar-section-toggle:hover { background: var(--surface-hover); color: var(--text); }
+    .workspace-sidebar .sidebar-section-toggle.sidebar-brand {
+      padding: 0 1rem 0.8rem; font-size: 0.95rem; color: var(--text);
+      text-transform: none; letter-spacing: 0; font-weight: 600;
+    }
+    .workspace-sidebar .sidebar-section-chevron { width: 0.85rem; flex: 0 0 auto; color: var(--text-muted); }
+    .workspace-sidebar .sidebar-section-body[hidden] { display: none !important; }
+    .workspace-sidebar .sidebar-organization {
+      margin: 0 0.75rem 0.75rem; padding: 0.6rem 0.7rem; border: 1px solid var(--border);
+      border-radius: 8px; background: rgba(124, 58, 237, 0.1);
+    }
+    .workspace-sidebar .sidebar-organization.missing { background: rgba(255,255,255,0.03); }
+    .workspace-sidebar .sidebar-organization-eyebrow {
+      color: var(--text-muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .workspace-sidebar .sidebar-organization-name { margin-top: 0.2rem; font-size: 0.88rem; font-weight: 600; }
+    .workspace-sidebar .sidebar-organization-meta { margin-top: 0.15rem; color: var(--text-muted); font-size: 0.72rem; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar workspace-sidebar" id="workspaceSidebar">
-      <button type="button" class="sidebar-expand-full" id="btnWorkspaceSidebarExpand" hidden title="Показать глобальное меню и полный список разделов">▴ Весь меню</button>
-      <div class="sidebar-top">
-        <div class="sidebar-brand">Typical Infrastructure</div>
-        <a href="/clients" class="sidebar-item">Клиенты</a>
-        <a href="/users" class="sidebar-item">Пользователи</a>
-        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
-        <div class="sidebar-section-label">Глобальные справочники</div>
-        <a href="/global" class="sidebar-item">Обзор</a>
-        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
-        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
-        <a id="topNavRegulations" href="/regulations" class="sidebar-item" title="Общесистемный нормативный реестр">Регламенты должностей</a>
-        <a href="/docs" class="sidebar-item api-link">API</a>
-      </div>
-      <div class="sidebar-middle">
-        <div class="sidebar-section-label">Справочники организации</div>
-        <div class="sidebar-muted" style="font-size:0.78rem;margin:-0.35rem 0 0.5rem 0;line-height:1.35;">Просмотр и правки в разрезе <strong>выбранной</strong> организации</div>
-        <a class="sidebar-item active" data-tab="org">Подразделения</a>
-        <a class="sidebar-item" data-tab="positions">Должности</a>
-        <a class="sidebar-item" data-tab="client-regs">Регламенты и KPI</a>
-        <a class="sidebar-item" data-tab="employees">Сотрудники</a>
-        <a class="sidebar-item" data-tab="accounts">Аккаунты</a>
-      </div>
-      <div class="sidebar-divider" aria-hidden="true"></div>
-      <div class="sidebar-apps" id="sidebarApps" role="region" aria-label="Приложения">
-        <div class="sidebar-section-label">Приложения</div>
-        <div class="sidebar-apps-placeholder">Раздел в разработке. Здесь появятся подключаемые приложения для организации.</div>
-      </div>
-    </aside>
+    <aside class="sidebar workspace-sidebar" id="workspaceSidebar"></aside>
     <main class="main">
       <div class="main-header">
         <div class="header-row">
@@ -279,6 +277,31 @@
           </thead>
           <tbody id="accTbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Static HR module placeholders -->
+    <div id="panel-psych-testing" class="panel">
+      <h2>Психологические тестирования</h2>
+      <div class="empty-state module-placeholder">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
+      </div>
+    </div>
+
+    <div id="panel-learning" class="panel">
+      <h2>Обучение</h2>
+      <div class="empty-state module-placeholder">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
+      </div>
+    </div>
+
+    <div id="panel-attestations" class="panel">
+      <h2>Аттестации</h2>
+      <div class="empty-state module-placeholder">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
       </div>
     </div>
       </div>
@@ -541,7 +564,15 @@
     </div>
   </div>
 
+  <script src="/static/shared/sidebar-registry.js"></script>
+  <script src="/static/shared/sidebar.js"></script>
   <script>
+    if (window.SidebarRenderer) {
+      window.SidebarRenderer.renderWorkspaceSidebar({
+        activeTab: workspaceTabFromHash(location.hash),
+      });
+    }
+
     const API = '/api';
     let clientId = '';
     let orgUnits = [];
@@ -553,6 +584,7 @@
     let employeesTableCache = [];
 
     function getClientId() {
+      if (window.SidebarContext) return window.SidebarContext.readClientIdFromPath(window.location.pathname);
       const m = window.location.pathname.match(/^\/client\/([^/]+)/);
       return m ? m[1] : '';
     }
@@ -626,6 +658,10 @@
     const WORKSPACE_SIDEBAR_FOCUS_KEY = 'workspaceSidebarFocus';
 
     function applyWorkspaceSidebarFocus(mode) {
+      if (window.SidebarRenderer) {
+        window.SidebarRenderer.applyWorkspaceSidebarFocus(mode, { persist: true });
+        return;
+      }
       const el = document.getElementById('workspaceSidebar');
       const btn = document.getElementById('btnWorkspaceSidebarExpand');
       if (!el) return;
@@ -637,6 +673,9 @@
     }
 
     function getStoredWorkspaceSidebarFocus() {
+      if (window.SidebarRenderer) {
+        return window.SidebarRenderer.getStoredWorkspaceSidebarFocus({ legacy: true });
+      }
       try {
         const v = localStorage.getItem(WORKSPACE_SIDEBAR_FOCUS_KEY);
         if (v === 'full' || v === 'org' || v === 'apps') return v;
@@ -644,18 +683,106 @@
       return 'org';
     }
 
+    function workspaceModuleTabs() {
+      return ['client-regs', 'employees', 'accounts', 'psych-testing', 'learning', 'attestations'];
+    }
+
+    function workspaceTabFromHash(hash) {
+      const h = (hash || '').replace(/^#/, '');
+      if (h === 'positions') return 'positions';
+      return workspaceModuleTabs().includes(h) ? h : 'org';
+    }
+
+    function getActiveWorkspaceTab() {
+      const activePanel = document.querySelector('.panel.active');
+      if (activePanel && activePanel.id.indexOf('panel-') === 0) return activePanel.id.replace(/^panel-/, '');
+      return workspaceTabFromHash(location.hash);
+    }
+
+    function selectedClientSnapshot() {
+      return clientsList.find(c => c.id === clientId) || null;
+    }
+
+    function workspacePanels() {
+      const content = document.querySelector('.content');
+      return content ? content.querySelectorAll(':scope > .panel') : [];
+    }
+
+    function currentSidebarContext(extra = {}) {
+      const selectedClient = selectedClientSnapshot();
+      return Object.assign({
+        currentPath: window.location.pathname,
+        currentHash: window.location.hash || '',
+        clientId,
+        clientName: selectedClient ? selectedClient.name : '',
+        clientCode: selectedClient ? selectedClient.code : '',
+        activeTab: getActiveWorkspaceTab(),
+        focusMode: getStoredWorkspaceSidebarFocus(),
+      }, extra);
+    }
+
+    function syncWorkspaceSidebarContext(extra = {}) {
+      const context = currentSidebarContext(extra);
+      if (window.SidebarContext) window.SidebarContext.resolveContext(context, { persistFocus: false });
+      if (window.SidebarRenderer) {
+        window.SidebarRenderer.renderWorkspaceSidebar({ context });
+        bindWorkspaceSidebarInteractions();
+      }
+    }
+
+    function bindWorkspaceSidebarInteractions() {
+      document.querySelectorAll('[data-sidebar-section-toggle]').forEach(btn => {
+        btn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (btn.dataset.focusMode) applyWorkspaceSidebarFocus(btn.dataset.focusMode);
+          if (window.SidebarRenderer) window.SidebarRenderer.toggleWorkspaceSidebarSection(btn.dataset.sidebarSectionToggle);
+        };
+      });
+      document.querySelectorAll('.sidebar-item[data-tab]').forEach(t => {
+        t.onclick = (e) => {
+          e.preventDefault();
+          activateWorkspaceTab(t.dataset.tab);
+        };
+      });
+      const expandBtn = document.getElementById('btnWorkspaceSidebarExpand');
+      if (expandBtn) expandBtn.onclick = () => applyWorkspaceSidebarFocus('full');
+      const apps = document.getElementById('sidebarApps');
+      if (apps) {
+        apps.onclick = (e) => {
+          if (e.target.closest('a')) return;
+          applyWorkspaceSidebarFocus('apps');
+        };
+      }
+    }
+
+    function refreshSidebarActiveSections() {
+      document.querySelectorAll('[data-sidebar-section]').forEach(section => {
+        section.classList.toggle('active', !!section.querySelector('.sidebar-item.active'));
+      });
+    }
+
     function activateWorkspaceTab(tab) {
-      applyWorkspaceSidebarFocus('org');
+      const focusMode = workspaceModuleTabs().includes(tab) ? 'apps' : 'org';
+      applyWorkspaceSidebarFocus(focusMode);
       const path = window.location.pathname;
-      if (tab === 'client-regs') {
-        if (history.replaceState) history.replaceState(null, '', path + '#client-regs');
+      if (workspaceModuleTabs().includes(tab) || tab === 'positions') {
+        if (history.replaceState) history.replaceState(null, '', path + '#' + encodeURIComponent(tab));
       } else if (history.replaceState) {
         history.replaceState(null, '', path);
+      }
+      if (window.SidebarContext) {
+        window.SidebarContext.update({
+          currentHash: window.location.hash || '',
+          activeTab: tab,
+          focusMode,
+        }, { persistFocus: false });
       }
       document.querySelectorAll('.sidebar-item[data-tab]').forEach(x => {
         x.classList.toggle('active', x.dataset.tab === tab);
       });
-      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+      refreshSidebarActiveSections();
+      workspacePanels().forEach(x => x.classList.remove('active'));
       const panel = document.getElementById('panel-' + tab);
       if (!panel) return;
       panel.classList.add('active');
@@ -666,19 +793,7 @@
       else if (tab === 'accounts') loadAccounts();
     }
 
-    document.querySelectorAll('.sidebar-item[data-tab]').forEach(t => {
-      t.onclick = (e) => {
-        e.preventDefault();
-        activateWorkspaceTab(t.dataset.tab);
-      };
-    });
-
-    document.getElementById('btnWorkspaceSidebarExpand').onclick = () => applyWorkspaceSidebarFocus('full');
-
-    document.getElementById('sidebarApps').addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;
-      applyWorkspaceSidebarFocus('apps');
-    });
+    bindWorkspaceSidebarInteractions();
 
     document.getElementById('btnHeaderClientRegs').onclick = () => {
       if (!clientId) {
@@ -697,19 +812,35 @@
     }
 
     async function loadClient() {
-      clientId = getClientId();
+      const requestedClientId = getClientId();
+      clientId = requestedClientId;
       const selEl = document.getElementById('clientSelector');
       await loadClientsForSelector();
-      const clientExists = clientId && clientsList.some(c => c.id === clientId);
-      if (clientId && !clientExists) {
+      const resolvedOrganization = window.SidebarContext
+        ? window.SidebarContext.resolveOrganization({
+            clients: clientsList,
+            requestedClientId,
+            currentPath: window.location.pathname,
+            currentHash: window.location.hash || '',
+            activeTab: getActiveWorkspaceTab(),
+            focusMode: getStoredWorkspaceSidebarFocus(),
+          })
+        : null;
+      const clientExists = requestedClientId && (
+        resolvedOrganization ? !!resolvedOrganization.client : clientsList.some(c => c.id === requestedClientId)
+      );
+      if (requestedClientId && !clientExists) {
         clientId = '';
+        syncWorkspaceSidebarContext({ clientId: '', clientName: '', clientCode: '', fallbackReason: 'stale-client' });
         document.querySelector('.main-header').innerHTML = '<p class="err">Организация не найдена. <a href="/clients">← К списку клиентов</a></p>';
         return;
       }
+      if (resolvedOrganization) clientId = resolvedOrganization.clientId;
       if (!clientId && clientsList.length) clientId = clientsList[0].id;
       selEl.innerHTML = clientsList.length ? clientsList.map(c => '<option value="' + c.id + '"' + (c.id === clientId ? ' selected' : '') + '>' + c.name + ' (' + c.code + ')' + '</option>').join('') : '<option value="">Нет организаций</option>';
       selEl.onchange = () => { window.location.href = '/client/' + selEl.value; };
       clientId = selEl.value || clientId;
+      syncWorkspaceSidebarContext();
       updateGlobalRegulationsLinks();
       updateWorkspaceExportLinks();
     }
@@ -1672,8 +1803,8 @@
         await loadOrgTree();
         await loadPositionsForSelect();
         await loadEmployeesForSelect();
-        const h = (location.hash || '').replace(/^#/, '');
-        if (h === 'client-regs') activateWorkspaceTab('client-regs');
+        const initialTab = workspaceTabFromHash(location.hash);
+        if (initialTab !== 'org') activateWorkspaceTab(initialTab);
       }
     })();
   </script>
