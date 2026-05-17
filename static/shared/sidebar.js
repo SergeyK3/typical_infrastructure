@@ -10,6 +10,7 @@
       platformNavigation: [],
       organizationNavigation: [],
       moduleNavigation: [],
+      hrModuleNavigation: [],
       getDefaultActiveModules: function () { return ['hr.core']; },
     };
   }
@@ -64,11 +65,21 @@
     } catch (_) {}
   }
 
+  function normalizeModuleVisibility(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.assign({}, value);
+  }
+
   function currentTabFromHash(hashValue, pathValue) {
     const path = pathValue || window.location.pathname || '';
     if (!/^\/client(?:\/|$)/.test(path)) return '';
     const hash = (hashValue || '').replace(/^#/, '');
-    const routedTabs = ['positions', 'client-regs', 'employees', 'accounts', 'psych-testing', 'learning', 'attestations'];
+    const routedTabs = [
+      'positions', 'client-regs', 'local-kpi', 'local-skills', 'employees', 'accounts',
+      'psych-testing', 'learning', 'attestations', 'admin-assignments', 'disciplinary-actions',
+      'certificates', 'ai-assistants', 'document-flow', 'compliance', 'medical-checkups',
+      'accreditations', 'analytics',
+    ];
     return routedTabs.includes(hash) ? hash : 'org';
   }
 
@@ -93,6 +104,19 @@
       name: client.name || '',
       code: client.code || '',
     };
+  }
+
+  function resolveModuleVisibility(context, source) {
+    const reg = registry();
+    let visibility = {};
+    try {
+      if (typeof reg.getOrganizationModuleVisibility === 'function') {
+        visibility = normalizeModuleVisibility(reg.getOrganizationModuleVisibility(context));
+      }
+    } catch (_) {
+      visibility = {};
+    }
+    return Object.assign(visibility, normalizeModuleVisibility(source && source.moduleVisibility));
   }
 
   const SidebarContext = (function () {
@@ -129,6 +153,19 @@
         : (state.clientId || urlClientId || '');
       const clientName = hasOwn(source, 'clientName') && source.clientName != null ? source.clientName : (state.clientName || '');
       const clientCode = hasOwn(source, 'clientCode') && source.clientCode != null ? source.clientCode : (state.clientCode || '');
+      const organization = {
+        clientId: clientId || '',
+        name: clientName || '',
+        code: clientCode || '',
+      };
+      const moduleVisibility = resolveModuleVisibility({
+        currentPath,
+        currentHash,
+        clientId: clientId || '',
+        clientName: clientName || '',
+        clientCode: clientCode || '',
+        organization,
+      }, source);
 
       return {
         currentPath,
@@ -136,13 +173,10 @@
         clientId: clientId || '',
         clientName: clientName || '',
         clientCode: clientCode || '',
-        organization: {
-          clientId: clientId || '',
-          name: clientName || '',
-          code: clientCode || '',
-        },
+        organization,
         activeTab,
         activeModules,
+        moduleVisibility,
         collapsedSections,
         focusMode,
         fallbackReason: source.fallbackReason || '',
@@ -153,6 +187,7 @@
       return Object.assign({}, state, {
         organization: Object.assign({}, state.organization || {}),
         activeModules: (state.activeModules || []).slice(),
+        moduleVisibility: Object.assign({}, state.moduleVisibility || {}),
         collapsedSections: (state.collapsedSections || []).slice(),
       });
     }
@@ -168,7 +203,10 @@
     }
 
     function update(partial, options) {
-      return resolveContext(Object.assign({}, state, partial || {}), options);
+      const patch = partial || {};
+      const next = Object.assign({}, state, patch);
+      if (!hasOwn(patch, 'moduleVisibility')) delete next.moduleVisibility;
+      return resolveContext(next, options);
     }
 
     function resolveOrganization(options) {
@@ -262,6 +300,7 @@
   function isItemVisible(item, ctx) {
     if (item.requiresClient && !ctx.clientId) return false;
     if (item.requiresModule && !ctx.activeModules.includes(item.requiresModule)) return false;
+    if (item.visibilityKey && ctx.moduleVisibility && ctx.moduleVisibility[item.visibilityKey] === false) return false;
     if (typeof item.isVisible === 'function') return item.isVisible(ctx);
     return true;
   }
@@ -292,6 +331,20 @@
 
   function visibleItems(items, ctx) {
     return sorted(items).filter((item) => isItemVisible(item, ctx));
+  }
+
+  function findNavigationItemByTab(tab) {
+    const reg = registry();
+    return []
+      .concat(reg.organizationNavigation || [], reg.moduleNavigation || [], reg.hrModuleNavigation || [])
+      .find((item) => item && item.tab === tab) || null;
+  }
+
+  function isTabVisible(tab, rawContext) {
+    const item = findNavigationItemByTab(tab);
+    if (!item) return true;
+    const ctx = buildContext(rawContext || SidebarContext.getState());
+    return isItemVisible(item, ctx);
   }
 
   function hasActiveItem(items, ctx) {
@@ -479,26 +532,32 @@
     divider.setAttribute('aria-hidden', 'true');
     root.appendChild(divider);
 
-    const apps = document.createElement('div');
-    apps.className = 'sidebar-apps';
-    apps.id = 'sidebarApps';
-    apps.setAttribute('role', 'region');
-    apps.setAttribute('aria-label', 'Приложения');
-    apps.appendChild(createCollapsibleSection(
-      groupById(groups, 'hrModules'),
-      reg.moduleNavigation,
-      ctx,
-      { focusMode: 'modules' }
-    ));
-    if (visibleItems(reg.hrModuleNavigation, ctx).length) {
-      apps.appendChild(createCollapsibleSection(
-        groupById(groups, 'hrPluginModules'),
-        reg.hrModuleNavigation,
-        ctx,
-        { focusMode: 'modules' }
-      ));
+    const moduleItems = visibleItems(reg.moduleNavigation, ctx);
+    const hrPluginItems = visibleItems(reg.hrModuleNavigation, ctx);
+    if (moduleItems.length || hrPluginItems.length) {
+      const apps = document.createElement('div');
+      apps.className = 'sidebar-apps';
+      apps.id = 'sidebarApps';
+      apps.setAttribute('role', 'region');
+      apps.setAttribute('aria-label', 'Дополнительные модули');
+      if (moduleItems.length) {
+        apps.appendChild(createCollapsibleSection(
+          groupById(groups, 'hrModules'),
+          reg.moduleNavigation,
+          ctx,
+          { focusMode: 'modules' }
+        ));
+      }
+      if (hrPluginItems.length) {
+        apps.appendChild(createCollapsibleSection(
+          groupById(groups, 'hrPluginModules'),
+          reg.hrModuleNavigation,
+          ctx,
+          { focusMode: 'modules' }
+        ));
+      }
+      root.appendChild(apps);
     }
-    root.appendChild(apps);
 
     applyWorkspaceSidebarFocus(ctx.focusMode, { persist: false });
     return ctx;
@@ -514,6 +573,7 @@
     getContext: SidebarContext.getState,
     updateContext: SidebarContext.update,
     toggleWorkspaceSidebarSection,
+    isTabVisible,
     getStoredWorkspaceSidebarFocus: function (options) {
       return SidebarContext.getStoredFocus(options);
     },

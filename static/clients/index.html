@@ -31,6 +31,7 @@
     .modal-actions .btn { flex: 1; }
     .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
     .header-row .btn { flex-shrink: 0; }
+    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -45,6 +46,7 @@
         <a href="/global" class="sidebar-item">Обзор</a>
         <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
         <a href="/global/positions" class="sidebar-item">Типовые должности</a>
+        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
         <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
         <a href="/regulations" class="sidebar-item" title="Общесистемный реестр">Типовые регламенты</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
@@ -61,7 +63,9 @@
             <h1>Клиенты (организации)</h1>
             <p class="subtitle">Организации — владельцы типовой инфраструктуры</p>
           </div>
-          <button type="button" class="btn btn-primary" id="btnCreate">Создать</button>
+          <div class="header-actions">
+            <button type="button" class="btn btn-primary" id="btnCreate">Создать</button>
+          </div>
         </div>
       </div>
       <div class="content">
@@ -151,11 +155,15 @@
               </a>
             </div>
             <div class="card-actions">
+              <button type="button" class="btn btn-secondary btn-apply-template" data-id="${c.id}">Применить шаблон</button>
               <button type="button" class="btn btn-secondary btn-edit" data-id="${c.id}">Изменить</button>
               <button type="button" class="btn btn-danger btn-delete" data-id="${c.id}">Удалить</button>
             </div>
           </div>
         `).join('');
+        list.querySelectorAll('.btn-apply-template').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); applyTemplateToClient(btn.dataset.id); });
+        });
         list.querySelectorAll('.btn-edit').forEach(btn => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.id); });
         });
@@ -236,8 +244,27 @@
         alert('Ошибка: ' + e.message);
       }
     }
+    async function applyTemplateToClient(clientId) {
+      if (!confirm('Применить шаблон onboarding к существующей организации? Будут добавлены отсутствующие локальные справочники без удаления текущих данных.')) return;
+      try {
+        const res = await fetchApi('/onboarding-runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'apply_existing',
+            template_code: 'default',
+            existing_client_id: clientId,
+            idempotency_key: 'clients-apply-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+          }),
+        });
+        alert('Шаблон применён. Статус onboarding: ' + (res.status || 'completed'));
+        loadClients();
+      } catch (e) {
+        alert('Ошибка onboarding: ' + e.message);
+      }
+    }
     async function deleteClient(clientId) {
-      if (!confirm('Удалить организацию? Все данные (подразделения, сотрудники, аккаунты) будут удалены.')) return;
+      if (!confirm('Удалить организацию? Все данные (локальные справочники, сотрудники, аккаунты) будут удалены.')) return;
       try {
         await fetchApi('/clients/' + clientId, { method: 'DELETE' });
         loadClients();
@@ -245,7 +272,7 @@
         alert('Ошибка: ' + e.message);
       }
     }
-    document.getElementById('btnCreate').onclick = openCreateModal;
+    document.getElementById('btnCreate').onclick = () => { window.location.href = '/wizard'; };
     document.getElementById('btnCancelCreate').onclick = closeCreateModal;
     document.getElementById('btnSaveCreate').onclick = saveCreate;
     document.getElementById('createModal').addEventListener('click', (e) => {

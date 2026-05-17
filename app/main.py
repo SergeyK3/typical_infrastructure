@@ -39,6 +39,16 @@ logging.basicConfig(
 )
 logging.getLogger("app").setLevel(logging.INFO)
 
+try:
+    import skill_assessment.infrastructure.db_models  # noqa: F401 — register skill assessment tables
+    from skill_assessment.router import router as skill_assessment_router
+    from skill_assessment.runner import configure_skill_assessment_plugin, run_plugin_startup
+except ImportError:
+    logging.getLogger("app").exception("skill_assessment module is not available")
+    skill_assessment_router = None
+    configure_skill_assessment_plugin = None
+    run_plugin_startup = None
+
 app = FastAPI(title=settings.app_name)
 app.add_middleware(RequestTracingMiddleware)
 
@@ -51,8 +61,20 @@ async def add_security_headers(request, call_next):
     return response
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.include_router(api_router, prefix="/api")
+if skill_assessment_router is not None:
+    app.include_router(skill_assessment_router, prefix="/api")
+if configure_skill_assessment_plugin is not None:
+    configure_skill_assessment_plugin(app)
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
+_HTML_NO_CACHE = {
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+}
+
+
+def _html_file_response(path: Path) -> FileResponse:
+    return FileResponse(path, media_type="text/html; charset=utf-8", headers=_HTML_NO_CACHE)
 
 _MSG_MAP = {
     "Field required": "Поле обязательно для заполнения",
@@ -107,7 +129,7 @@ def wizard_page() -> FileResponse:
     wizard_path = static_dir / "wizard" / "index.html"
     if not wizard_path.exists():
         raise HTTPException(status_code=404, detail="wizard_not_found")
-    return FileResponse(wizard_path)
+    return _html_file_response(wizard_path)
 
 
 @app.get("/client/{client_id}")
@@ -116,7 +138,7 @@ def client_workspace_page(client_id: str) -> FileResponse:
     workspace_path = static_dir / "workspace" / "index.html"
     if not workspace_path.exists():
         raise HTTPException(status_code=404, detail="workspace_page_not_found")
-    return FileResponse(workspace_path)
+    return _html_file_response(workspace_path)
 
 
 @app.get("/users")
@@ -125,7 +147,7 @@ def users_page() -> FileResponse:
     users_path = static_dir / "users" / "index.html"
     if not users_path.exists():
         raise HTTPException(status_code=404, detail="users_page_not_found")
-    return FileResponse(users_path)
+    return _html_file_response(users_path)
 
 
 @app.get("/regulations", include_in_schema=False)
@@ -135,7 +157,7 @@ def regulations_page() -> FileResponse:
     regulations_path = static_dir / "regulations" / "index.html"
     if not regulations_path.exists():
         raise HTTPException(status_code=404, detail="regulations_page_not_found")
-    return FileResponse(regulations_path)
+    return _html_file_response(regulations_path)
 
 
 @app.get("/global")
@@ -143,7 +165,7 @@ def global_catalogs_hub() -> FileResponse:
     p = static_dir / "global" / "index.html"
     if not p.exists():
         raise HTTPException(status_code=404, detail="global_hub_not_found")
-    return FileResponse(p)
+    return _html_file_response(p)
 
 
 @app.get("/global/template-org")
@@ -151,7 +173,7 @@ def global_template_org_page() -> FileResponse:
     p = static_dir / "global" / "template-org.html"
     if not p.exists():
         raise HTTPException(status_code=404, detail="global_template_org_not_found")
-    return FileResponse(p)
+    return _html_file_response(p)
 
 
 @app.get("/global/positions")
@@ -159,7 +181,15 @@ def global_position_catalog_page() -> FileResponse:
     p = static_dir / "global" / "positions.html"
     if not p.exists():
         raise HTTPException(status_code=404, detail="global_positions_not_found")
-    return FileResponse(p)
+    return _html_file_response(p)
+
+
+@app.get("/global/skills")
+def global_skills_page() -> FileResponse:
+    p = static_dir / "global" / "skills.html"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="global_skills_not_found")
+    return _html_file_response(p)
 
 
 @app.get("/global/kpi")
@@ -167,7 +197,7 @@ def global_kpi_templates_page() -> FileResponse:
     p = static_dir / "global" / "kpi.html"
     if not p.exists():
         raise HTTPException(status_code=404, detail="global_kpi_not_found")
-    return FileResponse(p)
+    return _html_file_response(p)
 
 
 @app.get("/clients")
@@ -176,7 +206,7 @@ def clients_page() -> FileResponse:
     clients_path = static_dir / "clients" / "index.html"
     if not clients_path.exists():
         raise HTTPException(status_code=404, detail="clients_page_not_found")
-    return FileResponse(clients_path)
+    return _html_file_response(clients_path)
 
 
 if static_dir.exists():
@@ -202,3 +232,5 @@ def _startup() -> None:
         # seed_clients отключён — удалённые клиенты не восстанавливаются
     finally:
         db.close()
+    if run_plugin_startup is not None:
+        run_plugin_startup()

@@ -281,14 +281,19 @@ def import_employees_excel(
         headers_norm = [h.replace(" ", "").replace(".", "").replace("-", "") for h in headers]
         col_map = {}
         for name, alt in [
+            ("id", ["id", "employee_id", "employeeid", "ид", "идентификатор", "кодсотрудника"]),
             ("last_name", ["last_name", "lastname", "last name", "фамилия", "surname", "familia"]),
             ("first_name", ["first_name", "firstname", "first name", "имя", "name", "imya"]),
             ("middle_name", ["middle_name", "middlename", "middle name", "отчество", "patronymic", "otchestvo"]),
             ("email", ["email", "почта", "e-mail", "mail", "эл.почта", "электронная почта"]),
             ("phone", ["phone", "телефон", "mobile", "мобильный", "сотовый", "мобтел"]),
             ("telegram_id", ["telegram_id", "telegram", "телеграм", "tg", "telegram id"]),
-            ("org_unit_code", ["org_unit_code", "кодподразделения", "код_подразделения", "orgunitcode"]),
+            ("org_unit_id", ["org_unit_id", "orgunitid", "department_id", "departmentid", "idподразделения", "подразделение_id"]),
+            ("org_unit_code", ["org_unit_code", "кодподразделения", "код_подразделения", "orgunitcode", "department_code", "departmentcode"]),
+            ("org_unit_name", ["org_unit_name", "подразделение", "отделение", "отдел", "служба", "департамент", "department", "org_unit", "org unit", "orgunit"]),
+            ("position_id", ["position_id", "positionid", "job_id", "idдолжности", "должность_id"]),
             ("position_code", ["position_code", "коддолжности", "код_должности", "positioncode"]),
+            ("position_name", ["position_name", "должность", "позиция", "position", "job_title", "job title", "jobtitle"]),
             ("fio", ["сотрудник", "фИО", "ф.и.о.", "fio", "employee", "full name", "fullname", "фио"]),
         ]:
             for a in alt:
@@ -352,6 +357,110 @@ def import_employees_excel(
         if len(parts) >= 2:
             return parts[0], parts[1], " ".join(parts[2:]) if len(parts) > 2 else None
         return None, None, None
+
+    def _norm_lookup_key(value: object) -> str:
+        return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
+
+    def _cell_str(row: tuple, key: str) -> str:
+        idx = col_map.get(key)
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return ""
+        return str(row[idx]).strip()
+
+    org_units = db.scalars(select(OrgUnit).where(OrgUnit.client_id == client_id)).all()
+    positions = db.scalars(select(Position).where(Position.client_id == client_id)).all()
+    org_units_by_id = {x.id: x for x in org_units}
+    org_units_by_code = {_norm_lookup_key(x.code): x for x in org_units if x.code}
+    org_units_by_name = {_norm_lookup_key(x.name): x for x in org_units if x.name}
+    positions_by_id = {x.id: x for x in positions}
+    positions_by_code_by_org: dict[tuple[str, str], Position] = {}
+    positions_by_name_by_org: dict[tuple[str, str], Position] = {}
+    positions_by_code_all: dict[str, list[Position]] = {}
+    positions_by_name_all: dict[str, list[Position]] = {}
+    for p in positions:
+        for val in (p.code, getattr(p, "position_catalog_code", None)):
+            key = _norm_lookup_key(val)
+            if key:
+                positions_by_code_by_org.setdefault((key, p.org_unit_id), p)
+                positions_by_code_all.setdefault(key, []).append(p)
+        key = _norm_lookup_key(p.name)
+        if key:
+            positions_by_name_by_org.setdefault((key, p.org_unit_id), p)
+            positions_by_name_all.setdefault(key, []).append(p)
+    positions_by_unique_code = {k: v[0] for k, v in positions_by_code_all.items() if len(v) == 1}
+    positions_by_unique_name = {k: v[0] for k, v in positions_by_name_all.items() if len(v) == 1}
+
+    def _resolve_org_unit(row: tuple) -> OrgUnit | None:
+        raw_code = _cell_str(row, "org_unit_code")
+        raw_name = _cell_str(row, "org_unit_name")
+        for raw in (raw_code, raw_name):
+            key = _norm_lookup_key(raw)
+            if not key:
+                continue
+            found = org_units_by_code.get(key) or org_units_by_name.get(key)
+            if found:
+                return found
+        raw_id = _cell_str(row, "org_unit_id")
+        if raw_id:
+            return org_units_by_id.get(raw_id)
+        return None
+
+    def _resolve_position(row: tuple, org_unit_id: str | None) -> Position | None:
+        raw_code = _cell_str(row, "position_code")
+        raw_name = _cell_str(row, "position_name")
+        if org_unit_id:
+            for raw, by_org in ((raw_code, positions_by_code_by_org), (raw_name, positions_by_name_by_org)):
+                key = _norm_lookup_key(raw)
+                if not key:
+                    continue
+                found = by_org.get((key, org_unit_id))
+                if found:
+                    return found
+            if raw_code or raw_name:
+                return None
+        else:
+            for raw, by_unique in ((raw_code, positions_by_unique_code), (raw_name, positions_by_unique_name)):
+                key = _norm_lookup_key(raw)
+                if not key:
+                    continue
+                found = by_unique.get(key)
+                if found:
+                    return found
+        raw_id = _cell_str(row, "position_id")
+        if raw_id:
+            found = positions_by_id.get(raw_id)
+            if found and (org_unit_id is None or found.org_unit_id == org_unit_id):
+                return found
+        return None
+
+    def _find_existing_employee(
+        employee_id: str | None,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None,
+        email: str | None,
+    ) -> Employee | None:
+        if employee_id:
+            by_id = db.get(Employee, employee_id)
+            if by_id and by_id.client_id == client_id:
+                return by_id
+        if email:
+            by_email = db.scalar(
+                select(Employee).where(Employee.client_id == client_id, func.lower(Employee.email) == email.lower())
+            )
+            if by_email:
+                return by_email
+        return db.scalar(
+            select(Employee)
+            .where(
+                Employee.client_id == client_id,
+                func.lower(Employee.last_name) == last_name.lower(),
+                func.lower(Employee.first_name) == first_name.lower(),
+                func.coalesce(func.lower(Employee.middle_name), "") == (middle_name or "").lower(),
+            )
+            .order_by(Employee.created_at.desc())
+        )
+
     created: list[EmployeeOut] = []
     data_rows = rows[header_idx + 1 :]
     for row in data_rows:
@@ -379,39 +488,47 @@ def import_employees_excel(
         telegram_id = None
         if "telegram_id" in col_map and col_map["telegram_id"] is not None and col_map["telegram_id"] < len(row) and row[col_map["telegram_id"]]:
             telegram_id = str(row[col_map["telegram_id"]]).strip() or None
+        employee_id = _cell_str(row, "id") or None
         org_unit_id = None
-        if "org_unit_code" in col_map and col_map["org_unit_code"] is not None and col_map["org_unit_code"] < len(row) and row[col_map["org_unit_code"]]:
-            ou_code = str(row[col_map["org_unit_code"]]).strip()
-            if ou_code:
-                ou = db.scalar(
-                    select(OrgUnit).where(OrgUnit.client_id == client_id, OrgUnit.code == ou_code)
-                )
-                if ou:
-                    org_unit_id = ou.id
+        ou = _resolve_org_unit(row)
+        if ou:
+            org_unit_id = ou.id
         position_id = None
-        if "position_code" in col_map and col_map["position_code"] is not None and col_map["position_code"] < len(row) and row[col_map["position_code"]]:
-            p_code = str(row[col_map["position_code"]]).strip()
-            if p_code:
-                pos = db.scalar(
-                    select(Position).where(Position.client_id == client_id, Position.code == p_code)
-                )
-                if pos:
-                    position_id = pos.id
-        obj = Employee(
-            id=new_id32(),
-            client_id=client_id,
-            last_name=last_name,
-            first_name=first_name,
-            middle_name=middle_name,
-            email=email,
-            phone=phone,
-            telegram_id=telegram_id,
-            org_unit_id=org_unit_id,
-            position_id=position_id,
-            employment_status="active",
-            is_manager=False,
-        )
-        db.add(obj)
+        pos = _resolve_position(row, org_unit_id)
+        if pos:
+            position_id = pos.id
+            org_unit_id = pos.org_unit_id
+        obj = _find_existing_employee(employee_id, last_name, first_name, middle_name, email)
+        if obj:
+            obj.last_name = last_name
+            obj.first_name = first_name
+            obj.middle_name = middle_name
+            if email:
+                obj.email = email
+            if phone:
+                obj.phone = phone
+            if telegram_id:
+                obj.telegram_id = telegram_id
+            if org_unit_id:
+                obj.org_unit_id = org_unit_id
+            if position_id:
+                obj.position_id = position_id
+        else:
+            obj = Employee(
+                id=new_id32(),
+                client_id=client_id,
+                last_name=last_name,
+                first_name=first_name,
+                middle_name=middle_name,
+                email=email,
+                phone=phone,
+                telegram_id=telegram_id,
+                org_unit_id=org_unit_id,
+                position_id=position_id,
+                employment_status="active",
+                is_manager=False,
+            )
+            db.add(obj)
         db.flush()
         created.append(EmployeeOut.model_validate(obj))
     db.commit()

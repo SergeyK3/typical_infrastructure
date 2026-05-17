@@ -35,6 +35,8 @@
       padding: 1.25rem;
       margin-bottom: 1rem;
     }
+    .wizard-container > .panel[data-step] { display: none; }
+    .wizard-container > .panel[data-step].active { display: block; }
     .panel h2 { font-size: 1rem; margin: 0 0 1rem 0; }
     label {
       display: block;
@@ -110,6 +112,22 @@
     .hidden { display: none !important; }
     .save-draft { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
     .save-draft.saved { color: var(--success); }
+    .mode-choice {
+      display: grid; gap: 0.6rem; margin-top: 0.75rem;
+    }
+    .mode-choice label {
+      display: flex; gap: 0.55rem; align-items: flex-start; margin: 0;
+      padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,0.02);
+    }
+    .mode-choice input { width: auto; margin-top: 0.15rem; }
+    .mode-choice span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.35; }
+    .wizard-warning {
+      margin-top: 0.75rem; padding: 0.75rem; border: 1px solid rgba(210,153,34,0.45);
+      border-radius: 8px; background: rgba(210,153,34,0.12); color: var(--text);
+      font-size: 0.88rem; line-height: 1.45;
+    }
+    .wizard-warning strong { color: var(--warning); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     .wizard-help {
@@ -135,8 +153,9 @@
         <a href="/global" class="sidebar-item">Обзор</a>
         <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
         <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/global/kpi" class="sidebar-item">Шаблоны KPI</a>
-        <a href="/regulations" class="sidebar-item">Регламенты должностей</a>
+        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
+        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
+        <a href="/regulations" class="sidebar-item">Типовые регламенты</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
       </div>
       <div class="sidebar-bottom">
@@ -167,12 +186,38 @@
     <!-- Step 2: Client -->
     <div class="panel" id="panel2" data-step="2">
       <h2>2. Данные клиента</h2>
-      <label>Код клиента *</label>
-      <input type="text" id="clientCode" placeholder="TOO_ALFA" maxlength="64" />
-      <p class="field-error hidden" id="errClientCode"></p>
-      <label>Название *</label>
-      <input type="text" id="clientName" placeholder="ТОО Альфа" maxlength="256" />
-      <p class="field-error hidden" id="errClientName"></p>
+      <label>Режим onboarding</label>
+      <div class="mode-choice">
+        <label>
+          <input type="radio" name="onboardingMode" value="create" checked>
+          <div><strong>Создать новую организацию</strong><br><span>Будет создан клиент, типовая структура, должности и первый администратор.</span></div>
+        </label>
+        <label>
+          <input type="radio" name="onboardingMode" value="apply_existing">
+          <div><strong>Применить шаблон к существующей организации</strong><br><span>Будут добавлены только отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.</span></div>
+        </label>
+      </div>
+      <div id="newClientFields">
+        <label>Код клиента *</label>
+        <input type="text" id="clientCode" placeholder="TOO_ALFA" maxlength="64" />
+        <p class="field-error hidden" id="errClientCode"></p>
+        <label>Название *</label>
+        <input type="text" id="clientName" placeholder="ТОО Альфа" maxlength="256" />
+        <p class="field-error hidden" id="errClientName"></p>
+      </div>
+      <div id="existingClientFields" class="hidden">
+        <label>Существующая организация *</label>
+        <select id="existingClientId">
+          <option value="">— Загрузка организаций... —</option>
+        </select>
+        <p class="field-error hidden" id="errExistingClient"></p>
+        <p class="wizard-help" style="margin-top:0.75rem;">Повторное применение шаблона безопасно дополняет структуру: существующие подразделения и должности остаются на месте.</p>
+        <div class="wizard-warning">
+          <strong>Внимание:</strong> Вы применяете шаблон к уже существующей организации.
+          Некоторые элементы оргструктуры, должности, регламенты, KPI и связанные настройки
+          могут быть обновлены или перезаписаны. Перед продолжением рекомендуется создать резервную копию данных.
+        </div>
+      </div>
     </div>
 
     <!-- Step 3: Org structure preview -->
@@ -254,11 +299,20 @@
 
     let currentStep = 1;
     let templates = [];
+    let clients = [];
     let structurePreview = null;
     let runId = null;
     let runSubmitted = false;
 
     function $(id) { return document.getElementById(id); }
+    function wizardPanels() { return document.querySelectorAll('.wizard-container > .panel[data-step]'); }
+    function onboardingMode() {
+      return document.querySelector('input[name="onboardingMode"]:checked')?.value || 'create';
+    }
+    function selectedExistingClient() {
+      const id = $('existingClientId').value;
+      return clients.find(c => c.id === id) || null;
+    }
     function showErr(id, msg) {
       const el = $(id);
       if (!el) return;
@@ -276,8 +330,13 @@
         if (s) {
           const d = JSON.parse(s);
           $('templateCode').value = d.template_code || '';
+          const mode = d.action === 'apply_existing' ? 'apply_existing' : 'create';
+          const modeInput = document.querySelector(`input[name="onboardingMode"][value="${mode}"]`);
+          if (modeInput) modeInput.checked = true;
           $('clientCode').value = d.client_code || '';
           $('clientName').value = d.client_name || '';
+          $('existingClientId').value = d.existing_client_id || '';
+          $('existingClientId').dataset.pendingValue = d.existing_client_id || '';
           $('adminLastName').value = d.admin_last_name || '';
           $('adminFirstName').value = d.admin_first_name || '';
           $('adminLogin').value = d.admin_login || '';
@@ -290,8 +349,10 @@
     function saveDraft() {
       const d = {
         template_code: $('templateCode').value,
+        action: onboardingMode(),
         client_code: $('clientCode').value,
         client_name: $('clientName').value,
+        existing_client_id: $('existingClientId').value,
         admin_last_name: $('adminLastName').value,
         admin_first_name: $('adminFirstName').value,
         admin_login: $('adminLogin').value,
@@ -314,12 +375,19 @@
         setInputError('templateCode', 'errTemplate', !v ? 'Выберите шаблон' : null);
         ok = !!v;
       } else if (step === 2) {
-        const code = ($('clientCode').value || '').trim();
-        const name = ($('clientName').value || '').trim();
-        setInputError('clientCode', 'errClientCode', !code ? 'Код обязателен' : null);
-        setInputError('clientName', 'errClientName', !name ? 'Название обязательно' : null);
-        ok = !!code && !!name;
+        if (onboardingMode() === 'apply_existing') {
+          const existingClientId = $('existingClientId').value;
+          showErr('errExistingClient', !existingClientId ? 'Выберите существующую организацию' : null);
+          ok = !!existingClientId;
+        } else {
+          const code = ($('clientCode').value || '').trim();
+          const name = ($('clientName').value || '').trim();
+          setInputError('clientCode', 'errClientCode', !code ? 'Код обязателен' : null);
+          setInputError('clientName', 'errClientName', !name ? 'Название обязательно' : null);
+          ok = !!code && !!name;
+        }
       } else if (step === 5) {
+        if (onboardingMode() === 'apply_existing') return true;
         const ln = ($('adminLastName').value || '').trim();
         const fn = ($('adminFirstName').value || '').trim();
         const login = ($('adminLogin').value || '').trim();
@@ -335,6 +403,7 @@
       if (typeof detail === 'string') return detail;
       if (detail?.message) return detail.message;
       if (detail?.code === 'client_code_already_exists') return 'Клиент с таким кодом уже существует.';
+      if (detail?.code === 'client_not_found') return 'Клиент не найден.';
       if (detail?.code === 'login_already_exists') return 'Пользователь с таким логином уже существует.';
       if (detail?.code === 'template_not_found') return 'Шаблон не найден.';
       if (detail?.code === 'idempotency_key_conflict') return 'Запрос с таким ключом уже выполнен с другими данными.';
@@ -344,6 +413,16 @@
       }
       if (Array.isArray(detail)) return detail.map(d => d.msg || JSON.stringify(d)).join('; ');
       return JSON.stringify(detail);
+    }
+
+    function updateModeUi() {
+      const existingMode = onboardingMode() === 'apply_existing';
+      $('newClientFields').classList.toggle('hidden', existingMode);
+      $('existingClientFields').classList.toggle('hidden', !existingMode);
+      $('panel5').classList.toggle('hidden', existingMode && currentStep !== 5);
+      $('panel6').classList.toggle('hidden', existingMode && currentStep !== 6);
+      if (existingMode && (currentStep === 5 || currentStep === 6)) goToStep(7);
+      saveDraft();
     }
 
     async function fetchApi(path, opts = {}) {
@@ -374,6 +453,22 @@
       if (sel.value) loadStructurePreview();
     }
 
+    async function loadClients() {
+      try {
+        const data = await fetchApi('/clients?limit=500');
+        clients = data.items || [];
+      } catch (_) {
+        clients = [];
+      }
+      const sel = $('existingClientId');
+      const selected = sel.value || sel.dataset.pendingValue || '';
+      sel.innerHTML = clients.length
+        ? '<option value="">— Выберите организацию —</option>' + clients.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('')
+        : '<option value="">Нет организаций</option>';
+      if (selected) sel.value = selected;
+      sel.dataset.pendingValue = '';
+    }
+
     async function loadStructurePreview() {
       const code = $('templateCode').value;
       if (!code) return;
@@ -391,20 +486,37 @@
     }
 
     function renderConfirmSummary() {
+      const existingMode = onboardingMode() === 'apply_existing';
+      const existingClient = selectedExistingClient();
       const html = `
         <ul class="preview-list">
           <li><strong>Шаблон:</strong> ${$('templateCode').value}</li>
-          <li><strong>Клиент:</strong> ${$('clientCode').value} — ${$('clientName').value}</li>
-          <li><strong>Администратор:</strong> ${$('adminLastName').value} ${$('adminFirstName').value} (${$('adminLogin').value})</li>
+          <li><strong>Режим:</strong> ${existingMode ? 'Применить к существующей организации' : 'Создать новую организацию'}</li>
+          <li><strong>Клиент:</strong> ${existingMode && existingClient ? existingClient.code + ' — ' + existingClient.name : $('clientCode').value + ' — ' + $('clientName').value}</li>
+          <li><strong>Действие:</strong> ${existingMode ? 'Будут добавлены отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.' : 'Будет создан клиент, структура и первый администратор.'}</li>
+          ${existingMode ? '<li><strong>Предупреждение:</strong> Вы применяете шаблон к уже существующей организации. Некоторые элементы оргструктуры, должности, регламенты, KPI и связанные настройки могут быть обновлены или перезаписаны. Перед продолжением рекомендуется создать резервную копию данных.</li>' : ''}
+          ${existingMode ? '' : `<li><strong>Администратор:</strong> ${$('adminLastName').value} ${$('adminFirstName').value} (${$('adminLogin').value})</li>`}
         </ul>
       `;
       $('confirmSummary').innerHTML = html;
     }
 
+    function nextStepFrom(step) {
+      if (onboardingMode() === 'apply_existing' && step === 4) return 7;
+      return step + 1;
+    }
+
+    function prevStepFrom(step) {
+      if (onboardingMode() === 'apply_existing' && step === 7) return 4;
+      return step - 1;
+    }
+
     function goToStep(s) {
       currentStep = Math.max(1, Math.min(TOTAL_STEPS, s));
-      document.querySelectorAll('.panel').forEach(p => {
-        p.classList.toggle('hidden', parseInt(p.dataset.step) !== currentStep);
+      wizardPanels().forEach(p => {
+        const isActive = parseInt(p.dataset.step) === currentStep;
+        p.classList.toggle('active', isActive);
+        p.classList.toggle('hidden', !isActive);
       });
       document.querySelectorAll('.step-dot').forEach((d, i) => {
         d.classList.toggle('active', i + 1 === currentStep);
@@ -412,6 +524,11 @@
       });
       $('btnPrev').classList.toggle('hidden', currentStep === 1);
       $('btnNext').classList.toggle('hidden', currentStep === TOTAL_STEPS || currentStep === 7);
+      if (onboardingMode() === 'apply_existing' && (currentStep === 5 || currentStep === 6)) {
+        currentStep = 7;
+        goToStep(7);
+        return;
+      }
       if (currentStep === 7) {
         renderConfirmSummary();
         runSubmitted = false;
@@ -427,18 +544,24 @@
       $('btnRun').disabled = true;
       showErr('errRun', '');
 
+      const existingMode = onboardingMode() === 'apply_existing';
       const payload = {
+        action: onboardingMode(),
         template_code: $('templateCode').value,
-        client: { code: ($('clientCode').value || '').trim(), name: ($('clientName').value || '').trim() },
-        admin: {
+        idempotency_key: 'wizard-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+      };
+      if (existingMode) {
+        payload.existing_client_id = $('existingClientId').value;
+      } else {
+        payload.client = { code: ($('clientCode').value || '').trim(), name: ($('clientName').value || '').trim() };
+        payload.admin = {
           last_name: ($('adminLastName').value || '').trim(),
           first_name: ($('adminFirstName').value || '').trim(),
           login: ($('adminLogin').value || '').trim(),
           password: $('adminPassword').value || null,
           email: ($('adminEmail').value || '').trim() || null,
-        },
-        idempotency_key: 'wizard-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
-      };
+        };
+      }
 
       try {
         const bodyStr = JSON.stringify(payload);
@@ -462,7 +585,7 @@
         } else {
           statusEl.innerHTML = `
             <p><span class="status-badge status-running">running</span></p>
-            <p class="wizard-help" style="margin-top:0.75rem;">Идёт создание клиента и развёртывание оргструктуры (подразделения, должности, учётная запись администратора). Дождитесь статуса <code>completed</code> и журнала шагов ниже.</p>
+            <p class="wizard-help" style="margin-top:0.75rem;">${existingMode ? 'Идёт безопасное повторное применение шаблона к выбранной организации.' : 'Идёт создание клиента и развёртывание оргструктуры (подразделения, должности, учётная запись администратора).' } Дождитесь статуса <code>completed</code> и журнала шагов ниже.</p>
           `;
         }
         stepsEl.classList.remove('hidden');
@@ -522,18 +645,20 @@
     }
 
     $('templateCode').addEventListener('change', () => { loadStructurePreview(); saveDraft(); });
+    document.querySelectorAll('input[name="onboardingMode"]').forEach(el => el.addEventListener('change', updateModeUi));
+    $('existingClientId').addEventListener('change', saveDraft);
     ['clientCode','clientName','adminLastName','adminFirstName','adminLogin','adminPassword','adminEmail'].forEach(id => {
       $(id)?.addEventListener('input', saveDraft);
     });
 
-    $('btnPrev').onclick = () => goToStep(currentStep - 1);
+    $('btnPrev').onclick = () => goToStep(prevStepFrom(currentStep));
     $('btnNext').onclick = async () => {
       if (!validateStep(currentStep)) return;
       saveDraft();
       if (currentStep === 2 && $('templateCode').value) {
         try { await loadStructurePreview(); } catch (_) {}
       }
-      goToStep(currentStep + 1);
+      goToStep(nextStepFrom(currentStep));
     };
 
     $('btnDryRun').onclick = () => submitRun(true);
@@ -548,7 +673,10 @@
       dots.appendChild(d);
     }
 
-    loadTemplates().then(() => goToStep(1));
+    Promise.all([loadTemplates(), loadClients()]).then(() => {
+      updateModeUi();
+      goToStep(1);
+    });
   </script>
 </body>
 </html>

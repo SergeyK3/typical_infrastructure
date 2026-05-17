@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.client_catalog_sync import sync_global_regulations_to_client
 from app.models import Account, AccountRole, Client, Employee, EnterpriseTemplate, OnboardingRun, OnboardingStep, OrgUnit, Position, Role
 from app.onboarding_constants import (
     ERROR_BOOTSTRAP_FAILED,
@@ -124,6 +125,8 @@ def run_onboarding_bootstrap(
     client_code: str,
     client_name: str,
     template_code: str = "default",
+    action: str = "create",
+    existing_client_id: str | None = None,
     requested_by: str | None = None,
     admin_last_name: str = "Admin",
     admin_first_name: str = "System",
@@ -153,8 +156,17 @@ def run_onboarding_bootstrap(
             )
 
     # Business validation (only when creating new run)
+    target_client: Client | None = None
+    if action == "apply_existing":
+        target_client = db.get(Client, existing_client_id or "")
+        if not target_client:
+            raise HTTPException(status_code=404, detail={"code": "client_not_found", "message": "Клиент не найден."})
+        client_code = target_client.code
+        client_name = target_client.name
+    elif action != "create":
+        raise HTTPException(status_code=422, detail={"code": "invalid_onboarding_action", "message": "Некорректный режим onboarding."})
     existing_client = db.scalar(select(Client).where(Client.code == client_code))
-    if existing_client:
+    if action == "create" and existing_client:
         raise HTTPException(
             status_code=409,
             detail={"code": ERROR_CLIENT_CODE_ALREADY_EXISTS, "message": "Клиент с таким кодом уже существует."},
@@ -168,7 +180,7 @@ def run_onboarding_bootstrap(
         )
 
     existing_login = db.scalar(select(Account).where(Account.login == admin_login))
-    if existing_login:
+    if action == "create" and existing_login:
         raise HTTPException(
             status_code=409,
             detail={"code": ERROR_LOGIN_ALREADY_EXISTS, "message": "Пользователь с таким логином уже существует."},
@@ -181,6 +193,7 @@ def run_onboarding_bootstrap(
         payload_hash=payload_hash if idempotency_key else None,
         requested_by=requested_by,
         template_id=template.id,
+        client_id=target_client.id if target_client else None,
         started_at=_utcnow(),
     )
     db.add(run)
@@ -221,7 +234,7 @@ def run_onboarding_bootstrap(
             "orchestration_dry_run_complete",
             extra={"request_id": get_request_id(), "run_id": run.id, "status": run.status},
         )
-        return BootstrapResult(run_id=run.id, client_id=None, status=run.status)
+        return BootstrapResult(run_id=run.id, client_id=target_client.id if target_client else None, status=run.status)
 
     client_id: str | None = None
     try:
@@ -230,47 +243,62 @@ def run_onboarding_bootstrap(
         db.commit()
 
         _start_step(steps["create_client"])
-        client = Client(
-            id=new_id32(),
-            code=client_code,
-            name=client_name,
-            bin=None,
-            status="active",
-            template_id=template.id,
-        )
-        db.add(client)
-        db.flush()
-        client_id = client.id
-        run.client_id = client.id
-        _finish_step(steps["create_client"], STEP_STATUS_COMPLETED, detail=f"client_id={client.id}")
+        if target_client:
+            client = target_client
+            client_id = client.id
+            run.client_id = client.id
+            _finish_step(steps["create_client"], STEP_STATUS_SKIPPED, detail=f"existing_client_id={client.id}")
+        else:
+            client = Client(
+                id=new_id32(),
+                code=client_code,
+                name=client_name,
+                bin=None,
+                status="active",
+                template_id=template.id,
+            )
+            db.add(client)
+            db.flush()
+            client_id = client.id
+            run.client_id = client.id
+            _finish_step(steps["create_client"], STEP_STATUS_COMPLETED, detail=f"client_id={client.id}")
         db.commit()
 
         structure = resolve_template_structure(db, template_code)
-        ids_by_code: dict[str, str] = {}
+        ids_by_code: dict[str, str] = {
+            ou.code: ou.id
+            for ou in db.scalars(select(OrgUnit).where(OrgUnit.client_id == client.id)).all()
+        }
 
         _start_step(steps["create_root_org_unit"])
         root_spec = next(x for x in structure if x["parent_code"] is None)
-        root = OrgUnit(
-            id=new_id32(),
-            client_id=client.id,
-            code=root_spec["code"],
-            name=root_spec["name"],
-            parent_id=None,
-            unit_type=root_spec["unit_type"],
-            is_active=True,
-            sort_order=int(root_spec["sort_order"]),
-            catalog_source_code=root_spec["code"],
-            is_detached=True,
-        )
-        db.add(root)
-        db.flush()
-        ids_by_code[root.code] = root.id
-        _finish_step(steps["create_root_org_unit"], STEP_STATUS_COMPLETED, detail=f"org_unit_id={root.id}")
+        if root_spec["code"] in ids_by_code:
+            _finish_step(steps["create_root_org_unit"], STEP_STATUS_SKIPPED, detail=f"existing_org_unit_id={ids_by_code[root_spec['code']]}")
+        else:
+            root = OrgUnit(
+                id=new_id32(),
+                client_id=client.id,
+                code=root_spec["code"],
+                name=root_spec["name"],
+                parent_id=None,
+                unit_type=root_spec["unit_type"],
+                is_active=True,
+                sort_order=int(root_spec["sort_order"]),
+                catalog_source_code=root_spec["code"],
+                is_detached=True,
+            )
+            db.add(root)
+            db.flush()
+            ids_by_code[root.code] = root.id
+            _finish_step(steps["create_root_org_unit"], STEP_STATUS_COMPLETED, detail=f"org_unit_id={root.id}")
         db.commit()
 
         _start_step(steps["deploy_org_units"])
+        created_org_unit_ids: list[str] = []
         for spec in structure:
             if spec["parent_code"] is None:
+                continue
+            if spec["code"] in ids_by_code:
                 continue
             parent_id = ids_by_code.get(spec["parent_code"])
             if not parent_id:
@@ -290,14 +318,21 @@ def run_onboarding_bootstrap(
             db.add(ou)
             db.flush()
             ids_by_code[ou.code] = ou.id
-        _finish_step(steps["deploy_org_units"], STEP_STATUS_COMPLETED, detail=f"org_units={len(ids_by_code)}")
+            created_org_unit_ids.append(ou.id)
+        _finish_step(steps["deploy_org_units"], STEP_STATUS_COMPLETED, detail=f"created_org_units={len(created_org_unit_ids)}")
         db.commit()
 
         _start_step(steps["deploy_positions"])
         position_ids: list[str] = []
+        existing_positions = {
+            (p.code, p.org_unit_id)
+            for p in db.scalars(select(Position).where(Position.client_id == client.id)).all()
+        }
         for p in list_positions_from_position_catalog(db):
             ou_id = ids_by_code.get(p["org_unit_code"])
             if not ou_id:
+                continue
+            if (p["code"], ou_id) in existing_positions:
                 continue
             pos = Position(
                 id=new_id32(),
@@ -316,52 +351,62 @@ def run_onboarding_bootstrap(
             db.add(pos)
             db.flush()
             position_ids.append(pos.id)
-        _finish_step(steps["deploy_positions"], STEP_STATUS_COMPLETED, detail=f"positions={len(position_ids)}")
+            existing_positions.add((p["code"], ou_id))
+        regulations_created = sync_global_regulations_to_client(db, client.id)
+        _finish_step(steps["deploy_positions"], STEP_STATUS_COMPLETED, detail=f"created_positions={len(position_ids)}; regulations={regulations_created}")
         db.commit()
 
         _start_step(steps["create_admin_employee"])
-        admin = Employee(
-            id=new_id32(),
-            client_id=client.id,
-            last_name=admin_last_name,
-            first_name=admin_first_name,
-            middle_name=None,
-            email=admin_email,
-            phone=None,
-            telegram_id=None,
-            org_unit_id=ids_by_code.get(ADMIN_ORG_UNIT_CODE),
-            position_id=None,
-            employment_status="active",
-            is_manager=True,
-        )
-        db.add(admin)
-        db.flush()
-        _finish_step(steps["create_admin_employee"], STEP_STATUS_COMPLETED, detail=f"employee_id={admin.id}")
+        admin: Employee | None = None
+        if target_client:
+            _finish_step(steps["create_admin_employee"], STEP_STATUS_SKIPPED, detail="existing_organization_mode")
+        else:
+            admin = Employee(
+                id=new_id32(),
+                client_id=client.id,
+                last_name=admin_last_name,
+                first_name=admin_first_name,
+                middle_name=None,
+                email=admin_email,
+                phone=None,
+                telegram_id=None,
+                org_unit_id=ids_by_code.get(ADMIN_ORG_UNIT_CODE),
+                position_id=None,
+                employment_status="active",
+                is_manager=True,
+            )
+            db.add(admin)
+            db.flush()
+            _finish_step(steps["create_admin_employee"], STEP_STATUS_COMPLETED, detail=f"employee_id={admin.id}")
         db.commit()
 
         _start_step(steps["create_admin_account"])
-        password = admin_password or generate_temp_password()
-        password_hash_val = hash_password(password)
-        admin_role = db.scalar(select(Role).where(Role.code == "admin", Role.is_active == True))
-        if not admin_role:
-            raise RuntimeError("role_admin_not_found")
-        existing_login = db.scalar(select(Account).where(Account.login == admin_login))
-        if existing_login:
-            raise HTTPException(
-                status_code=409,
-                detail={"code": ERROR_LOGIN_ALREADY_EXISTS, "message": "Пользователь с таким логином уже существует."},
+        acc: Account | None = None
+        if target_client:
+            _finish_step(steps["create_admin_account"], STEP_STATUS_SKIPPED, detail="existing_organization_mode")
+        else:
+            password = admin_password or generate_temp_password()
+            password_hash_val = hash_password(password)
+            admin_role = db.scalar(select(Role).where(Role.code == "admin", Role.is_active == True))
+            if not admin_role:
+                raise RuntimeError("role_admin_not_found")
+            existing_login = db.scalar(select(Account).where(Account.login == admin_login))
+            if existing_login:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": ERROR_LOGIN_ALREADY_EXISTS, "message": "Пользователь с таким логином уже существует."},
+                )
+            acc = Account(
+                id=new_id32(),
+                employee_id=admin.id if admin else "",
+                login=admin_login,
+                password_hash=password_hash_val,
+                status="active",
             )
-        acc = Account(
-            id=new_id32(),
-            employee_id=admin.id,
-            login=admin_login,
-            password_hash=password_hash_val,
-            status="active",
-        )
-        db.add(acc)
-        db.flush()
-        db.add(AccountRole(id=new_id32(), account_id=acc.id, role_id=admin_role.id))
-        _finish_step(steps["create_admin_account"], STEP_STATUS_COMPLETED, detail=f"account_id={acc.id}")
+            db.add(acc)
+            db.flush()
+            db.add(AccountRole(id=new_id32(), account_id=acc.id, role_id=admin_role.id))
+            _finish_step(steps["create_admin_account"], STEP_STATUS_COMPLETED, detail=f"account_id={acc.id}")
         db.commit()
 
         _start_step(steps["finalize_run"])
@@ -370,10 +415,11 @@ def run_onboarding_bootstrap(
         # Traceability: store created entity IDs for run-to-entities mapping
         created_entities = {
             "client_id": client_id,
-            "org_unit_ids": list(ids_by_code.values()),
+            "org_unit_ids": created_org_unit_ids if target_client else list(ids_by_code.values()),
             "position_ids": position_ids,
-            "employee_id": admin.id,
-            "account_id": acc.id,
+            "employee_id": admin.id if admin else None,
+            "account_id": acc.id if acc else None,
+            "action": action,
         }
         run.created_entities = json.dumps(created_entities)
         _finish_step(steps["finalize_run"], STEP_STATUS_COMPLETED)

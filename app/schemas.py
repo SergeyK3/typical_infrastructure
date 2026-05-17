@@ -6,7 +6,7 @@ import json
 from datetime import date, datetime
 from typing import Generic, TypeVar
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator, model_validator
 from pydantic import BaseModel, Field
 
 
@@ -344,11 +344,24 @@ class OnboardingAdminIn(BaseModel):
 class OnboardingRunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")  # reject unknown fields at API boundary
 
+    action: str = Field(default="create", pattern="^(create|apply_existing)$")
     template_code: str = Field(default="default", min_length=1, max_length=64)
     requested_by: str | None = Field(default=None, max_length=128)
     idempotency_key: str | None = Field(default=None, max_length=64)
-    client: OnboardingClientIn
-    admin: OnboardingAdminIn
+    client: OnboardingClientIn | None = None
+    existing_client_id: str | None = Field(default=None, max_length=32)
+    admin: OnboardingAdminIn | None = None
+
+    @model_validator(mode="after")
+    def validate_action_requirements(self) -> "OnboardingRunCreate":
+        if self.action == "create":
+            if self.client is None:
+                raise ValueError("client is required for create onboarding")
+            if self.admin is None:
+                raise ValueError("admin is required for create onboarding")
+        if self.action == "apply_existing" and not self.existing_client_id:
+            raise ValueError("existing_client_id is required for existing organization onboarding")
+        return self
 
 
 class OnboardingRunOut(BaseModel):

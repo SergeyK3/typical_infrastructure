@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Рабочее пространство — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css">
+  <link rel="stylesheet" href="/static/shared/layout.css?v=hr-modules-sidebar-20260517">
   <style>
     :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
     .panel { display: none; }
@@ -44,6 +44,11 @@
     .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; }
     .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
     .module-placeholder { max-width: 48rem; text-align: left; }
+    .module-placeholder.is-muted { opacity: 0.72; }
+    .panel.hr-module-muted > h2 { color: var(--text-muted); opacity: 0.72; font-weight: 500; }
+    .module-entry { max-width: 58rem; text-align: left; border-style: solid; border-color: rgba(124,58,237,0.35); background: rgba(124,58,237,0.08); }
+    .module-entry h3 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--accent); }
+    .module-entry-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
     .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
     .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -70,6 +75,11 @@
     .ws-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
     .cr-th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
     .cr-th-filter select {
+      margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%;
+      padding: 0.35rem 0.45rem; font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); box-sizing: border-box;
+    }
+    .cr-th-filter input {
       margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%;
       padding: 0.35rem 0.45rem; font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
       border-radius: 6px; color: var(--text); box-sizing: border-box;
@@ -133,14 +143,14 @@
         <div class="header-row">
           <label for="clientSelector" class="meta" style="margin:0;">Организация:</label>
           <select id="clientSelector" class="client-select" title="Сменить организацию"></select>
-          <button type="button" class="btn btn-primary" id="btnHeaderClientRegs" title="Регламенты и KPI только этой организации (не глобальный шаблон)">Регламенты и KPI</button>
+          <button type="button" class="btn btn-primary" id="btnHeaderClientRegs" title="Локальные регламенты только этой организации (не глобальный шаблон)">Локальные регламенты</button>
           <a id="linkGlobalRegs" class="btn btn-secondary" href="/regulations" style="text-decoration:none;font-size:0.88rem;" title="Общесистемный реестр — шаблоны для всех организаций">Глобальные регламенты →</a>
         </div>
       </div>
       <div class="content">
     <!-- Подразделения -->
     <div id="panel-org" class="panel active">
-      <h2>Дерево подразделений</h2>
+      <h2>Локальные подразделения</h2>
       <div class="org-actions">
         <button class="btn btn-primary" id="btnAddOrg">+ Добавить подразделение</button>
         <button class="btn btn-secondary" id="btnDeployTemplate">Развернуть типовую оргструктуру</button>
@@ -151,8 +161,8 @@
 
     <!-- Должности -->
     <div id="panel-positions" class="panel">
-      <h2>Должности</h2>
-      <p class="meta" style="margin: -0.5rem 0 1rem 0;">Глобальные шаблоны — в <a id="linkRegulationsHint" href="/regulations">глобальном реестре</a> (верх сайдбара). Регламенты и KPI <strong>этой</strong> организации — кнопка <strong>«Регламенты и KPI»</strong> в шапке или пункт с тем же названием в блоке «Организация» слева.</p>
+      <h2>Локальные должности</h2>
+      <p class="meta" style="margin: -0.5rem 0 1rem 0;">Глобальные шаблоны — в <a id="linkRegulationsHint" href="/regulations">глобальном реестре</a> (верх сайдбара). Регламенты и KPI <strong>этой</strong> организации разделены на пункты <strong>«Локальные регламенты»</strong> и <strong>«Локальные KPI»</strong> в блоке «Справочники организации» слева.</p>
       <div class="org-actions">
         <button class="btn btn-primary" id="btnAddPosition">+ Добавить должность</button>
         <button class="btn btn-secondary" id="btnDeployTemplatePos">Развернуть типовую оргструктуру</button>
@@ -163,7 +173,7 @@
 
     <!-- Регламенты организации (клиентские копии) -->
     <div id="panel-client-regs" class="panel">
-      <h2>Регламенты и KPI организации</h2>
+      <h2>Локальные регламенты</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
         Здесь только регламенты <strong>выбранной организации</strong> (копии из <a id="crLinkGlobal" href="/regulations">глобального реестра</a> или созданные вручную).
         Глобальная страница <code>/regulations</code> — общесистемные шаблоны; эта вкладка — ваши редактируемые карточки.
@@ -207,6 +217,58 @@
       </div>
     </div>
 
+    <!-- Локальные KPI -->
+    <div id="panel-local-kpi" class="panel">
+      <h2>Локальные KPI</h2>
+      <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
+        KPI организации разворачиваются из типовых KPI как часть локальных регламентов. Здесь показана отдельная выборка KPI без смешивания с карточками регламентов.
+      </p>
+      <div class="org-actions">
+        <button type="button" class="btn btn-secondary" id="btnLocalKpiRefresh">Обновить</button>
+      </div>
+      <p id="localKpiMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
+      <div style="overflow-x:auto;margin-top:0.75rem;">
+        <table class="ws-table" id="localKpiTable">
+          <thead>
+            <tr>
+              <th style="width:18%;">Код KPI</th>
+              <th style="width:14%;">Цель</th>
+              <th style="width:12%;">Период</th>
+              <th style="width:10%;">Вес</th>
+              <th>Локальный регламент</th>
+            </tr>
+          </thead>
+          <tbody id="localKpiTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Локальные навыки -->
+    <div id="panel-local-skills" class="panel">
+      <h2>Локальные навыки</h2>
+      <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
+        Навыки разворачиваются из типовой матрицы для тех должностей, которые есть в выбранной организации.
+      </p>
+      <div class="org-actions">
+        <button type="button" class="btn btn-secondary" id="btnLocalSkillsRefresh">Обновить</button>
+        <input type="search" id="localSkillsSearch" placeholder="Поиск по должности, коду или навыку" style="min-width: 240px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" autocomplete="off">
+      </div>
+      <p id="localSkillsMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
+      <div style="overflow-x:auto;margin-top:0.75rem;">
+        <table class="ws-table" id="localSkillsTable">
+          <thead>
+            <tr>
+              <th style="width:16%;">Код должности</th>
+              <th style="width:26%;">Должность</th>
+              <th style="width:8%;">Ранг</th>
+              <th>Навык</th>
+            </tr>
+          </thead>
+          <tbody id="localSkillsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Modal: Assign employee to position -->
     <div id="modalAssignPosition" class="modal">
       <div class="modal-content" style="max-width: 480px;">
@@ -230,6 +292,13 @@
         <button class="btn btn-secondary" id="btnImportExcel">Импорт из Excel</button>
         <input type="text" id="excelSheetName" placeholder="Лист (пусто = первый)" title="Имя листа или номер (1, 2, 3...). Пусто — первый лист." style="width: 150px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
         <input type="number" id="excelHeaderRow" placeholder="Строка заголовков" title="Номер строки с заголовками (1, 2, 3...). По умолчанию 1." min="1" style="width: 90px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
+        <select id="empSort" title="Сортировка сотрудников" style="width: 210px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem;">
+          <option value="created_desc">Сортировка: новые сверху</option>
+          <option value="name_asc">Фамилия А-Я</option>
+          <option value="name_desc">Фамилия Я-А</option>
+          <option value="org_name_asc">Подразделение + фамилия</option>
+          <option value="position_name_asc">Должность + фамилия</option>
+        </select>
       </div>
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none">
       <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;line-height:1.45;">Импорт: колонки Фамилия, Имя (+ опционально Отчество, Email, телефон, Telegram, код подразделения, код должности). Коды должны совпадать с подразделениями и должностями этой организации.</p>
@@ -237,7 +306,7 @@
         <table class="ws-table" id="empTable">
           <thead>
             <tr>
-              <th style="width:14%;">ФИО</th>
+              <th style="width:14%;"><label class="cr-th-filter">ФИО<input type="text" id="empFilterLastName" placeholder="Фамилия" title="Фильтр по фамилии"></label></th>
               <th style="width:12%;">Email</th>
               <th style="width:9%;">Телефон</th>
               <th style="width:9%;">Telegram</th>
@@ -281,17 +350,17 @@
     </div>
 
     <!-- Static HR module placeholders -->
-    <div id="panel-psych-testing" class="panel">
+    <div id="panel-psych-testing" class="panel hr-module-muted">
       <h2>Психологические тестирования</h2>
-      <div class="empty-state module-placeholder">
+      <div class="empty-state module-placeholder is-muted">
         <p class="empty-message">Модуль пока не подключён.</p>
         <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
       </div>
     </div>
 
-    <div id="panel-learning" class="panel">
+    <div id="panel-learning" class="panel hr-module-muted">
       <h2>Обучение</h2>
-      <div class="empty-state module-placeholder">
+      <div class="empty-state module-placeholder is-muted">
         <p class="empty-message">Модуль пока не подключён.</p>
         <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
       </div>
@@ -299,9 +368,86 @@
 
     <div id="panel-attestations" class="panel">
       <h2>Аттестации</h2>
-      <div class="empty-state module-placeholder">
+      <div class="empty-state module-entry">
+        <h3>Опрос по регламентам</h3>
+        <p class="empty-message">Подключён вход в сценарий опросов по регламентам из HR assessment контура.</p>
+        <p class="empty-hint">Открывает рабочую сессию оценки и список протоколов для текущей организации через существующие маршруты <code>/api/skill-assessment</code>, если этот контур запущен рядом с ядром.</p>
+        <div class="module-entry-actions">
+          <a class="btn btn-primary" id="linkAttestationSurveyWorkspace" href="#">Открыть опросы по регламентам</a>
+          <a class="btn btn-secondary" id="linkAttestationSurveyProtocols" href="#">Протоколы опросов</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-admin-assignments" class="panel hr-module-muted">
+      <h2>Адм назначения</h2>
+      <div class="empty-state module-placeholder is-muted">
         <p class="empty-message">Модуль пока не подключён.</p>
-        <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-disciplinary-actions" class="panel hr-module-muted">
+      <h2>Дисциплинарные поощрения и взыскания</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-certificates" class="panel hr-module-muted">
+      <h2>Сертификаты</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-ai-assistants" class="panel hr-module-muted">
+      <h2>AI-ассистенты</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-document-flow" class="panel hr-module-muted">
+      <h2>Документооборот</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-compliance" class="panel hr-module-muted">
+      <h2>Комплаенс</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-medical-checkups" class="panel hr-module-muted">
+      <h2>Медосмотры</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-accreditations" class="panel hr-module-muted">
+      <h2>Аккредитации</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
+      </div>
+    </div>
+
+    <div id="panel-analytics" class="panel hr-module-muted">
+      <h2>Аналитика</h2>
+      <div class="empty-state module-placeholder is-muted">
+        <p class="empty-message">Модуль пока не подключён.</p>
+        <p class="empty-hint">Пункт зарезервирован в HR-модулях для будущего функционала.</p>
       </div>
     </div>
       </div>
@@ -564,8 +710,8 @@
     </div>
   </div>
 
-  <script src="/static/shared/sidebar-registry.js"></script>
-  <script src="/static/shared/sidebar.js"></script>
+  <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260517"></script>
+  <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260517"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -582,6 +728,7 @@
     let employeesAllCache = [];
     /** Текущая выборка на вкладке «Сотрудники» (с учётом фильтров). */
     let employeesTableCache = [];
+    let localSkillRows = [];
 
     function getClientId() {
       if (window.SidebarContext) return window.SidebarContext.readClientIdFromPath(window.location.pathname);
@@ -627,6 +774,18 @@
       if (crg) crg.href = u;
     }
 
+    function updateAttestationSurveyLinks() {
+      const q = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+      const workspace = document.getElementById('linkAttestationSurveyWorkspace');
+      const protocols = document.getElementById('linkAttestationSurveyProtocols');
+      if (workspace) workspace.href = attestationSurveyWorkspaceUrl();
+      if (protocols) protocols.href = '/api/skill-assessment/ui/exam-protocols' + q;
+    }
+
+    function attestationSurveyWorkspaceUrl() {
+      return '/api/skill-assessment/workspace' + (clientId ? '?client_id=' + encodeURIComponent(clientId) : '');
+    }
+
     function updateWorkspaceExportLinks() {
       const setHref = (id, path, query) => {
         const el = document.getElementById(id);
@@ -644,8 +803,10 @@
       const pEmp = new URLSearchParams({ client_id: clientId });
       const ouE = document.getElementById('empFilterOrg') && document.getElementById('empFilterOrg').value;
       const posE = document.getElementById('empFilterPos') && document.getElementById('empFilterPos').value;
+      const lastNameE = document.getElementById('empFilterLastName') && document.getElementById('empFilterLastName').value.trim();
       if (ouE) pEmp.set('org_unit_id', ouE);
       if (posE) pEmp.set('position_id', posE);
+      if (lastNameE) pEmp.set('search', lastNameE);
       setHref('exportEmployeesXlsx', '/api/employees/export/excel', pEmp.toString());
       const pAcc = new URLSearchParams({ client_id: clientId });
       const ouA = document.getElementById('accFilterOrg') && document.getElementById('accFilterOrg').value;
@@ -683,14 +844,22 @@
       return 'org';
     }
 
+    function workspaceOrganizationTabs() {
+      return ['client-regs', 'local-kpi', 'local-skills', 'employees', 'accounts'];
+    }
+
     function workspaceModuleTabs() {
-      return ['client-regs', 'employees', 'accounts', 'psych-testing', 'learning', 'attestations'];
+      return [
+        'psych-testing', 'learning', 'attestations', 'admin-assignments', 'disciplinary-actions',
+        'certificates', 'ai-assistants', 'document-flow', 'compliance', 'medical-checkups',
+        'accreditations', 'analytics',
+      ];
     }
 
     function workspaceTabFromHash(hash) {
       const h = (hash || '').replace(/^#/, '');
       if (h === 'positions') return 'positions';
-      return workspaceModuleTabs().includes(h) ? h : 'org';
+      return workspaceOrganizationTabs().includes(h) || workspaceModuleTabs().includes(h) ? h : 'org';
     }
 
     function getActiveWorkspaceTab() {
@@ -719,6 +888,11 @@
         activeTab: getActiveWorkspaceTab(),
         focusMode: getStoredWorkspaceSidebarFocus(),
       }, extra);
+    }
+
+    function isWorkspaceTabVisible(tab) {
+      if (!window.SidebarRenderer || !window.SidebarRenderer.isTabVisible) return true;
+      return window.SidebarRenderer.isTabVisible(tab, currentSidebarContext({ activeTab: tab }));
     }
 
     function syncWorkspaceSidebarContext(extra = {}) {
@@ -763,10 +937,15 @@
     }
 
     function activateWorkspaceTab(tab) {
+      if (tab === 'attestations') {
+        window.location.href = attestationSurveyWorkspaceUrl();
+        return;
+      }
+      if (!isWorkspaceTabVisible(tab)) tab = 'org';
       const focusMode = workspaceModuleTabs().includes(tab) ? 'apps' : 'org';
       applyWorkspaceSidebarFocus(focusMode);
       const path = window.location.pathname;
-      if (workspaceModuleTabs().includes(tab) || tab === 'positions') {
+      if (tab !== 'org') {
         if (history.replaceState) history.replaceState(null, '', path + '#' + encodeURIComponent(tab));
       } else if (history.replaceState) {
         history.replaceState(null, '', path);
@@ -789,6 +968,8 @@
       if (tab === 'org') loadOrgTree();
       else if (tab === 'positions') loadPositions();
       else if (tab === 'client-regs') loadCrFilterOptions().then(() => loadClientRegulations());
+      else if (tab === 'local-kpi') loadLocalKpis();
+      else if (tab === 'local-skills') loadLocalSkills();
       else if (tab === 'employees') loadEmployees();
       else if (tab === 'accounts') loadAccounts();
     }
@@ -842,6 +1023,7 @@
       clientId = selEl.value || clientId;
       syncWorkspaceSidebarContext();
       updateGlobalRegulationsLinks();
+      updateAttestationSurveyLinks();
       updateWorkspaceExportLinks();
     }
 
@@ -1186,10 +1368,39 @@
         let url = '/employees?client_id=' + encodeURIComponent(clientId) + '&limit=2000';
         const fo = document.getElementById('empFilterOrg') && document.getElementById('empFilterOrg').value;
         const fp = document.getElementById('empFilterPos') && document.getElementById('empFilterPos').value;
+        const fl = document.getElementById('empFilterLastName') && document.getElementById('empFilterLastName').value.trim();
         if (fo) url += '&org_unit_id=' + encodeURIComponent(fo);
         if (fp) url += '&position_id=' + encodeURIComponent(fp);
+        if (fl) url += '&search=' + encodeURIComponent(fl);
         const data = await fetchApi(url);
-        const items = data.items || [];
+        let items = data.items || [];
+        if (fl) {
+          const flNorm = fl.toLowerCase();
+          items = items.filter((e) => String(e.last_name || '').toLowerCase().includes(flNorm));
+        }
+        const sortMode = (document.getElementById('empSort') && document.getElementById('empSort').value) || 'created_desc';
+        const fullNameOf = (e) => [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+        const orgLabelOf = (e) => {
+          const ou = orgUnits.find(x => x.id === e.org_unit_id);
+          return ou ? (ou.code + ' ' + ou.name) : '';
+        };
+        const posLabelOf = (e) => {
+          const pos = positionsCache.find(x => x.id === e.position_id);
+          return pos ? (pos.code + ' ' + pos.name) : '';
+        };
+        if (sortMode === 'name_asc') {
+          items = [...items].sort((a, b) => fullNameOf(a).localeCompare(fullNameOf(b), 'ru'));
+        } else if (sortMode === 'name_desc') {
+          items = [...items].sort((a, b) => fullNameOf(b).localeCompare(fullNameOf(a), 'ru'));
+        } else if (sortMode === 'org_name_asc') {
+          items = [...items].sort((a, b) =>
+            orgLabelOf(a).localeCompare(orgLabelOf(b), 'ru') || fullNameOf(a).localeCompare(fullNameOf(b), 'ru')
+          );
+        } else if (sortMode === 'position_name_asc') {
+          items = [...items].sort((a, b) =>
+            posLabelOf(a).localeCompare(posLabelOf(b), 'ru') || fullNameOf(a).localeCompare(fullNameOf(b), 'ru')
+          );
+        }
         employeesTableCache = items;
         updateWorkspaceExportLinks();
         if (!items.length) {
@@ -1224,6 +1435,136 @@
         const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
         positionsCache = data.items || [];
       } catch (_) { positionsCache = []; }
+    }
+
+    async function loadLocalKpis() {
+      const tbody = document.getElementById('localKpiTbody');
+      const meta = document.getElementById('localKpiMeta');
+      if (!tbody) return;
+      if (!clientId) {
+        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        if (meta) meta.classList.add('hidden');
+        return;
+      }
+      try {
+        const data = await fetchApi('/client-regulations?client_id=' + encodeURIComponent(clientId) + '&limit=500');
+        const regs = data.items || [];
+        const details = await Promise.all(regs.map((r) =>
+          fetchApi('/client-regulations/' + encodeURIComponent(r.id)).catch(() => null)
+        ));
+        const rows = [];
+        details.filter(Boolean).forEach((reg) => {
+          (reg.kpis || []).forEach((kpi) => {
+            rows.push({ reg, kpi });
+          });
+        });
+        if (meta) {
+          meta.textContent = 'Записей KPI: ' + rows.length;
+          meta.classList.remove('hidden');
+        }
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Нет локальных KPI. Скопируйте или разверните локальные регламенты с KPI.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(({ reg, kpi }) => (
+          '<tr>' +
+            '<td><code>' + escapeHtml(kpi.kpi_code) + '</code></td>' +
+            '<td>' + escapeHtml(kpi.target_value == null ? '' : String(kpi.target_value)) + '</td>' +
+            '<td>' + escapeHtml(kpi.period_type || '') + '</td>' +
+            '<td>' + escapeHtml(kpi.weight == null ? '' : String(kpi.weight)) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(reg.regulation_name || reg.regulation_code) + '</td>' +
+          '</tr>'
+        )).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    function parseLocalSkillsCsvLine(line) {
+      const cells = [];
+      let cur = '';
+      let quoted = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (quoted && line[i + 1] === '"') {
+            cur += '"';
+            i += 1;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (ch === ';' && !quoted) {
+          cells.push(cur);
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      cells.push(cur);
+      return cells;
+    }
+
+    function parseLocalSkillsCsv(text) {
+      const lines = text.trim().split(/\r?\n/);
+      const header = parseLocalSkillsCsvLine(lines.shift() || '');
+      return lines.filter(Boolean).map((line) => {
+        const cells = parseLocalSkillsCsvLine(line);
+        const row = {};
+        header.forEach((key, idx) => row[key] = cells[idx] || '');
+        row.skill_rank = Number(row.skill_rank);
+        return row;
+      });
+    }
+
+    function renderLocalSkills() {
+      const tbody = document.getElementById('localSkillsTbody');
+      const meta = document.getElementById('localSkillsMeta');
+      if (!tbody) return;
+      const q = (document.getElementById('localSkillsSearch')?.value || '').trim().toLowerCase();
+      const rows = localSkillRows.filter((row) => {
+        if (!q) return true;
+        return [row.position_code, row.position_name_ru, row.skill_name].some((value) =>
+          String(value || '').toLowerCase().includes(q)
+        );
+      });
+      if (meta) {
+        meta.textContent = 'Записей навыков: ' + rows.length + ' из ' + localSkillRows.length;
+        meta.classList.remove('hidden');
+      }
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="meta" style="padding:1rem;">Нет локальных навыков по текущим должностям или фильтру.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((row) => (
+        '<tr>' +
+          '<td><code>' + escapeHtml(row.position_code || '') + '</code></td>' +
+          '<td class="td-ellipsis">' + escapeHtml(row.position_name_ru || '') + '</td>' +
+          '<td>' + escapeHtml(Number.isFinite(row.skill_rank) ? String(row.skill_rank) : '') + '</td>' +
+          '<td class="td-ellipsis">' + escapeHtml(row.skill_name || '') + '</td>' +
+        '</tr>'
+      )).join('');
+    }
+
+    async function loadLocalSkills() {
+      const tbody = document.getElementById('localSkillsTbody');
+      if (!tbody) return;
+      try {
+        await loadPositionsForSelect();
+        const positionCodes = new Set(
+          positionsCache.map((p) => (p.position_catalog_code || p.code || '').trim()).filter(Boolean)
+        );
+        if (!positionCodes.size) {
+          localSkillRows = [];
+          renderLocalSkills();
+          return;
+        }
+        const r = await fetch('/static/global/position-skills-normalized.csv', { cache: 'no-store' });
+        if (!r.ok) throw new Error('Не удалось загрузить типовую матрицу навыков');
+        localSkillRows = parseLocalSkillsCsv(await r.text()).filter((row) => positionCodes.has(row.position_code));
+        renderLocalSkills();
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+      }
     }
 
     document.getElementById('btnImportExcel').onclick = () => document.getElementById('fileExcel').click();
@@ -1512,14 +1853,25 @@
       } catch (e) { alert(e.message); }
     }
 
-    ['empFilterOrg', 'empFilterPos'].forEach((id) => {
+    ['empFilterOrg', 'empFilterPos', 'empSort'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', () => loadEmployees());
     });
+    const empLastNameFilter = document.getElementById('empFilterLastName');
+    if (empLastNameFilter) {
+      let empLastNameTimer = null;
+      empLastNameFilter.addEventListener('input', () => {
+        clearTimeout(empLastNameTimer);
+        empLastNameTimer = setTimeout(() => loadEmployees(), 250);
+      });
+    }
     ['accFilterOrg', 'accFilterPos'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', () => loadAccounts());
     });
+    document.getElementById('btnLocalKpiRefresh').onclick = loadLocalKpis;
+    document.getElementById('btnLocalSkillsRefresh').onclick = loadLocalSkills;
+    document.getElementById('localSkillsSearch').oninput = renderLocalSkills;
 
     async function loadCrFilterOptions() {
       if (!clientId) return;

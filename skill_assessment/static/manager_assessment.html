@@ -1,0 +1,302 @@
+<!-- route: GET /api/skill-assessment/ui/manager-assessment | file: skill_assessment/static/manager_assessment.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оценка руководителем</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <style>
+    html, body { min-height: 100%; overflow-y: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+    .wrap { max-width: 64rem; margin: 0 auto; padding: 1.5rem; box-sizing: border-box; }
+    body { padding-bottom: 8rem; }
+    .block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-top: 1rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem 0; color: var(--accent); }
+    h2 { font-size: 1rem; margin: 0 0 0.5rem 0; color: var(--accent); }
+    .meta { font-size: 0.88rem; color: var(--text-muted); margin: 0.35rem 0; }
+    .ok { color: var(--success); }
+    .err { color: var(--error); }
+    .hint-list { margin: 0.45rem 0 0 1.1rem; padding: 0; color: var(--text-muted); font-size: 0.9rem; }
+    .hint-list li { margin: 0.3rem 0; }
+    .callout { border-left: 3px solid var(--accent); padding-left: 0.8rem; margin-top: 0.75rem; }
+    .helper { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem; }
+    .floating-actions { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: 0.65rem; z-index: 20; max-width: 12rem; }
+    .floating-actions button { box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+    th, td { border-bottom: 1px solid var(--border); padding: 0.6rem 0.5rem; text-align: left; vertical-align: top; }
+    th { color: var(--text-muted); font-weight: 600; font-size: 0.85rem; }
+    select { min-width: 12rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: inherit; padding: 0.4rem 0.5rem; }
+    button { padding: 0.5rem 0.9rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: inherit; cursor: pointer; }
+    button.primary { background: rgba(124,58,237,0.25); border-color: var(--accent); color: var(--accent); }
+    button[disabled], select[disabled] { opacity: 0.65; cursor: default; }
+    .row-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+    .pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.78rem; }
+    .form-row { display: flex; gap: 0.75rem; align-items: flex-start; flex-wrap: wrap; }
+    textarea.overall-comment { width: 100%; min-height: 6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: inherit; padding: 0.55rem 0.65rem; font: inherit; resize: vertical; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Этап 3. Оценка руководителем</h1>
+    <p class="meta" id="pageIntro">Загрузка данных оценки…</p>
+    <p class="meta" id="submitStatus"></p>
+    <div id="mount"><p class="meta">Подготовка страницы…</p></div>
+  </div>
+  <div class="floating-actions" id="floatingActions" hidden></div>
+  <script>
+    const API = '/api/skill-assessment/public/manager-assessment';
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    function escapeHtml(value) {
+      const d = document.createElement('div');
+      d.textContent = value == null ? '' : String(value);
+      return d.innerHTML;
+    }
+
+    function isLocalDevOrigin() {
+      const o = String(window.location.origin || '').toLowerCase();
+      return o.includes('127.0.0.1') || o.includes('localhost') || o.includes('0.0.0.0');
+    }
+
+    /** На локальном хосте не открывать report_url с устаревшим туннелем из .env — иначе 503. */
+    function resolveReportHref(data) {
+      const origin = String(window.location.origin || '');
+      if (!isLocalDevOrigin()) {
+        return data.report_url || data.report_path || '';
+      }
+      if (data.report_path) {
+        const p = String(data.report_path);
+        return origin + (p.startsWith('/') ? p : '/' + p);
+      }
+      if (data.report_url) {
+        try {
+          const u = new URL(String(data.report_url));
+          return origin + u.pathname + u.search;
+        } catch (_) {}
+      }
+      return '';
+    }
+
+    function optionHtml(selected, value, label) {
+      return '<option value="' + value + '"' + (String(selected) === String(value) ? ' selected' : '') + '>' +
+        escapeHtml(label) + '</option>';
+    }
+
+    function levelOptions(selected) {
+      return [
+        optionHtml(selected, 0, '0 - не проявляется'),
+        optionHtml(selected, 1, '1 - проявляется нестабильно'),
+        optionHtml(selected, 2, '2 - проявляется стабильно'),
+        optionHtml(selected, 3, '3 - проявляется очень хорошо')
+      ].join('');
+    }
+
+    function levelLabel(value) {
+      if (value === 0) return '0 - не проявляется';
+      if (value === 1) return '1 - проявляется нестабильно';
+      if (value === 2) return '2 - проявляется стабильно';
+      if (value === 3) return '3 - проявляется очень хорошо';
+      return '—';
+    }
+
+    function renderFloatingActions(canSubmit) {
+      const el = document.getElementById('floatingActions');
+      if (!el) return;
+      if (!canSubmit) {
+        el.hidden = true;
+        el.innerHTML = '';
+        return;
+      }
+      el.hidden = false;
+      el.innerHTML =
+        '<button type="button" id="btnScrollToSubmit">Вниз к отправке</button>' +
+        '<button type="button" class="primary" id="btnFloatingSubmit">Отправить оценку</button>';
+      const scrollBtn = document.getElementById('btnScrollToSubmit');
+      if (scrollBtn) {
+        scrollBtn.onclick = function() {
+          const submitBtn = document.getElementById('btnSubmitManager');
+          if (submitBtn) submitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+      }
+      const submitBtn = document.getElementById('btnFloatingSubmit');
+      if (submitBtn) submitBtn.onclick = function() { submitRatings(); };
+    }
+
+    function renderPage(data) {
+      const intro = document.getElementById('pageIntro');
+      const mount = document.getElementById('mount');
+      if (!mount) return;
+      if (intro) {
+        intro.innerHTML =
+          'Сотрудник: <strong>' + escapeHtml(data.employee_label || '—') + '</strong> · ' +
+          'должность: <strong>' + escapeHtml(data.employee_position_label || '—') + '</strong> · ' +
+          'подразделение: <strong>' + escapeHtml(data.employee_department_label || '—') + '</strong> · ' +
+          'этап: <span class="pill">' + escapeHtml(data.stage_title || 'оценка руководителем') + '</span>' +
+          (data.deadline_label ? ' · дедлайн: <strong>' + escapeHtml(data.deadline_label) + '</strong>' : '');
+      }
+      const rows = (data.skills || []).map(function(item) {
+        const selected = item.current_level == null ? 2 : item.current_level;
+        const isActive = item.is_active !== false;
+        const scoreCell = isActive
+          ? '<select class="level"' + (data.can_submit ? '' : ' disabled') + ' aria-label="Оценка навыка ' + escapeHtml(item.skill_title) + '">' + levelOptions(selected) + '</select>' +
+            '<div class="helper">Выберите уровень проявления навыка у сотрудника в реальной работе.</div>'
+          : '<span class="meta">Неактивный навык: оценка не обязательна.</span>' +
+            (item.current_level == null ? '' : '<br><span class="pill">Текущая оценка: ' + escapeHtml(levelLabel(item.current_level)) + '</span>');
+        return '<tr data-skill-id="' + escapeHtml(item.skill_id) + '">' +
+          '<td><strong>' + escapeHtml(String(item.skill_rank != null ? item.skill_rank : '—')) + '</strong></td>' +
+          '<td><strong>' + escapeHtml(item.skill_title) + '</strong><br><span class="meta"><code>' + escapeHtml(item.skill_code) + '</code></span>' +
+            (isActive ? '<br><span class="pill">Активный</span>' : '<br><span class="pill">Неактивный</span>') +
+          '</td>' +
+          '<td>' + scoreCell + '</td>' +
+          '</tr>';
+      }).join('');
+      const readonlyNote = data.can_submit
+        ? '<div class="callout">' +
+            '<p class="meta" style="margin-top:0;">Как заполнять оценку:</p>' +
+            '<ul class="hint-list">' +
+              '<li>верхний блок показывает контекст: как сотрудник решил кейсы и какой KPI-контекст важен для этой роли;</li>' +
+              '<li>руководитель оценивает все навыки из матрицы должности, независимо от покрытия кейсами; если для этой должности в матрице 6 или 7 навыков, в интерфейсе для оценки должны отображаться все эти 6 или 7 навыков;</li>' +
+              '<li>в выпадающем списке по каждому навыку выберите, насколько устойчиво сотрудник демонстрирует его в работе;</li>' +
+              '<li>после нажатия кнопки ниже оценки сразу попадут в общий протокол и этап 3 будет завершён.</li>' +
+            '</ul>' +
+          '</div>'
+        : '<div class="callout"><p class="meta ok" style="margin-top:0;">Оценка руководителя уже принята и добавлена в общий протокол сотрудника. Страница переведена в режим просмотра, повторно отправлять ничего не нужно.</p></div>';
+      const overallComment = data.overall_comment != null && data.overall_comment !== undefined ? String(data.overall_comment) : '';
+      const reportHref = resolveReportHref(data);
+      const reportBlock = reportHref
+        ? '<div class="block">' +
+            '<h2>Общий протокол</h2>' +
+            '<p class="meta">По этой ссылке руководитель может открыть общий протокол сотрудника.</p>' +
+            '<p class="meta"><a href="' + escapeHtml(reportHref) + '" target="_blank" rel="noopener">Открыть общий протокол</a></p>' +
+          '</div>'
+        : '';
+      const overallCommentBlock = data.can_submit
+        ? '<div class="block">' +
+            '<h2>Общий комментарий руководителя</h2>' +
+            '<p class="meta">Необязательно, но полезно: коротко поясните сильные стороны сотрудника или зоны развития.</p>' +
+            '<div class="form-row">' +
+              '<button type="button" id="btnVoiceOverall">Голосом</button>' +
+              '<span class="meta" id="voiceOverallStatus"></span>' +
+            '</div>' +
+            '<textarea class="overall-comment" id="overallComment" placeholder="Общий комментарий по сотруднику (необязательно)">' + escapeHtml(overallComment) + '</textarea>' +
+            '<div class="row-actions"><button type="button" class="primary" id="btnSubmitManager">Подтвердить и отправить в общий протокол</button><span class="meta">После отправки страница станет только для просмотра.</span></div>' +
+          '</div>'
+        : '<div class="block"><h2>Общий комментарий руководителя</h2><p style="white-space:pre-wrap; margin:0;">' + (overallComment ? escapeHtml(overallComment) : '—') + '</p></div>';
+      mount.innerHTML =
+        '<div class="block">' +
+          '<h2>Контекст оценки</h2>' +
+          '<p class="meta"><strong>Результат по кейсам:</strong> ' + escapeHtml(data.part2_summary || '—') + '</p>' +
+          '<p class="meta"><strong>Ориентир по KPI:</strong> ' + escapeHtml(data.kpi_summary || '—') + '</p>' +
+        '</div>' +
+        '<div class="block">' +
+          '<h2>Шкала 0-3</h2>' +
+          '<p class="meta">Смысл шкалы: 0 - не проявляется, 1 - проявляется нестабильно, 2 - проявляется стабильно, 3 - проявляется очень хорошо.</p>' +
+          readonlyNote +
+          '<table><thead><tr><th>Приоритет</th><th>Навык</th><th>Ваша оценка</th></tr></thead><tbody>' +
+            (rows || '<tr><td colspan="3">Нет навыков для оценки.</td></tr>') +
+          '</tbody></table>' +
+        '</div>' +
+        overallCommentBlock +
+        reportBlock;
+      const btn = document.getElementById('btnSubmitManager');
+      if (btn) btn.onclick = function() { submitRatings(); };
+      const voiceBtn = document.getElementById('btnVoiceOverall');
+      if (voiceBtn) voiceBtn.onclick = function() { startOverallVoiceInput(); };
+      renderFloatingActions(!!data.can_submit);
+    }
+
+    let overallRecognition = null;
+
+    function startOverallVoiceInput() {
+      const status = document.getElementById('voiceOverallStatus');
+      const ta = document.getElementById('overallComment');
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        if (status) status.innerHTML = '<span class="err">Распознавание речи не поддерживается в этом браузере.</span>';
+        return;
+      }
+      if (!ta) return;
+      if (overallRecognition) {
+        try { overallRecognition.stop(); } catch (_) {}
+        overallRecognition = null;
+      }
+      const rec = new SR();
+      overallRecognition = rec;
+      rec.lang = 'ru-RU';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      if (status) status.textContent = 'Слушаю…';
+      rec.onresult = function(evt) {
+        const txt = evt && evt.results && evt.results[0] && evt.results[0][0] ? String(evt.results[0][0].transcript || '').trim() : '';
+        if (txt) {
+          ta.value = (ta.value ? (ta.value.trim() + '\n') : '') + txt;
+        }
+        if (status) status.innerHTML = '<span class="ok">Голосовой комментарий добавлен.</span>';
+      };
+      rec.onerror = function(evt) {
+        const msg = evt && evt.error ? String(evt.error) : 'speech_error';
+        if (status) status.innerHTML = '<span class="err">' + escapeHtml(msg) + '</span>';
+      };
+      rec.onend = function() {
+        overallRecognition = null;
+      };
+      rec.start();
+    }
+
+    async function submitRatings() {
+      const status = document.getElementById('submitStatus');
+      const ratings = [];
+      document.querySelectorAll('tr[data-skill-id]').forEach(function(tr) {
+        const sid = tr.getAttribute('data-skill-id');
+        const sel = tr.querySelector('select.level');
+        if (!sel) return;
+        const row = { skill_id: sid, level: parseInt(sel.value, 10) };
+        ratings.push(row);
+      });
+      const overallCommentEl = document.getElementById('overallComment');
+      const overallComment = overallCommentEl ? String(overallCommentEl.value || '').trim() : '';
+      if (status) status.textContent = 'Сохранение оценки…';
+      try {
+        const r = await fetch(API + '?token=' + encodeURIComponent(token), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ratings: ratings, overall_comment: overallComment || null })
+        });
+        const j = await r.json().catch(function() { return null; });
+        if (!r.ok) {
+          const msg = (j && j.detail) ? (typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)) : ('HTTP ' + r.status);
+          if (status) status.innerHTML = '<span class="err">' + escapeHtml(msg) + '</span>';
+          return;
+        }
+        if (status) status.innerHTML = '<span class="ok">Оценка принята. Она добавлена в общий протокол сотрудника, а этап 3 завершён. Можно закрыть страницу.</span>';
+        await loadPage();
+      } catch (e) {
+        if (status) status.innerHTML = '<span class="err">' + escapeHtml(e.message || String(e)) + '</span>';
+      }
+    }
+
+    async function loadPage() {
+      const mount = document.getElementById('mount');
+      if (!token || token.length < 16) {
+        if (mount) mount.innerHTML = '<p class="meta err">Нет или слишком короткий параметр <code>token</code> в адресе страницы.</p>';
+        return;
+      }
+      try {
+        const r = await fetch(API + '?token=' + encodeURIComponent(token));
+        const j = await r.json().catch(function() { return null; });
+        if (!r.ok) {
+          const msg = (j && j.detail) ? (typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)) : ('HTTP ' + r.status);
+          if (mount) mount.innerHTML = '<p class="meta err">' + escapeHtml(msg) + '</p>';
+          return;
+        }
+        renderPage(j);
+      } catch (e) {
+        if (mount) mount.innerHTML = '<p class="meta err">' + escapeHtml(e.message || String(e)) + '</p>';
+      }
+    }
+
+    loadPage();
+  </script>
+</body>
+</html>
