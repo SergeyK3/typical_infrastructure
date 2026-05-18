@@ -13,6 +13,10 @@ from skill_assessment.integration.hr_core import get_employee
 from skill_assessment.schemas.examination_api import ExaminationProtocolOut
 from skill_assessment.services import examination_service as ex
 from skill_assessment.services.exam_protocol_recipients import resolve_manager_telegram_chat_for_protocol
+from skill_assessment.services.examination_protocol_archive import (
+    ensure_examination_protocol_archive,
+    protocol_out_from_archive,
+)
 from skill_assessment.services.public_url import skill_assessment_hr_base_url_for_browser_links
 
 _log = logging.getLogger(__name__)
@@ -70,11 +74,12 @@ def deliver_examination_protocol_telegram(session_id: str) -> None:
 
     db = SessionLocal()
     try:
-        proto = ex.build_protocol(db, session_id)
         row = db.get(ExaminationSessionRow, session_id)
         if row is None:
             _log.warning("examination_protocol_delivery: session gone %s", session_id[:8])
             return
+        archive = ensure_examination_protocol_archive(db, session_id)
+        proto = protocol_out_from_archive(archive)
 
         emp = get_employee(db, row.client_id, row.employee_id)
         employee_label = (

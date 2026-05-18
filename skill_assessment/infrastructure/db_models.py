@@ -226,6 +226,46 @@ class ExaminationAnswerRow(Base):
     session: Mapped[ExaminationSessionRow] = relationship(back_populates="answers")
 
 
+class ExaminationProtocolArchiveRow(Base, TimestampMixin):
+    """Registry immutable artifacts for a finalized examination protocol."""
+
+    __tablename__ = "sa_examination_protocol_archives"
+    __table_args__ = (
+        UniqueConstraint("session_id", name="uq_sa_exam_protocol_archive_session"),
+        Index("ix_sa_exam_protocol_archive_client_employee", "client_id", "employee_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sa_examination_sessions.id"), nullable=False, index=True
+    )
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready", index=True)
+    immutable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    protocol_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    generator_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    snapshot_storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    snapshot_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_mime_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/json")
+
+    html_storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    html_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    html_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    html_mime_type: Mapped[str] = mapped_column(String(128), nullable=False, default="text/html; charset=utf-8")
+
+    archived_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="standard", index=True)
+    legal_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    finalized_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
 class CompetencyCatalogVersionRow(Base, TimestampMixin):
     """Версия матрицы компетенций (набор связей должность + подразделение + навыки)."""
 

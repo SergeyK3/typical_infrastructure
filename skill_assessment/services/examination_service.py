@@ -971,6 +971,12 @@ def complete_examination_session(
         except Exception:
             _log.exception("examination: advance skill assessment to part2 after complete failed for %s", session_id[:8])
     try:
+        from skill_assessment.services.examination_protocol_archive import ensure_examination_protocol_archive
+
+        ensure_examination_protocol_archive(db, session_id)
+    except Exception:
+        _log.exception("examination: protocol archive creation failed after complete")
+    try:
         from skill_assessment.services.examination_protocol_delivery import (
             schedule_examination_protocol_delivery,
         )

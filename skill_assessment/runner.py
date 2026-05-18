@@ -448,6 +448,48 @@ def _ensure_sa_catalog_version_lineage_columns(engine) -> None:
         pass
 
 
+def _ensure_examination_protocol_archive_ops_columns(engine) -> None:
+    """SQLite: retention/legal-hold foundation for protocol archive registry."""
+    from sqlalchemy import inspect, text
+
+    try:
+        insp = inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("sa_examination_protocol_archives")}
+    except Exception:
+        return
+    with engine.begin() as conn:
+        if "archived_at" not in cols:
+            conn.execute(text("ALTER TABLE sa_examination_protocol_archives ADD COLUMN archived_at DATETIME"))
+            conn.execute(text("UPDATE sa_examination_protocol_archives SET archived_at = finalized_at WHERE archived_at IS NULL"))
+        if "retention_class" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE sa_examination_protocol_archives "
+                    "ADD COLUMN retention_class VARCHAR(32) NOT NULL DEFAULT 'standard'"
+                )
+            )
+        if "legal_hold" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE sa_examination_protocol_archives "
+                    "ADD COLUMN legal_hold BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_sa_exam_protocol_archive_retention_class "
+                "ON sa_examination_protocol_archives (retention_class)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_sa_exam_protocol_archive_legal_hold "
+                "ON sa_examination_protocol_archives (legal_hold)"
+            )
+        )
+    _log.info("skill_assessment: ensured protocol archive retention columns (migration)")
+
+
 def apply_skill_assessment_database_migrations() -> None:
     """
     ``create_all`` + ALTER для существующих SQLite БД (без Alembic).
@@ -459,6 +501,7 @@ def apply_skill_assessment_database_migrations() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_sa_catalog_version_lineage_columns(engine)
+    _ensure_examination_protocol_archive_ops_columns(engine)
     _ensure_sa_session_phase_column(engine)
     _ensure_docs_survey_notify_chat_column(engine)
     _ensure_docs_survey_pd_consent_columns(engine)
@@ -686,6 +729,13 @@ def run_plugin_startup() -> None:
             _log.info("skill_assessment: фоновая проверка таймаутов (ПДн + ответы экзамена) запущена.")
         except Exception:
             _log.exception("skill_assessment: не удалось запустить проверку таймаута согласия ПДн")
+        try:
+            from skill_assessment.services.examination_protocol_archive import start_archive_integrity_background_task
+
+            if start_archive_integrity_background_task():
+                _log.info("skill_assessment: фоновая проверка целостности архивов протоколов запущена.")
+        except Exception:
+            _log.exception("skill_assessment: не удалось запустить проверку целостности архивов протоколов")
     else:
         _log.info(
             "skill_assessment: таймаутный цикл в uvicorn отключён (работает в telegram_worker), чтобы избежать дублей."
