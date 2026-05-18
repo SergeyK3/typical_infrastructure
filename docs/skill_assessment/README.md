@@ -30,6 +30,7 @@ pip install -e D:\path\to\skill_assessment
 | `TELEGRAM_ENABLE_POLLING` | `1` — при старте uvicorn запускается **long polling**; бот отвечает на `/start` (удобно в разработке). В тестах и CI не включать. |
 | `SKILL_ASSESSMENT_PUBLIC_BASE_URL` | Внешний базовый URL сервиса. Из него собираются персональные ссылки из Telegram, включая страницу оценки руководителя. |
 | `SKILL_ASSESSMENT_HR_BASE_URL` | Базовый URL для HR/протокольных ссылок в браузере. По умолчанию используется `http://127.0.0.1:8000`, чтобы старый tunnel URL не открывался как `503 Tunnel Unavailable`. |
+| `SKILL_ASSESSMENT_DATA_DIR` | Filesystem storage для immutable snapshot/HTML протоколов. По умолчанию `data`; можно использовать общий `DATA_DIR`. |
 | `SKILL_ASSESSMENT_MANAGER_REVIEW_DEADLINE_HOURS` | Через сколько часов после завершения кейсов ставить дедлайн руководителю на `Part 3`. По умолчанию `72`. |
 
 При старте `runner` подхватывает **`.env`** из корня пакета (даже если текущий каталог — ядро `typical_infrastructure`).

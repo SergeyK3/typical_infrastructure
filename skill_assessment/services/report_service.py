@@ -40,6 +40,7 @@ from skill_assessment.schemas.api import (
 from skill_assessment.services import part1_docs_checklist as part1_docs_svc
 from skill_assessment.services.assessment_service import _evidence_from_json, _session_out
 from skill_assessment.services import examination_service as examination_svc
+from skill_assessment.services import examination_protocol_archive as exam_protocol_archive_svc
 from skill_assessment.services.part1_service import turn_row_to_out
 from skill_assessment.services import part2_case as part2_case_svc
 
@@ -462,7 +463,8 @@ def _related_completed_examination_part1_metrics(
         if created_at is not None and exam_row.created_at is not None and exam_row.created_at < created_at:
             continue
         try:
-            proto = examination_svc.build_protocol(db, exam_row.id)
+            archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, exam_row.id)
+            proto = exam_protocol_archive_svc.protocol_out_from_archive(archive)
         except Exception:
             continue
         avg4 = getattr(proto, "average_score_4", None)
