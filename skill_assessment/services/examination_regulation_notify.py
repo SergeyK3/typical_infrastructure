@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from skill_assessment.adapters.telegram_outbound import get_telegram_outbound
 from skill_assessment.infrastructure.db_models import ExaminationSessionRow
 from skill_assessment.integration.hr_core import employee_display_label, get_employee
+from skill_assessment.services.public_url import skill_assessment_hr_base_url_for_browser_links
 
 _log = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def notify_hr_no_examination_regulation(db: Session, row: ExaminationSessionRow)
     """Сообщение в служебный Telegram-канал или менеджерский чат экзамена."""
     emp = get_employee(db, row.client_id, row.employee_id)
     label = employee_display_label(emp) or row.employee_id
-    base = (os.getenv("SKILL_ASSESSMENT_PUBLIC_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
+    base = skill_assessment_hr_base_url_for_browser_links()
     text = (
         "Экзамен по внутренним регламентам приостановлен: нет применимого регламента/KPI для вопросов.\n\n"
         f"Организация (client_id): {row.client_id}\n"

@@ -13,6 +13,7 @@ from skill_assessment.integration.hr_core import get_employee
 from skill_assessment.schemas.examination_api import ExaminationProtocolOut
 from skill_assessment.services import examination_service as ex
 from skill_assessment.services.exam_protocol_recipients import resolve_manager_telegram_chat_for_protocol
+from skill_assessment.services.public_url import skill_assessment_hr_base_url_for_browser_links
 
 _log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ PROTOCOL_DELAY_SEC = int(os.getenv("TELEGRAM_EXAM_PROTOCOL_DELAY_SEC", "300"))
 
 
 def public_examination_protocol_url(session_id: str) -> str:
-    base = (os.getenv("SKILL_ASSESSMENT_PUBLIC_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
+    base = skill_assessment_hr_base_url_for_browser_links()
     return f"{base}/api/skill-assessment/examination/sessions/{session_id}/protocol/html"
 
 
