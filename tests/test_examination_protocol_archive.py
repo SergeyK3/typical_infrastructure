@@ -9,6 +9,7 @@ from app.db import SessionLocal
 from skill_assessment.domain.examination_entities import ConsentStatus, ExaminationPhase, ExaminationSessionStatus
 from skill_assessment.infrastructure.db_models import (
     ExaminationAnswerRow,
+    ExaminationProtocolArchiveRow,
     ExaminationQuestionRow,
     ExaminationSessionRow,
 )
@@ -124,3 +125,68 @@ def test_protocol_html_route_serves_archived_content_after_live_answer_change(cl
     snapshot = client.get(f"/api/skill-assessment/examination/protocol-archives/{archive_id}/snapshot")
     assert snapshot.status_code == 200
     assert snapshot.json()["questions"][0]["answer"]["transcript_text"] == "ORIGINAL_ARCHIVED_ANSWER"
+
+
+def test_archive_route_survives_deleted_session_employee_and_regulation(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SKILL_ASSESSMENT_DATA_DIR", str(tmp_path))
+    db = SessionLocal()
+    try:
+        session_id = _completed_exam_session(db, answer_text="ARCHIVE_WITHOUT_LIVE_SESSION")
+        archive = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        archive_id = archive.id
+        session = db.get(ExaminationSessionRow, session_id)
+        db.delete(session)
+        db.commit()
+    finally:
+        db.close()
+
+    by_session = client.get(f"/api/skill-assessment/examination/sessions/{session_id}/protocol/html")
+    assert by_session.status_code == 200
+    assert "ARCHIVE_WITHOUT_LIVE_SESSION" in by_session.text
+
+    by_archive = client.get(f"/api/skill-assessment/examination/protocol-archives/{archive_id}/snapshot")
+    assert by_archive.status_code == 200
+    assert by_archive.json()["session"]["id"] == session_id
+
+
+def test_archive_corruption_is_reported_on_route(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SKILL_ASSESSMENT_DATA_DIR", str(tmp_path))
+    db = SessionLocal()
+    try:
+        session_id = _completed_exam_session(db, answer_text="CORRUPTION_ORIGINAL")
+        archive = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        protocol_storage.artifact_path(archive.html_storage_key).write_text("corrupted", encoding="utf-8")
+    finally:
+        db.close()
+
+    resp = client.get(f"/api/skill-assessment/examination/sessions/{session_id}/protocol/html")
+    assert resp.status_code == 409
+    assert "protocol_archive_corrupted" in resp.text
+
+
+def test_archive_creation_reuses_existing_registry_and_orphan_artifacts(client, tmp_path, monkeypatch, caplog) -> None:
+    monkeypatch.setenv("SKILL_ASSESSMENT_DATA_DIR", str(tmp_path))
+    caplog.set_level("INFO", logger="skill_assessment.services.examination_protocol_archive")
+    db = SessionLocal()
+    try:
+        session_id = _completed_exam_session(db, answer_text="ORPHAN_RETRY_ANSWER")
+        first = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        first_snapshot_sha = first.snapshot_sha256
+        first_html_sha = first.html_sha256
+
+        reused = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        assert reused.id == first.id
+
+        db.delete(first)
+        db.commit()
+        caplog.clear()
+        recreated = archive_svc.ensure_examination_protocol_archive(db, session_id)
+
+        assert recreated.id != first.id
+        assert recreated.snapshot_sha256 == first_snapshot_sha
+        assert recreated.html_sha256 == first_html_sha
+        snapshot = archive_svc.read_archive_snapshot(recreated)
+        assert snapshot["questions"][0]["answer"]["transcript_text"] == "ORPHAN_RETRY_ANSWER"
+        assert any("archive.reused" in rec.message for rec in caplog.records)
+    finally:
+        db.close()

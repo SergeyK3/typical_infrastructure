@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -70,9 +71,39 @@ def put_immutable_artifact(storage_key: str, data: bytes, *, mime_type: str) -> 
         )
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(payload)
-    os.replace(tmp, path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        with tmp.open("xb") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            existing = path.read_bytes()
+            existing_digest = sha256_bytes(existing)
+            if existing_digest != digest:
+                raise FileExistsError(f"immutable_artifact_exists_with_different_checksum:{key}") from None
+            return StoredArtifact(
+                storage_key=key,
+                sha256=existing_digest,
+                size_bytes=len(existing),
+                mime_type=mime_type,
+                path=path,
+            )
+        try:
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
     return StoredArtifact(
         storage_key=key,
         sha256=digest,

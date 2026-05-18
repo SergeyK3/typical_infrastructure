@@ -1456,16 +1456,19 @@ def get_examination_protocol(
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
 ) -> ExaminationProtocolOut:
-    archive = exam_protocol_archive_svc.get_archive_by_session(db, session_id)
-    if archive is not None:
-        return exam_protocol_archive_svc.protocol_out_from_archive(archive)
     try:
-        archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
-        return exam_protocol_archive_svc.protocol_out_from_archive(archive)
-    except HTTPException as e:
-        if e.detail != "protocol_archive_requires_completed_session":
-            raise
-    return examination_svc.build_protocol(db, session_id)
+        archive = exam_protocol_archive_svc.get_archive_by_session(db, session_id)
+        if archive is not None:
+            return exam_protocol_archive_svc.protocol_out_from_archive(archive)
+        try:
+            archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
+            return exam_protocol_archive_svc.protocol_out_from_archive(archive)
+        except HTTPException as e:
+            if e.detail != "protocol_archive_requires_completed_session":
+                raise
+        return examination_svc.build_protocol(db, session_id)
+    except exam_protocol_archive_svc.ProtocolArchiveCorruptedError as e:
+        raise HTTPException(status_code=409, detail=f"protocol_archive_corrupted:{e}") from e
 
 
 @router.get("/examination/sessions/{session_id}/protocol/html", response_class=HTMLResponse)
@@ -1475,18 +1478,21 @@ def get_examination_protocol_html(
     download: bool = Query(False, description="Скачать как файл .html"),
 ) -> HTMLResponse:
     """Просмотр протокола экзамена в HTML; отдел кадров — таблица со ссылками на этот URL."""
-    archive = exam_protocol_archive_svc.get_archive_by_session(db, session_id)
-    if archive is not None:
-        html = exam_protocol_archive_svc.read_archive_html(archive)
-    else:
-        try:
-            archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
+    try:
+        archive = exam_protocol_archive_svc.get_archive_by_session(db, session_id)
+        if archive is not None:
             html = exam_protocol_archive_svc.read_archive_html(archive)
-        except HTTPException as e:
-            if e.detail != "protocol_archive_requires_completed_session":
-                raise
-            proto = examination_svc.build_protocol(db, session_id)
-            html = examination_svc.render_examination_protocol_html(proto)
+        else:
+            try:
+                archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
+                html = exam_protocol_archive_svc.read_archive_html(archive)
+            except HTTPException as e:
+                if e.detail != "protocol_archive_requires_completed_session":
+                    raise
+                proto = examination_svc.build_protocol(db, session_id)
+                html = examination_svc.render_examination_protocol_html(proto)
+    except exam_protocol_archive_svc.ProtocolArchiveCorruptedError as e:
+        raise HTTPException(status_code=409, detail=f"protocol_archive_corrupted:{e}") from e
     headers: dict[str, str] = {}
     if download:
         headers["Content-Disposition"] = f'attachment; filename="exam-protocol-{session_id[:8]}.html"'
@@ -1499,7 +1505,10 @@ def get_examination_protocol_archive(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, object]:
     """Registry metadata for the immutable archived protocol artifacts."""
-    archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
+    try:
+        archive = exam_protocol_archive_svc.ensure_examination_protocol_archive(db, session_id)
+    except exam_protocol_archive_svc.ProtocolArchiveCorruptedError as e:
+        raise HTTPException(status_code=409, detail=f"protocol_archive_corrupted:{e}") from e
     return {
         "id": archive.id,
         "session_id": archive.session_id,
@@ -1532,7 +1541,10 @@ def get_examination_protocol_archive_snapshot(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     archive = exam_protocol_archive_svc.get_archive(db, archive_id)
-    return exam_protocol_archive_svc.read_archive_snapshot(archive)
+    try:
+        return exam_protocol_archive_svc.read_archive_snapshot(archive)
+    except exam_protocol_archive_svc.ProtocolArchiveCorruptedError as e:
+        raise HTTPException(status_code=409, detail=f"protocol_archive_corrupted:{e}") from e
 
 
 @router.get("/examination/protocol-archives/{archive_id}/html", response_class=HTMLResponse)
@@ -1542,7 +1554,10 @@ def get_examination_protocol_archive_html(
     download: bool = Query(False, description="Скачать как файл .html"),
 ) -> HTMLResponse:
     archive = exam_protocol_archive_svc.get_archive(db, archive_id)
-    html = exam_protocol_archive_svc.read_archive_html(archive)
+    try:
+        html = exam_protocol_archive_svc.read_archive_html(archive)
+    except exam_protocol_archive_svc.ProtocolArchiveCorruptedError as e:
+        raise HTTPException(status_code=409, detail=f"protocol_archive_corrupted:{e}") from e
     headers: dict[str, str] = {}
     if download:
         headers["Content-Disposition"] = f'attachment; filename="exam-protocol-{archive.session_id[:8]}.html"'
