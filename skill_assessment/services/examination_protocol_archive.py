@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -18,6 +21,7 @@ from skill_assessment.infrastructure.db_models import (
     ExaminationSessionRow,
 )
 from skill_assessment.schemas.examination_api import ExaminationProtocolOut
+from skill_assessment.services.archive_metrics import archive_metrics
 from skill_assessment.services import protocol_storage
 from skill_assessment.services.examination_protocol_snapshot import (
     PROTOCOL_VERSION,
@@ -30,6 +34,7 @@ SNAPSHOT_MIME_TYPE = "application/json"
 HTML_MIME_TYPE = "text/html; charset=utf-8"
 
 _log = logging.getLogger(__name__)
+_integrity_thread_started = False
 
 
 class ProtocolArchiveCorruptedError(RuntimeError):
@@ -76,6 +81,7 @@ def read_archive_snapshot(row: ExaminationProtocolArchiveRow) -> dict:
             row.id,
             row.session_id,
         )
+        archive_metrics.observe_corruption()
         raise ProtocolArchiveCorruptedError("snapshot_json_decode_failed") from e
 
 
@@ -117,6 +123,7 @@ def _verify_archive_artifact(
             artifact_kind,
             storage_key,
         )
+        archive_metrics.observe_corruption()
         raise ProtocolArchiveCorruptedError(f"{artifact_kind}_missing") from e
     if meta.sha256 != expected_sha256 or meta.size_bytes != expected_size:
         _log.error(
@@ -125,6 +132,7 @@ def _verify_archive_artifact(
             artifact_kind,
             storage_key,
         )
+        archive_metrics.observe_corruption()
         raise ProtocolArchiveCorruptedError(f"{artifact_kind}_checksum_or_size_mismatch")
 
 
@@ -146,6 +154,7 @@ def verify_archive_artifacts(row: ExaminationProtocolArchiveRow) -> None:
 
 
 def ensure_examination_protocol_archive(db: Session, session_id: str) -> ExaminationProtocolArchiveRow:
+    started = time.perf_counter()
     existing = get_archive_by_session(db, session_id)
     if existing is not None:
         verify_archive_artifacts(existing)
@@ -166,6 +175,7 @@ def ensure_examination_protocol_archive(db: Session, session_id: str) -> Examina
         snapshot = json.loads(snapshot_raw.decode("utf-8"))
         snapshot_artifact = protocol_storage.artifact_metadata(snapshot_key, mime_type=SNAPSHOT_MIME_TYPE)
         _log.info("archive.reused session_id=%s reason=orphan_snapshot", session_id)
+        archive_metrics.observe_recovery()
     except FileNotFoundError:
         snapshot = build_examination_protocol_snapshot(db, session_id)
         snapshot_artifact = protocol_storage.put_immutable_artifact(
@@ -179,11 +189,13 @@ def ensure_examination_protocol_archive(db: Session, session_id: str) -> Examina
             session_id,
             snapshot_key,
         )
+        archive_metrics.observe_corruption()
         raise ProtocolArchiveCorruptedError("orphan_snapshot_unreadable") from e
 
     try:
         html_artifact = protocol_storage.artifact_metadata(html_key, mime_type=HTML_MIME_TYPE)
         _log.info("archive.reused session_id=%s reason=orphan_html", session_id)
+        archive_metrics.observe_recovery()
     except FileNotFoundError:
         try:
             html = render_protocol_html_from_snapshot(snapshot)
@@ -217,13 +229,25 @@ def ensure_examination_protocol_archive(db: Session, session_id: str) -> Examina
         html_sha256=html_artifact.sha256,
         html_size_bytes=html_artifact.size_bytes,
         html_mime_type=html_artifact.mime_type,
+        archived_at=datetime.now(timezone.utc),
+        retention_class="standard",
+        legal_hold=False,
         finalized_at=datetime.now(timezone.utc),
     )
     db.add(row)
     try:
         db.commit()
         db.refresh(row)
-        _log.info("archive.created archive_id=%s session_id=%s", row.id, session_id)
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        size_bytes = row.snapshot_size_bytes + row.html_size_bytes
+        archive_metrics.observe_created(duration_ms=duration_ms, size_bytes=size_bytes)
+        _log.info(
+            "archive.created archive_id=%s session_id=%s duration_ms=%.2f size_bytes=%s",
+            row.id,
+            session_id,
+            duration_ms,
+            size_bytes,
+        )
         return row
     except IntegrityError:
         db.rollback()
@@ -232,8 +256,87 @@ def ensure_examination_protocol_archive(db: Session, session_id: str) -> Examina
             raise
         verify_archive_artifacts(existing_after_race)
         _log.info("archive.reused archive_id=%s session_id=%s reason=integrity_race", existing_after_race.id, session_id)
+        archive_metrics.observe_recovery()
         return existing_after_race
 
 
 def ensure_archive_snapshot(db: Session, session_id: str) -> dict:
     return read_archive_snapshot(ensure_examination_protocol_archive(db, session_id))
+
+
+def archive_metrics_snapshot() -> dict[str, float | int]:
+    return archive_metrics.snapshot()
+
+
+def verify_archive_integrity(db: Session, *, limit: int | None = None) -> dict[str, object]:
+    stmt = select(ExaminationProtocolArchiveRow).order_by(ExaminationProtocolArchiveRow.created_at.asc())
+    if limit is not None:
+        stmt = stmt.limit(max(0, int(limit)))
+    rows = list(db.scalars(stmt).all())
+    ok: list[str] = []
+    corrupted: list[dict[str, str]] = []
+    registry_keys: set[str] = set()
+    for row in rows:
+        registry_keys.add(row.snapshot_storage_key)
+        registry_keys.add(row.html_storage_key)
+        try:
+            verify_archive_artifacts(row)
+            ok.append(row.id)
+        except ProtocolArchiveCorruptedError as e:
+            corrupted.append({"archive_id": row.id, "session_id": row.session_id, "reason": str(e)})
+
+    orphan_storage_keys = sorted(
+        key
+        for key in protocol_storage.iter_storage_keys("protocol_archive/examination")
+        if key not in registry_keys
+    )
+    result: dict[str, object] = {
+        "checked": len(rows),
+        "ok": len(ok),
+        "corrupted": len(corrupted),
+        "corrupted_items": corrupted,
+        "orphan_storage_key_count": len(orphan_storage_keys),
+        "orphan_storage_keys": orphan_storage_keys[:100],
+    }
+    _log.info(
+        "archive.integrity_scan checked=%s ok=%s corrupted=%s orphan_storage_key_count=%s",
+        result["checked"],
+        result["ok"],
+        result["corrupted"],
+        result["orphan_storage_key_count"],
+    )
+    return result
+
+
+def start_archive_integrity_background_task() -> bool:
+    """Start a lightweight periodic integrity scan loop when enabled by env."""
+    global _integrity_thread_started
+    raw = (os.getenv("SKILL_ASSESSMENT_ARCHIVE_INTEGRITY_SCAN_INTERVAL_SEC") or "3600").strip()
+    try:
+        interval = int(raw or "3600")
+    except ValueError:
+        interval = 3600
+    if interval <= 0:
+        _log.info("archive.integrity_scan disabled interval_sec=%s", interval)
+        return False
+    if _integrity_thread_started:
+        return False
+    _integrity_thread_started = True
+
+    def _run() -> None:
+        from app.db import SessionLocal
+
+        while True:
+            time.sleep(interval)
+            db = SessionLocal()
+            try:
+                verify_archive_integrity(db)
+            except Exception:
+                _log.exception("archive.integrity_scan_failed")
+            finally:
+                db.close()
+
+    t = threading.Thread(target=_run, name="archive-integrity-scan", daemon=True)
+    t.start()
+    _log.info("archive.integrity_scan_started interval_sec=%s", interval)
+    return True

@@ -260,6 +260,9 @@ class ExaminationProtocolArchiveRow(Base, TimestampMixin):
     html_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     html_mime_type: Mapped[str] = mapped_column(String(128), nullable=False, default="text/html; charset=utf-8")
 
+    archived_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="standard", index=True)
+    legal_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     finalized_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 

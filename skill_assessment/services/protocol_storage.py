@@ -8,6 +8,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from collections.abc import Iterator
 
 
 @dataclass(frozen=True)
@@ -128,3 +129,14 @@ def artifact_metadata(storage_key: str, *, mime_type: str) -> StoredArtifact:
         mime_type=mime_type,
         path=path,
     )
+
+
+def iter_storage_keys(prefix: str) -> Iterator[str]:
+    key_prefix = normalize_storage_key(prefix).rstrip("/")
+    root = artifact_path(key_prefix)
+    if not root.exists():
+        return
+    base = protocol_storage_base_dir()
+    for path in root.rglob("*"):
+        if path.is_file() and not path.name.startswith(".") and not path.name.endswith(".tmp"):
+            yield path.relative_to(base).as_posix()

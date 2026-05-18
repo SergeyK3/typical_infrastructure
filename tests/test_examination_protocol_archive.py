@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import delete
 
 from app.db import SessionLocal
 from skill_assessment.domain.examination_entities import ConsentStatus, ExaminationPhase, ExaminationSessionStatus
@@ -18,6 +19,12 @@ from skill_assessment.services import protocol_storage
 
 
 def _completed_exam_session(db, *, answer_text: str = "Подробно соблюдаю регламент и фиксирую результат.") -> str:
+    db.execute(delete(ExaminationProtocolArchiveRow))
+    db.execute(delete(ExaminationAnswerRow))
+    db.execute(delete(ExaminationQuestionRow))
+    db.execute(delete(ExaminationSessionRow))
+    db.commit()
+    db.expire_all()
     sid = str(uuid.uuid4())
     qid = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -93,6 +100,9 @@ def test_ensure_protocol_archive_writes_snapshot_and_html(client, tmp_path, monk
         assert archive.html_sha256
         assert archive.snapshot_size_bytes > 0
         assert archive.html_size_bytes > 0
+        assert archive.archived_at is not None
+        assert archive.retention_class == "standard"
+        assert archive.legal_hold is False
 
         snapshot = archive_svc.read_archive_snapshot(archive)
         assert snapshot["schema_version"] == "examination_protocol_snapshot.v1"
@@ -162,6 +172,55 @@ def test_archive_corruption_is_reported_on_route(client, tmp_path, monkeypatch) 
     resp = client.get(f"/api/skill-assessment/examination/sessions/{session_id}/protocol/html")
     assert resp.status_code == 409
     assert "protocol_archive_corrupted" in resp.text
+
+
+def test_archive_integrity_scan_reports_ok_corruption_and_orphans(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SKILL_ASSESSMENT_DATA_DIR", str(tmp_path))
+    db = SessionLocal()
+    try:
+        session_id = _completed_exam_session(db, answer_text="SCAN_OK")
+        archive = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        protocol_storage.put_immutable_artifact(
+            "protocol_archive/examination/orphan/snapshot.json",
+            b"{}",
+            mime_type="application/json",
+        )
+
+        ok = archive_svc.verify_archive_integrity(db)
+        assert ok["checked"] >= 1
+        assert ok["ok"] >= 1
+        assert ok["corrupted"] == 0
+        assert ok["orphan_storage_key_count"] == 1
+
+        protocol_storage.artifact_path(archive.snapshot_storage_key).write_text("corrupted", encoding="utf-8")
+        broken = archive_svc.verify_archive_integrity(db)
+        assert broken["corrupted"] == 1
+        assert broken["corrupted_items"][0]["archive_id"] == archive.id
+    finally:
+        db.close()
+
+
+def test_archive_metrics_track_create_corruption_and_recovery(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SKILL_ASSESSMENT_DATA_DIR", str(tmp_path))
+    before = archive_svc.archive_metrics_snapshot()
+    db = SessionLocal()
+    try:
+        session_id = _completed_exam_session(db, answer_text="METRICS_ANSWER")
+        first = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        db.delete(first)
+        db.commit()
+        recreated = archive_svc.ensure_examination_protocol_archive(db, session_id)
+        protocol_storage.artifact_path(recreated.html_storage_key).write_text("corrupted", encoding="utf-8")
+        with pytest.raises(archive_svc.ProtocolArchiveCorruptedError):
+            archive_svc.read_archive_html(recreated)
+    finally:
+        db.close()
+
+    after = archive_svc.archive_metrics_snapshot()
+    assert after["archive_create_count"] >= before["archive_create_count"] + 2
+    assert after["archive_size_bytes_total"] > before["archive_size_bytes_total"]
+    assert after["archive_recovery_count"] >= before["archive_recovery_count"] + 2
+    assert after["archive_corruption_count"] >= before["archive_corruption_count"] + 1
 
 
 def test_archive_creation_reuses_existing_registry_and_orphan_artifacts(client, tmp_path, monkeypatch, caplog) -> None:
