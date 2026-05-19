@@ -1,4 +1,4 @@
-id;position_code;position_name_ru;skill_rank;skill_name
+﻿id;position_code;position_name_ru;skill_rank;skill_name
 1;ADM_DIRECTOR;Директор;1;Стратегическое и операционное планирование
 2;ADM_DIRECTOR;Директор;2;Управление организацией и делегирование
 3;ADM_DIRECTOR;Директор;3;Финансовая и управленческая отчётность (чтение и решения)

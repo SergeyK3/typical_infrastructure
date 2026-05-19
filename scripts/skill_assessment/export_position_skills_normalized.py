@@ -4,7 +4,8 @@
 
 Колонки: id, position_code, position_name_ru, skill_rank (1…7), skill_name.
 
-Вывод в repo/exports/: position_skills_normalized.xlsx и .csv (UTF-8 с BOM для Excel).
+Вывод: repo/exports/ (xlsx + csv) и static/global/position-skills-normalized.csv
+(UTF-8 с BOM — иначе Excel в Windows показывает кириллицу «крякозябрами»).
 
 Запуск из корня пакета skill_assessment:
     python scripts/export_position_skills_normalized.py
@@ -22,7 +23,9 @@ from openpyxl.utils import get_column_letter
 from skill_assessment.data.top20_position_skills import TOP20_POSITION_SKILL_ROWS
 
 # repo/exports — на уровень выше каталога пакета skill_assessment (pyproject)
-REPO_EXPORTS = Path(__file__).resolve().parents[2] / "exports"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_EXPORTS = REPO_ROOT / "exports"
+STATIC_CSV = REPO_ROOT / "static" / "global" / "position-skills-normalized.csv"
 
 
 def iter_normalized_rows():
@@ -61,14 +64,17 @@ def main() -> None:
     ws.column_dimensions["E"].width = 56
     wb.save(xlsx_path)
 
-    csv_path = REPO_EXPORTS / "position_skills_normalized.csv"
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, delimiter=";", quoting=csv.QUOTE_MINIMAL)
-        w.writerow(headers)
-        w.writerows(rows)
+    csv_targets = [REPO_EXPORTS / "position_skills_normalized.csv", STATIC_CSV]
+    for csv_path in csv_targets:
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        with csv_path.open("w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+            w.writerow(headers)
+            w.writerows(rows)
 
     print(f"Written: {xlsx_path}")
-    print(f"Written: {csv_path}")
+    for csv_path in csv_targets:
+        print(f"Written: {csv_path}")
     print(f"Rows: {len(rows)}")
 
 

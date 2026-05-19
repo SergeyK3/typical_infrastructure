@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from skill_assessment.schemas.examination_api import ExaminationProtocolOut
 from skill_assessment.services.telegram_docs_survey import _telegram_chat_ids_equal
 from skill_assessment.services.docs_survey_time import utc_naive_to_local_display
+from skill_assessment.services.public_url import skill_assessment_hr_base_url_for_browser_links
 
 from skill_assessment.domain.examination_entities import ExaminationPhase
 from skill_assessment.infrastructure.db_models import AssessmentSessionRow
@@ -360,7 +361,7 @@ def handle_telegram_message(
             if _is_done(msg):
                 cid = (row.client_id or "").strip()
                 eid = (row.employee_id or "").strip()
-                base = (os.getenv("SKILL_ASSESSMENT_PUBLIC_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
+                base = skill_assessment_hr_base_url_for_browser_links()
                 q = "client_id=" + quote(cid, safe="")
                 if eid:
                     q += "&employee_id=" + quote(eid, safe="")
