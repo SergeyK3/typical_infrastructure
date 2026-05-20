@@ -97,9 +97,67 @@ def get_session_document(session_id: str) -> dict[str, Any] | None:
     return None
 
 
+def latest_sessions_by_test_for_employee(
+    employee_id: str,
+    *,
+    client_id: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """
+    Return latest ``done`` session document per ``test_id`` for an employee.
+
+    Newer ``completed_at`` wins; file mtime breaks ties.
+    """
+    eid = str(employee_id).strip()
+    if not eid:
+        return {}
+
+    best: dict[str, tuple[str, float, dict[str, Any]]] = {}
+    for path in _iter_session_files():
+        doc = _load_document(path)
+        if not doc:
+            continue
+        if str(doc.get("employee_id") or "") != eid:
+            continue
+        if client_id and str(doc.get("client_id") or "") != client_id:
+            continue
+        if str(doc.get("status") or "") != "done":
+            continue
+        test_id = str(doc.get("test_id") or "").strip()
+        if not test_id:
+            continue
+        completed = str(doc.get("completed_at") or "")
+        mtime = path.stat().st_mtime
+        prev = best.get(test_id)
+        if prev is None or completed > prev[0] or (completed == prev[0] and mtime > prev[1]):
+            best[test_id] = (completed, mtime, doc)
+
+    return {test_id: doc for test_id, (_, _, doc) in best.items()}
+
+
+def build_session_refs_for_employee(
+    employee_id: str,
+    test_ids: list[str] | tuple[str, ...],
+    *,
+    client_id: str | None = None,
+) -> list[dict[str, str]]:
+    """Build manifest ``session_refs`` from latest persisted sessions."""
+    latest = latest_sessions_by_test_for_employee(employee_id, client_id=client_id)
+    refs: list[dict[str, str]] = []
+    for test_id in test_ids:
+        doc = latest.get(test_id)
+        if doc is None:
+            continue
+        sid = str(doc.get("session_id") or "").strip()
+        if sid:
+            refs.append({"test_id": test_id, "session_id": sid})
+    return refs
+
+
 def module_status() -> dict[str, Any]:
     """Lightweight status for workspace UI."""
     from psychological_testing.domain.test_registry import TestRegistry
+    from psychological_testing.integration.manifest_store import pdf_cache_mode
+    from psychological_testing.integration.report_storage import storage_status
 
     registry = TestRegistry()
     test_ids = registry.list_test_ids()
@@ -109,6 +167,8 @@ def module_status() -> dict[str, Any]:
         "persist_json_enabled": persist_on,
         "sessions_dir": str(sessions_dir()),
         "session_count": session_count,
+        "pdf_cache_mode": pdf_cache_mode(),
+        **storage_status(),
         "available_tests": [
             {
                 "test_id": tid,

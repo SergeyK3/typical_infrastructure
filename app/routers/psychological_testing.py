@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -13,11 +15,22 @@ from app.db import get_db
 from app.models import Client, Employee
 from app.schemas import ListEnvelope
 from app.services import psych_test_assignments as assign_svc
+from app.services.psych_rbac import assert_can_export_pdf
+from psychological_testing.integration.manifest_store import resolve_pdf_ref
+from psychological_testing.integration.report_storage import export_artifact_metadata
+from psychological_testing.integration.pdf_export_api import (
+    build_export_manifest,
+    export_employee_pdf,
+    export_preview,
+    load_cached_pdf,
+    sections_catalog,
+)
 from psychological_testing.integration.session_repository import (
     get_session_document,
     list_session_summaries,
     module_status,
 )
+from psychological_testing.shared_engine.report_contract import DEFAULT_TEMPLATE_ID
 
 router = APIRouter(prefix="/psychological-testing", tags=["psychological-testing"])
 
@@ -50,6 +63,12 @@ class PsychModuleStatusOut(BaseModel):
     session_count: int
     available_tests: list[PsychTestInfoOut]
     telegram_commands: list[str] = Field(default_factory=list)
+    pdf_cache_mode: str = "off"
+    gdrive_enabled: bool = False
+    gdrive_configured: bool = False
+    gdrive_upload_sessions: bool = False
+    gdrive_upload_manifest: bool = False
+    storage_label: str = ""
 
 
 class PsychAssignmentCreateIn(BaseModel):
@@ -62,6 +81,41 @@ class PsychAssignmentCreateIn(BaseModel):
 
 class PsychAssignmentPatchIn(BaseModel):
     due_at: datetime | None = None
+
+
+class PsychSectionOverrideIn(BaseModel):
+    section_id: str
+    enabled: bool = True
+    charts: list[str] | None = None
+    requires_ai: bool | None = None
+
+
+class PsychExportPdfIn(BaseModel):
+    client_id: str
+    template_id: str = DEFAULT_TEMPLATE_ID
+    sections: list[PsychSectionOverrideIn] | None = None
+    session_refs: list[dict[str, str]] | None = None
+    regenerate_ai: bool = False
+    strict: bool = False
+    response_mode: str = Field(
+        default="stream",
+        description="stream — PDF bytes; json — metadata + pdf_ref",
+    )
+    account_id: str | None = Field(
+        default=None,
+        description="Для RBAC hr.psych_testing.export при PSYCH_TESTING_RBAC_EXPORT=1",
+    )
+
+
+class PsychExportPdfOut(BaseModel):
+    manifest_id: str
+    pdf_ref: str | None = None
+    pdf_open_url: str | None = None
+    storage_kind: str | None = None
+    size_bytes: int
+    cache_hit: bool = False
+    manifest_path: str | None = None
+    manifest_drive_ref: str | None = None
 
 
 class PsychAssignmentOut(BaseModel):
@@ -201,6 +255,166 @@ def patch_psych_assignment(
     except ValueError as e:
         raise _value_error_to_http(e) from e
     return PsychAssignmentOut.model_validate(data)
+
+
+def _employee_display_name(db: Session, employee_id: str) -> str | None:
+    emp = db.get(Employee, employee_id)
+    if not emp:
+        return None
+    return " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
+
+
+def _assert_employee_client(db: Session, client_id: str, employee_id: str) -> Employee:
+    emp = db.get(Employee, employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="employee_not_found")
+    if str(emp.client_id) != str(client_id):
+        raise HTTPException(status_code=400, detail="employee_client_mismatch")
+    return emp
+
+
+def _sections_from_body(
+    overrides: list[PsychSectionOverrideIn] | None,
+) -> list[dict[str, Any]] | None:
+    if overrides is None:
+        return None
+    out: list[dict[str, Any]] = []
+    for item in overrides:
+        entry: dict[str, Any] = {
+            "section_id": item.section_id,
+            "enabled": item.enabled,
+        }
+        if item.charts is not None:
+            entry["charts"] = item.charts
+        if item.requires_ai is not None:
+            entry["requires_ai"] = item.requires_ai
+        out.append(entry)
+    return out
+
+
+@router.get("/report-templates")
+def get_report_templates() -> dict:
+    templates, sections = sections_catalog()
+    return {"templates": templates, "sections": sections}
+
+
+@router.get("/employees/{employee_id}/export-preview")
+def get_export_preview(
+    employee_id: str,
+    client_id: str = Query(...),
+    template_id: str = Query(DEFAULT_TEMPLATE_ID),
+    account_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _assert_client(db, client_id)
+    _assert_employee_client(db, client_id, employee_id)
+    assert_can_export_pdf(
+        db, account_id=account_id, client_id=client_id, employee_id=employee_id
+    )
+    return export_preview(
+        client_id=client_id,
+        employee_id=employee_id,
+        template_id=template_id,
+    )
+
+
+@router.post("/employees/{employee_id}/export-pdf")
+def post_export_pdf(
+    employee_id: str,
+    body: PsychExportPdfIn,
+    db: Session = Depends(get_db),
+):
+    _assert_client(db, body.client_id)
+    _assert_employee_client(db, body.client_id, employee_id)
+    assert_can_export_pdf(
+        db,
+        account_id=body.account_id,
+        client_id=body.client_id,
+        employee_id=employee_id,
+    )
+
+    sections = _sections_from_body(body.sections)
+    manifest = build_export_manifest(
+        client_id=body.client_id,
+        employee_id=employee_id,
+        template_id=body.template_id,
+        created_by=body.account_id,
+        session_refs=body.session_refs,
+        sections=sections,
+    )
+    if body.strict:
+        from psychological_testing.shared_engine.report_contract import (
+            load_section_registry,
+            validate_manifest,
+        )
+
+        reg = load_section_registry()
+        result = validate_manifest(manifest, registry=reg, strict=True)
+        if not result.ok:
+            raise HTTPException(status_code=400, detail=list(result.errors))
+
+    display_name = _employee_display_name(db, employee_id)
+    try:
+        result = export_employee_pdf(
+            manifest,
+            employee_display_name=display_name,
+            regenerate_ai=body.regenerate_ai,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    pdf_bytes = result["pdf_bytes"]
+    pdf_ref = result.get("pdf_ref")
+    artifact = export_artifact_metadata(pdf_ref, client_id=body.client_id)
+    mode = (body.response_mode or "stream").strip().lower()
+    if mode == "json":
+        return PsychExportPdfOut(
+            manifest_id=str(result["manifest"].get("manifest_id") or ""),
+            pdf_ref=artifact["pdf_ref"],
+            pdf_open_url=artifact["pdf_open_url"],
+            storage_kind=artifact["storage_kind"],
+            size_bytes=len(pdf_bytes),
+            cache_hit=bool(result.get("cache_hit")),
+            manifest_path=result.get("manifest_path"),
+            manifest_drive_ref=result.get("manifest_drive_ref"),
+        )
+
+    filename = f"psych_report_{employee_id[:8]}.pdf"
+    if display_name:
+        safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in display_name)[:40]
+        filename = f"{safe.strip() or 'report'}.pdf"
+    headers: dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    if pdf_ref:
+        headers["X-Psych-Pdf-Ref"] = pdf_ref
+    if artifact.get("pdf_open_url"):
+        headers["X-Psych-Pdf-Open-Url"] = str(artifact["pdf_open_url"])
+    if artifact.get("storage_kind"):
+        headers["X-Psych-Storage-Kind"] = str(artifact["storage_kind"])
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers=headers,
+    )
+
+
+@router.get("/export-pdf/file")
+def get_export_pdf_file(
+    pdf_ref: str = Query(..., description="Относительный pdf_ref из export-pdf json"),
+    client_id: str = Query(...),
+    account_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    _assert_client(db, client_id)
+    assert_can_export_pdf(db, account_id=account_id, client_id=client_id)
+    data = load_cached_pdf(pdf_ref)
+    if data is None:
+        path = resolve_pdf_ref(pdf_ref)
+        if path is None or not path.is_file():
+            raise HTTPException(status_code=404, detail="pdf_not_found")
+        data = path.read_bytes()
+    return Response(content=data, media_type="application/pdf")
 
 
 @router.post("/assignments/{assignment_id}/notify", response_model=PsychAssignmentOut)

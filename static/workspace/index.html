@@ -511,8 +511,36 @@
     <div class="modal-content" style="max-width: 720px;">
       <h3 id="modalPsychSessionTitle">Сессия тестирования</h3>
       <pre id="modalPsychSessionBody" style="white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:0.85rem;background:var(--bg);padding:0.75rem;border-radius:6px;border:1px solid var(--border);"></pre>
+      <p class="meta hidden" id="psychSessionReportLinkWrap" style="margin:0.5rem 0;">
+        <a href="#" id="psychSessionReportLink" target="_blank" rel="noopener noreferrer">Открыть отчёт</a>
+      </p>
       <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnPsychSessionExportPdf">PDF (сотрудник)</button>
         <button type="button" class="btn btn-secondary" id="btnPsychSessionClose">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Psych PDF export (HR) -->
+  <div id="modalPsychExport" class="modal">
+    <div class="modal-content" style="max-width: 640px;">
+      <h3 id="modalPsychExportTitle">Экспорт PDF отчёта</h3>
+      <p class="meta" id="psychExportMeta">Загрузка…</p>
+      <div id="psychExportWarnings" class="meta" style="color:var(--warn, #b8860b);"></div>
+      <p class="meta" style="margin:0.5rem 0 0.25rem;">Секции отчёта:</p>
+      <div id="psychExportSections" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;background:var(--bg);"></div>
+      <p class="meta" style="margin:0.75rem 0 0.25rem;">Доступные сессии (latest per test):</p>
+      <ul id="psychExportSessions" class="meta" style="margin:0 0 0.75rem 1rem;padding:0;list-style:disc;"></ul>
+      <label class="meta" style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.75rem;">
+        <input type="checkbox" id="psychExportRegenerateAi">
+        Перегенерировать AI-тексты (игнорировать кэш)
+      </label>
+      <p class="meta hidden" id="psychExportResultLinkWrap" style="margin:0 0 0.5rem;">
+        <a href="#" id="psychExportResultLink" target="_blank" rel="noopener noreferrer">Открыть отчёт</a>
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnPsychExportRun">Скачать PDF</button>
+        <button type="button" class="btn btn-secondary" id="btnPsychExportClose">Закрыть</button>
       </div>
     </div>
   </div>
@@ -819,6 +847,145 @@
         throw new Error(parseApiErrorText(text) || ('HTTP ' + r.status));
       }
       return text ? JSON.parse(text) : null;
+    }
+
+    async function fetchApiBlob(path, opts = {}) {
+      const r = await fetch(API + path, opts);
+      if (!r.ok) {
+        const text = await r.text();
+        throw new Error(parseApiErrorText(text) || ('HTTP ' + r.status));
+      }
+      return { blob: await r.blob(), headers: r.headers };
+    }
+
+    function psychArtifactOpenUrl(pdfRef, storageKind) {
+      if (!pdfRef || !String(pdfRef).trim()) return null;
+      const ref = String(pdfRef).trim();
+      if (ref.startsWith('gdrive:')) {
+        const id = ref.slice(7);
+        return id ? ('https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view') : null;
+      }
+      if (ref.indexOf('drive.google.com/file/d/') >= 0) return ref;
+      if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
+      if (!clientId) return null;
+      const q = new URLSearchParams({ pdf_ref: ref, client_id: clientId });
+      return API + '/psychological-testing/export-pdf/file?' + q.toString();
+    }
+
+    function psychArtifactLinkLabel(storageKind) {
+      if (storageKind === 'gdrive') return 'Открыть в Google Drive';
+      if (storageKind === 'local') return 'Скачать PDF (кэш)';
+      return 'Открыть отчёт';
+    }
+
+    function showPsychArtifactLink(wrapId, linkId, pdfRef, storageKind) {
+      const wrap = document.getElementById(wrapId);
+      const link = document.getElementById(linkId);
+      if (!wrap || !link) return;
+      const url = psychArtifactOpenUrl(pdfRef, storageKind);
+      if (!url) {
+        wrap.classList.add('hidden');
+        link.removeAttribute('href');
+        return;
+      }
+      link.href = url;
+      link.textContent = psychArtifactLinkLabel(storageKind);
+      wrap.classList.remove('hidden');
+    }
+
+    let psychExportState = { employeeId: null, preview: null };
+
+    function openPsychExportModal(employeeId, employeeName) {
+      const modal = document.getElementById('modalPsychExport');
+      const title = document.getElementById('modalPsychExportTitle');
+      const meta = document.getElementById('psychExportMeta');
+      const sectionsEl = document.getElementById('psychExportSections');
+      const sessionsEl = document.getElementById('psychExportSessions');
+      const warnEl = document.getElementById('psychExportWarnings');
+      if (!modal || !clientId || !employeeId) {
+        showWorkspaceToast('Выберите организацию и сотрудника.', 'error');
+        return;
+      }
+      psychExportState = { employeeId, preview: null };
+      const resultWrap = document.getElementById('psychExportResultLinkWrap');
+      if (resultWrap) resultWrap.classList.add('hidden');
+      title.textContent = 'Экспорт PDF: ' + (employeeName || employeeId);
+      meta.textContent = 'Загрузка настроек…';
+      sectionsEl.innerHTML = '';
+      sessionsEl.innerHTML = '';
+      if (warnEl) warnEl.textContent = '';
+      modal.classList.add('show');
+      fetchApi('/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-preview?client_id=' + encodeURIComponent(clientId))
+        .then((data) => {
+          psychExportState.preview = data;
+          meta.textContent = 'Шаблон: ' + (data.manifest && data.manifest.template_id ? data.manifest.template_id : 'legacy_team_assessment_v1');
+          if (warnEl && data.validation && data.validation.warnings && data.validation.warnings.length) {
+            warnEl.textContent = data.validation.warnings.join(' ');
+          }
+          const sections = (data.manifest && data.manifest.sections) || [];
+          sectionsEl.innerHTML = sections.map((s) => (
+            '<label style="display:block;margin:0.2rem 0;font-size:0.9rem;">' +
+              '<input type="checkbox" class="psych-export-section-cb" data-section-id="' + escapeHtml(s.section_id) + '" ' + (s.enabled ? 'checked' : '') + '> ' +
+              escapeHtml(s.section_id) +
+              (s.requires_ai ? ' <span class="meta">(AI)</span>' : '') +
+            '</label>'
+          )).join('');
+          const avail = data.available_sessions || [];
+          sessionsEl.innerHTML = avail.length
+            ? avail.map((a) => '<li><code>' + escapeHtml(a.test_id) + '</code> — ' + escapeHtml(a.session_id || '') + (a.typology_code ? ' (' + escapeHtml(a.typology_code) + ')' : '') + '</li>').join('')
+            : '<li class="meta">Нет завершённых сессий</li>';
+        })
+        .catch((e) => {
+          meta.textContent = e.message || String(e);
+        });
+    }
+
+    async function runPsychExportPdf() {
+      const employeeId = psychExportState.employeeId;
+      if (!employeeId || !clientId) return;
+      const sections = [];
+      document.querySelectorAll('.psych-export-section-cb').forEach((cb) => {
+        sections.push({ section_id: cb.dataset.sectionId, enabled: cb.checked });
+      });
+      const regenerateAi = !!(document.getElementById('psychExportRegenerateAi') && document.getElementById('psychExportRegenerateAi').checked);
+      const body = {
+        client_id: clientId,
+        template_id: 'legacy_team_assessment_v1',
+        sections,
+        regenerate_ai: regenerateAi,
+        response_mode: 'stream',
+      };
+      try {
+        showWorkspaceToast('Формирование PDF…', 'info');
+        const { blob, headers } = await fetchApiBlob(
+          '/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-pdf',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'psych_report.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+        const pdfRef = headers.get('X-Psych-Pdf-Ref');
+        const storageKind = headers.get('X-Psych-Storage-Kind');
+        const openUrl = headers.get('X-Psych-Pdf-Open-Url');
+        if (pdfRef || openUrl) {
+          showPsychArtifactLink(
+            'psychExportResultLinkWrap',
+            'psychExportResultLink',
+            pdfRef || openUrl,
+            storageKind
+          );
+        }
+        let toast = 'PDF сформирован.';
+        if (storageKind === 'gdrive' && openUrl) toast += ' Файл в Google Drive.';
+        showWorkspaceToast(toast, 'success');
+        const modal = document.getElementById('modalPsychExport');
+        if (modal) modal.classList.remove('show');
+      } catch (e) {
+        showWorkspaceToast(e.message || String(e), 'error');
+      }
     }
 
     function showErr(el, msg) {
@@ -1702,19 +1869,30 @@
       }
     }
 
+    let psychSessionModalDoc = null;
+
     function showPsychSessionModal(sessionId) {
       const modal = document.getElementById('modalPsychSession');
       const title = document.getElementById('modalPsychSessionTitle');
       const body = document.getElementById('modalPsychSessionBody');
       if (!modal || !body) return;
+      psychSessionModalDoc = null;
+      const linkWrap = document.getElementById('psychSessionReportLinkWrap');
+      if (linkWrap) linkWrap.classList.add('hidden');
       title.textContent = 'Сессия ' + sessionId;
       body.textContent = 'Загрузка…';
       modal.classList.add('show');
       fetchApi('/psychological-testing/sessions/' + encodeURIComponent(sessionId))
         .then((doc) => {
+          psychSessionModalDoc = doc;
           const report = doc.report && doc.report.text_telegram ? doc.report.text_telegram : '';
           const scores = doc.scores ? JSON.stringify(doc.scores, null, 2) : '';
           body.textContent = [report, scores ? '\n--- scores ---\n' + scores : ''].filter(Boolean).join('\n') || JSON.stringify(doc, null, 2);
+          const pdfRef = doc.report && doc.report.pdf_ref;
+          if (pdfRef) {
+            const kind = String(pdfRef).startsWith('gdrive:') ? 'gdrive' : 'local';
+            showPsychArtifactLink('psychSessionReportLinkWrap', 'psychSessionReportLink', pdfRef, kind);
+          }
         })
         .catch((e) => { body.textContent = e.message || String(e); });
     }
@@ -1729,7 +1907,12 @@
         cmdEl.textContent = 'Команды в боте: ' + cmds + '. Сотрудник должен быть привязан к организации (Telegram в карточке сотрудника).';
         if (statusEl) {
           const persist = st.persist_json_enabled ? 'включено' : 'выключено (PSYCH_TESTING_PERSIST_JSON)';
-          statusEl.textContent = 'Сохранение JSON: ' + persist + '. Каталог: ' + (st.sessions_dir || '—') + '. Всего файлов сессий: ' + (st.session_count || 0) + '.';
+          const storage = st.storage_label || (st.gdrive_configured ? 'Google Drive' : (st.gdrive_enabled ? 'Google Drive (не настроено)' : 'локально'));
+          const cache = st.pdf_cache_mode && st.pdf_cache_mode !== 'off' ? st.pdf_cache_mode : 'выкл';
+          statusEl.textContent =
+            'Сохранение JSON: ' + persist + '. Каталог: ' + (st.sessions_dir || '—') +
+            '. Сессий: ' + (st.session_count || 0) + '. PDF-кэш: ' + cache +
+            '. Хранилище отчётов: ' + storage + '.';
         }
       } catch (e) {
         cmdEl.textContent = 'Не удалось загрузить статус модуля: ' + (e.message || e);
@@ -1866,11 +2049,17 @@
             '<td>' + escapeHtml(s.typology_code || '—') + '</td>' +
             '<td>' + escapeHtml(formatPsychDate(s.completed_at || s.started_at)) + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(s.report_preview || '') + '</td>' +
-            '<td><button type="button" class="btn btn-secondary btn-sm btn-psych-detail" data-session-id="' + escapeHtml(s.session_id) + '">Отчёт</button></td>' +
+            '<td style="white-space:nowrap;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-psych-detail" data-session-id="' + escapeHtml(s.session_id) + '">JSON</button> ' +
+              (s.employee_id ? '<button type="button" class="btn btn-primary btn-sm btn-psych-pdf" data-employee-id="' + escapeHtml(s.employee_id) + '" data-employee-name="' + escapeHtml(s.employee_display_name || '') + '">PDF</button>' : '') +
+            '</td>' +
           '</tr>'
         )).join('');
         tbody.querySelectorAll('.btn-psych-detail').forEach((btn) => {
           btn.onclick = () => showPsychSessionModal(btn.dataset.sessionId);
+        });
+        tbody.querySelectorAll('.btn-psych-pdf').forEach((btn) => {
+          btn.onclick = () => openPsychExportModal(btn.dataset.employeeId, btn.dataset.employeeName);
         });
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
@@ -1886,6 +2075,22 @@
     const btnPsychSessionClose = document.getElementById('btnPsychSessionClose');
     if (btnPsychSessionClose) btnPsychSessionClose.onclick = () => {
       const modal = document.getElementById('modalPsychSession');
+      if (modal) modal.classList.remove('show');
+    };
+    const btnPsychSessionExportPdf = document.getElementById('btnPsychSessionExportPdf');
+    if (btnPsychSessionExportPdf) btnPsychSessionExportPdf.onclick = () => {
+      const doc = psychSessionModalDoc;
+      if (!doc || !doc.employee_id) {
+        showWorkspaceToast('Нет employee_id в сессии.', 'error');
+        return;
+      }
+      openPsychExportModal(doc.employee_id, doc.employee_display_name || '');
+    };
+    const btnPsychExportRun = document.getElementById('btnPsychExportRun');
+    if (btnPsychExportRun) btnPsychExportRun.onclick = () => runPsychExportPdf();
+    const btnPsychExportClose = document.getElementById('btnPsychExportClose');
+    if (btnPsychExportClose) btnPsychExportClose.onclick = () => {
+      const modal = document.getElementById('modalPsychExport');
       if (modal) modal.classList.remove('show');
     };
 

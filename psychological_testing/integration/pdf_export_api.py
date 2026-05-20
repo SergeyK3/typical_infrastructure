@@ -1,0 +1,259 @@
+"""
+HR export API helpers: manifest preview, PDF generation, cache (Phase E).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from psychological_testing.integration.manifest_store import (
+    _slug_name,
+    exports_root,
+    manifest_cache_key,
+    pdf_cache_mode,
+    resolve_pdf_ref,
+    save_manifest,
+    save_pdf_cache,
+)
+from psychological_testing.integration.report_storage import (
+    gdrive_enabled,
+    gdrive_upload_manifest_enabled,
+    sync_pdf_ref_to_sessions,
+    upload_manifest_file,
+    upload_pdf_to_drive,
+)
+from psychological_testing.integration.session_repository import (
+    build_session_refs_for_employee,
+    latest_sessions_by_test_for_employee,
+)
+from psychological_testing.shared_engine.pdf_export_service import build_pdf_bytes
+from psychological_testing.shared_engine.report_contract import (
+    DEFAULT_TEMPLATE_ID,
+    SectionRegistry,
+    build_default_manifest,
+    load_section_registry,
+    validate_manifest,
+)
+
+
+def sections_catalog(
+    registry: SectionRegistry | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Sections and templates for workspace UI."""
+    reg = registry or load_section_registry()
+    templates = []
+    for template_id, tpl in reg.templates.items():
+        templates.append(
+            {
+                "template_id": template_id,
+                "title_ru": tpl.title_ru,
+                "program_id": tpl.program_id,
+                "default_sections": [
+                    {
+                        "section_id": d.section_id,
+                        "enabled": d.enabled,
+                        "charts": list(d.charts),
+                        "requires_ai": d.requires_ai,
+                    }
+                    for d in tpl.default_sections
+                ],
+            }
+        )
+    sections = []
+    for section_id, spec in reg.sections.items():
+        sections.append(
+            {
+                "section_id": section_id,
+                "label_ru": spec.label_ru,
+                "test_id": spec.test_id,
+                "order": spec.order,
+                "charts_available": list(spec.charts_available),
+                "ai_slots": list(spec.ai_slots),
+                "cross_test": spec.cross_test,
+                "appendix": spec.appendix,
+            }
+        )
+    return templates, sorted(sections, key=lambda x: x["order"])
+
+
+def available_sessions_payload(
+    employee_id: str,
+    *,
+    client_id: str | None = None,
+) -> list[dict[str, Any]]:
+    latest = latest_sessions_by_test_for_employee(employee_id, client_id=client_id)
+    items: list[dict[str, Any]] = []
+    for test_id, doc in sorted(latest.items()):
+        scores = doc.get("scores") or {}
+        typology = scores.get("typology_code") if isinstance(scores, dict) else None
+        items.append(
+            {
+                "test_id": test_id,
+                "session_id": doc.get("session_id"),
+                "completed_at": doc.get("completed_at"),
+                "employee_display_name": doc.get("employee_display_name"),
+                "typology_code": typology,
+                "has_ai_enrichment": bool(doc.get("ai_enrichment")),
+            }
+        )
+    return items
+
+
+def build_export_manifest(
+    *,
+    client_id: str,
+    employee_id: str,
+    template_id: str = DEFAULT_TEMPLATE_ID,
+    created_by: str | None = None,
+    session_refs: list[dict[str, str]] | None = None,
+    sections: list[dict[str, Any]] | None = None,
+    program_id: str | None = "standard_hr_v1",
+) -> dict[str, Any]:
+    """Build manifest with latest sessions unless ``session_refs`` provided."""
+    reg = load_section_registry()
+    refs = session_refs
+    if not refs:
+        test_ids = [spec.test_id for spec in reg.sections.values() if spec.test_id]
+        refs = build_session_refs_for_employee(
+            employee_id, test_ids, client_id=client_id
+        )
+    manifest = build_default_manifest(
+        client_id=client_id,
+        employee_id=employee_id,
+        template_id=template_id,
+        created_by=created_by,
+        session_refs=refs,
+        registry=reg,
+    )
+    if program_id:
+        manifest["program_id"] = program_id
+    if sections is not None:
+        manifest["sections"] = sections
+    return manifest
+
+
+def export_preview(
+    *,
+    client_id: str,
+    employee_id: str,
+    template_id: str = DEFAULT_TEMPLATE_ID,
+    sections: list[dict[str, Any]] | None = None,
+    session_refs: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    reg = load_section_registry()
+    manifest = build_export_manifest(
+        client_id=client_id,
+        employee_id=employee_id,
+        template_id=template_id,
+        sections=sections,
+        session_refs=session_refs,
+    )
+    validation = validate_manifest(manifest, registry=reg, strict=False)
+    templates, section_list = sections_catalog(reg)
+    return {
+        "manifest": manifest,
+        "validation": {
+            "ok": validation.ok,
+            "errors": list(validation.errors),
+            "warnings": list(validation.warnings),
+        },
+        "templates": templates,
+        "sections_catalog": section_list,
+        "available_sessions": available_sessions_payload(employee_id, client_id=client_id),
+        "pdf_cache_enabled": pdf_cache_mode() not in ("off", "", "0", "false"),
+        "gdrive_enabled": gdrive_enabled(),
+    }
+
+
+def export_employee_pdf(
+    manifest: dict[str, Any],
+    *,
+    employee_display_name: str | None = None,
+    regenerate_ai: bool = False,
+    use_pdf_cache: bool = True,
+    persist_manifest: bool = True,
+) -> dict[str, Any]:
+    """
+    Generate PDF bytes; optionally read/write cache and persist manifest.
+
+    Returns dict with ``pdf_bytes``, ``manifest``, ``pdf_ref``, ``manifest_path``, ``cache_hit``.
+    """
+    reg = load_section_registry()
+    validation = validate_manifest(manifest, registry=reg, strict=False)
+    if not validation.ok:
+        raise ValueError("; ".join(validation.errors))
+
+    cache_hit = False
+    pdf_ref: str | None = None
+    if use_pdf_cache and pdf_cache_mode() in ("hash", "on", "1", "true") and not regenerate_ai:
+        key = manifest_cache_key(manifest)
+        client_id = str(manifest.get("client_id") or "")
+        slug = _slug_name(employee_display_name or str(manifest.get("employee_id") or "emp"))
+        candidate = exports_root() / client_id / f"{slug}_{key}.pdf"
+        if candidate.is_file():
+            pdf_ref_cached = f"data/report_exports/{client_id}/{candidate.name}"
+            return {
+                "pdf_bytes": candidate.read_bytes(),
+                "manifest": manifest,
+                "pdf_ref": pdf_ref_cached,
+                "manifest_path": None,
+                "cache_hit": True,
+            }
+
+    pdf_bytes = build_pdf_bytes(manifest, regenerate_ai=regenerate_ai)
+    manifest_path = None
+    manifest_drive_ref: str | None = None
+    if persist_manifest:
+        saved = save_manifest(manifest, employee_display_name=employee_display_name)
+        manifest_path = str(saved)
+        if gdrive_enabled() and gdrive_upload_manifest_enabled():
+            try:
+                client_id = str(manifest.get("client_id") or "unknown")
+                manifest_drive_ref = upload_manifest_file(saved, client_id=client_id)
+            except Exception as exc:
+                _log_gdrive_upload_warning("manifest", exc)
+
+    pdf_ref = save_pdf_cache(manifest, pdf_bytes, employee_display_name=employee_display_name)
+    if gdrive_enabled():
+        try:
+            client_id = str(manifest.get("client_id") or "unknown")
+            slug = _slug_name(
+                employee_display_name or str(manifest.get("employee_id") or "emp")
+            )
+            manifest_id = str(manifest.get("manifest_id") or "")[:8]
+            filename = f"{slug}_{manifest_id or 'report'}.pdf"
+            pdf_ref = upload_pdf_to_drive(
+                pdf_bytes, filename=filename, client_id=client_id
+            )
+            sync_pdf_ref_to_sessions(manifest, pdf_ref)
+        except Exception as exc:
+            _log_gdrive_upload_warning("pdf", exc)
+
+    return {
+        "pdf_bytes": pdf_bytes,
+        "manifest": manifest,
+        "pdf_ref": pdf_ref,
+        "manifest_path": manifest_path,
+        "manifest_drive_ref": manifest_drive_ref,
+        "cache_hit": cache_hit,
+    }
+
+
+def _log_gdrive_upload_warning(kind: str, exc: Exception) -> None:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "psych_testing: Drive %s upload failed (local cache kept): %s", kind, exc
+    )
+
+
+def load_cached_pdf(pdf_ref: str) -> bytes | None:
+    from psychological_testing.integration.report_storage import download_pdf
+
+    remote = download_pdf(pdf_ref)
+    if remote is not None:
+        return remote
+    path = resolve_pdf_ref(pdf_ref)
+    if path is None:
+        return None
+    return path.read_bytes()

@@ -109,9 +109,14 @@ Phase 3 (Telegram E2E) закрыта. **Phase 3b** — сохранение к�
 
 ### Версионирование
 
-- `schema_version` — формат JSON.
+- `schema_version` — формат JSON (`1.0.0` baseline; `1.1.0` при наличии `ai_enrichment`).
 - `test_version` — из `TestDefinition.version` (пин на старте сессии).
-- Breaking change JSON → `1.1.0`; старые файлы не переписываем.
+- Breaking change JSON → `1.1.0` / `1.2.0`; старые файлы не переписываем.
+
+### Поле `ai_enrichment` (v1.1.0, Phase A PDF export)
+
+Опционально после завершения теста или при HR export. Контракт: [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md) §2.2.  
+Код: `shared_engine/report_contract.py`, `integration/session_persistence.apply_ai_enrichment`.
 
 ---
 
@@ -149,7 +154,9 @@ Phase 4 заменит `persist_session_result` на INSERT в `pt_test_sessions
 
 1. Сохранить JSON (3b).
 2. Telegram — текст из `report.text_telegram`.
-3. Phase 4: `report_builder` → PDF bytes → `pdf_ref` (путь/URL) + кнопка в workspace / опционально `sendDocument`.
+3. Phase 4+: **on-demand PDF** из JSON по manifest (выбор секций HR), графики динамически, AI в `ai_enrichment`.  
+   Контракт и план: **[16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md)**.
+4. `pdf_ref` — опциональный кэш экспорта, **не** источник истины.
 
 ---
 

@@ -10,7 +10,7 @@
 
 | Что | Путь |
 |-----|------|
-| Архитектурные документы (14 файлов) | `docs/hr-os/psychological_testing/` |
+| Архитектурные документы (00–16) | `docs/hr-os/psychological_testing/` |
 | Точка входа модуля | `psychological_testing/README.md` |
 | Research zone | `psychological_testing/research/` |
 | MBTI 16 типов (reference) | `psychological_testing/data/interpretations/v1/mbti_16_types.yaml` |
@@ -170,7 +170,7 @@ Unit-тест: фиксированные ответы → `type_code == "INTJ"`
 ☑ `integration/session_persistence.py` — JSON v1, файлы при `PSYCH_TESTING_PERSIST_JSON=1`  
 ☑ Live DISC + HEXACO на @orgskilldevbot (2026-05-20, chat 7826888928)  
 ☑ `PERSIST_JSON=1` — live: JSON в `data/sessions/v1/2026-05-20/` (hexaco + disc)  
-□ PDF — экспорт из JSON (Phase 4 или поздний 3b)  
+□ PDF — Phase A ✅ + Phase B ✅ (CLI export); Phase C 🔄 AI enrichment — [16](16_PDF_EXPORT_CONTRACT_AND_PLAN.md)  
 
 UX-шаблоны: [06_TELEGRAM_INTEGRATION.md](06_TELEGRAM_INTEGRATION.md)
 
@@ -182,7 +182,7 @@ UX-шаблоны: [06_TELEGRAM_INTEGRATION.md](06_TELEGRAM_INTEGRATION.md)
 
 - `pt_*` ORM + миграции (тот же JSON в `result_json` / нормализованные таблицы)
 - FastAPI router, RBAC (`hr.psych_testing.*`)
-- Workspace UI: сессии, просмотр, export PDF
+- Workspace UI: сессии, просмотр, export PDF (контракт: [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md))
 - Resume сессии после рестарта worker (`pt_telegram_bindings`)
 - Корпоративное хранилище вместо локальных JSON (опционально)
 
@@ -223,6 +223,7 @@ Scoring → `type_code` (4 буквы) → **обязательный lookup** �
 | Telegram голос + кнопки? | [06_TELEGRAM_INTEGRATION.md](06_TELEGRAM_INTEGRATION.md) |
 | MBTI specifics? | [13_MBTI_EXTENSION_POINT.md](13_MBTI_EXTENSION_POINT.md) |
 | Tech debt legacy? | [11_TECHNICAL_DEBT.md](11_TECHNICAL_DEBT.md) |
+| PDF export, секции HR, charts? | [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md) |
 
 ---
 

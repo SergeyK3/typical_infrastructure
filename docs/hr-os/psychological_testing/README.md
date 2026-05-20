@@ -36,6 +36,10 @@
 | 11 | [Technical Debt](11_TECHNICAL_DEBT.md) | Технический долг legacy и migration |
 | 12 | [Risks](12_RISKS.md) | Реестр рисков и митигации |
 | 13 | [MBTI Extension Point](13_MBTI_EXTENSION_POINT.md) | MBTI: 3 Colab-подхода, scoring, research vs production |
+| 14 | [E2E Phase 3 Report](14_E2E_PHASE3_REPORT.md) | Итоги Telegram E2E (@orgskilldevbot) |
+| 15 | [Phase 3b Persistence & HR](15_PHASE3B_PERSISTENCE_AND_HR.md) | JSON-сессии, hr_core, граница Phase 4 |
+| 16 | **[PDF Export Contract & Plan](16_PDF_EXPORT_CONTRACT_AND_PLAN.md)** | **On-demand PDF, секции HR, charts, AI cache, план разработки** |
+| 17 | **[Google Drive Storage](17_GDRIVE_STORAGE.md)** | **Service account upload, `pdf_ref` gdrive:** |
 
 ---
 
@@ -49,7 +53,9 @@
 | **scoring_type** | Стратегия подсчёта (`likert_sum`, `dichotomy_weighted_choice`, …) |
 | **answer_resolver** | Детерминированный mapping transcript → structured answer |
 | **research/** | Зона экспериментов; не production без promotion checklist |
-| **pt_*** | Префикс таблиц модуля (future, mirror `sa_*`) |
+| **pt_report_manifest** | Настройки одного HR-экспорта PDF: template, выбранные секции, session_refs |
+| **ai_enrichment** | Кэш AI-narrative в session JSON; PDF только отображает |
+| **section registry** | Декларативный YAML: id секций, test_id, доступные charts и AI slots |
 
 ---
 
@@ -60,6 +66,7 @@
 3. Telegram UX: **текстовый вопрос** + **inline-кнопки** + явная подсказка «можно ответить голосом»; inbound: голос (primary), кнопка или текст (fallback).
 4. Scoring — **детерминированный**; LLM не используется для mapping ответа в score.
 5. MBTI — test plugin; вывод **16 типов**; логика из Colab → **Python scripts** → `shared_engine/`.
+6. PDF — **on-demand export** из JSON; выбор секций HR; графики динамически — [16](16_PDF_EXPORT_CONTRACT_AND_PLAN.md).
 
 ---
 

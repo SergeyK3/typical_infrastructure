@@ -1,0 +1,104 @@
+# Section registry for on-demand PDF export (contract v1).
+# See docs/hr-os/psychological_testing/16_PDF_EXPORT_CONTRACT_AND_PLAN.md
+
+schema_version: "1.0.0"
+
+templates:
+  legacy_team_assessment_v1:
+    title_ru: "Оценка командных навыков"
+    registry_version: "1.0.0"
+    program_id: standard_hr_v1
+    default_sections:
+      - section_id: cover
+        enabled: true
+      - section_id: general_summary
+        enabled: true
+        requires_ai: true
+      - section_id: mbti
+        enabled: true
+        charts: [decision_tree, axis_bars]
+      - section_id: soft_skills
+        enabled: true
+        charts: [radar]
+      - section_id: hexaco
+        enabled: true
+        charts: [radar]
+      - section_id: disc
+        enabled: true
+        charts: [combined]
+      - section_id: paei
+        enabled: true
+        charts: [combined]
+      - section_id: career_recommendations
+        enabled: true
+        requires_ai: true
+      - section_id: appendix_qa
+        enabled: false
+
+sections:
+  cover:
+    label_ru: "Титульная страница"
+    test_id: null
+    order: 0
+    charts_available: []
+    ai_slots: []
+
+  general_summary:
+    label_ru: "Общее заключение и рекомендации"
+    test_id: null
+    order: 5
+    cross_test: true
+    charts_available: []
+    ai_slots: [general_summary]
+
+  mbti:
+    label_ru: "MBTI — тип личности"
+    test_id: mbti
+    order: 10
+    charts_available: [decision_tree, axis_bars, type_matrix]
+    ai_slots: [interpretation]
+    static_source: interpretation.profile
+
+  soft_skills:
+    label_ru: "Soft Skills — мягкие навыки"
+    test_id: soft_skills
+    order: 20
+    charts_available: [radar]
+    ai_slots: [interpretation]
+
+  hexaco:
+    label_ru: "HEXACO — модель личности"
+    test_id: hexaco
+    order: 30
+    charts_available: [radar]
+    ai_slots: [interpretation]
+
+  disc:
+    label_ru: "DISC — модель поведения"
+    test_id: disc
+    order: 40
+    charts_available: [combined]
+    ai_slots: [interpretation]
+
+  paei:
+    label_ru: "Тест Адизеса (PAEI)"
+    test_id: paei
+    order: 50
+    charts_available: [combined]
+    ai_slots: [interpretation]
+
+  career_recommendations:
+    label_ru: "Рекомендации по профессиональному развитию"
+    test_id: null
+    order: 60
+    cross_test: true
+    charts_available: []
+    ai_slots: [career_recommendations]
+
+  appendix_qa:
+    label_ru: "Приложение: детализация вопросов и ответов"
+    test_id: null
+    order: 90
+    appendix: true
+    charts_available: []
+    ai_slots: []

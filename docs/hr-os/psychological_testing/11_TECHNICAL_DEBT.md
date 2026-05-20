@@ -34,7 +34,7 @@
 
 | # | Issue | Location | Impact | Remediation |
 |---|-------|----------|--------|-------------|
-| D11 | Monolithic PDF (951 lines) | `enhanced_pdf_report_v2.py` | Hard to extend | Split report_builder sections |
+| D11 | Monolithic PDF (951 lines) | `enhanced_pdf_report_v2.py` | Hard to extend | Модульные section renderers — [16](16_PDF_EXPORT_CONTRACT_AND_PLAN.md) |
 | D12 | Naming: disk_ vs disc_ | prompts, files | Confusion | Rename to disc_ everywhere |
 | D13 | Missing report_template.docx | referenced in cli_main | Broken CLI path | Remove or add template |
 | D14 | ~200 archived scripts | archive/, tests/archived/ | Noise | Do not migrate |

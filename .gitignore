@@ -28,3 +28,10 @@ htmlcov/
 
 # Logs
 *.log
+
+# Psych testing — local runtime artifacts (not versioned)
+psychological_testing/pdf samples/
+psychological_testing/data/sessions/v1/20*/
+psychological_testing/data/report_exports/
+.psych_testing_telegram_worker.pid
+logs/

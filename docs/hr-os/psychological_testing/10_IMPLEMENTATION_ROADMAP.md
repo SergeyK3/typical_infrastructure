@@ -131,14 +131,14 @@ gantt
 - [ ] Wire voice_pipeline to OpenAI Whisper (or mock)
 - [ ] answer_resolver per test with voice patterns
 - [ ] AI summary slot via gateway stub
-- [ ] Report PDF generation (port enhanced_pdf_report_v2 patterns)
+- [ ] Report PDF generation — **не** монолит legacy; см. [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md) (JSON → manifest → charts → PDF)
 
 ### Exit criteria
 
 - Full test session via Telegram: text + buttons + voice hint → voice OR button answer
 - STT misrecognition triggers reprompt with buttons
 - Employee binding via telegram_id
-- PDF report delivered on completion
+- PDF export on HR request from session JSON (Telegram: text only; full PDF — RBAC export)
 
 ---
 
@@ -159,7 +159,8 @@ gantt
 - [ ] Activate workspace tab (unmute sidebar)
 - [ ] Org test assignment workflow
 - [ ] Audit log integration
-- [ ] Platform storage for PDFs
+- [x] Google Drive upload (service account, env switch) — [17](17_GDRIVE_STORAGE.md)
+- [ ] Platform DB storage for sessions (source of truth = JSON until Phase 4) — [08](08_RBAC_STORAGE_VERSIONING.md)
 
 ### Exit criteria
 

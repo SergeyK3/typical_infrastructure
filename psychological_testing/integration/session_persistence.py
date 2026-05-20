@@ -24,9 +24,16 @@ from psychological_testing.research.mbti.scripts.akma_dialog_engine import AkmaD
 from psychological_testing.shared_engine.interpretation_engine import InterpretationResult
 from psychological_testing.shared_engine.session_state_machine import SessionEngine
 
+from psychological_testing.shared_engine.report_contract import (
+    AI_ENRICHMENT_SCHEMA_VERSION,
+    merge_ai_enrichment,
+    validate_ai_enrichment,
+)
+
 _log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "1.0.0"
+SESSION_SCHEMA_VERSION_WITH_AI = "1.1.0"
 
 
 def _utc_now() -> datetime:
@@ -178,6 +185,45 @@ def build_session_result_document(
     return doc
 
 
+def apply_ai_enrichment(
+    document: dict[str, Any],
+    enrichment: dict[str, Any],
+    *,
+    merge_sections: bool = True,
+) -> dict[str, Any]:
+    """Return session document with merged ``ai_enrichment`` (schema v1.1)."""
+    return merge_ai_enrichment(
+        document,
+        enrichment,
+        merge_sections=merge_sections,
+    )
+
+
+def update_session_ai_enrichment(
+    session_id: str,
+    enrichment: dict[str, Any],
+    *,
+    merge_sections: bool = True,
+) -> Path | None:
+    """
+    Load persisted session JSON, merge ``ai_enrichment``, write back.
+
+    Returns path when ``PSYCH_TESTING_PERSIST_JSON=1``, else None.
+    """
+    from psychological_testing.integration.session_repository import get_session_document
+
+    doc = get_session_document(session_id)
+    if doc is None:
+        raise KeyError(f"session not found: {session_id}")
+    updated = apply_ai_enrichment(doc, enrichment, merge_sections=merge_sections)
+    return persist_session_result(updated)
+
+
+def validate_session_ai_enrichment(enrichment: dict[str, Any]) -> tuple[bool, tuple[str, ...]]:
+    """Validate ``ai_enrichment`` block against contract v1."""
+    return validate_ai_enrichment(enrichment)
+
+
 def persist_session_result(document: dict[str, Any]) -> Path | None:
     """
     Phase 3b: write JSON file under ``data/sessions/v1/YYYY-MM-DD/{session_id}.json``.
@@ -194,4 +240,49 @@ def persist_session_result(document: dict[str, Any]) -> Path | None:
     path = out_dir / f"{session_id}.json"
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
     _log.info("psych_testing: session result saved %s", path)
+    _maybe_upload_session_to_drive(document, path)
     return path
+
+
+def _maybe_upload_session_to_drive(document: dict[str, Any], local_path: Path) -> None:
+    from psychological_testing.integration.report_storage import (
+        gdrive_upload_sessions_enabled,
+        upload_json_to_drive,
+    )
+
+    if not gdrive_upload_sessions_enabled():
+        return
+    try:
+        client_id = str(document.get("client_id") or "unknown")
+        session_id = str(document.get("session_id") or local_path.stem)
+        completed = str(document.get("completed_at") or "")[:10]
+        ref = upload_json_to_drive(
+            document,
+            filename=f"{session_id}.json",
+            client_id=client_id,
+            day=completed or None,
+        )
+        report = document.get("report")
+        if not isinstance(report, dict):
+            report = {}
+            document["report"] = report
+        report["session_json_drive_ref"] = ref
+        local_path.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        _log.warning("psych_testing: session Drive upload failed: %s", exc)
+
+
+__all__ = [
+    "AI_ENRICHMENT_SCHEMA_VERSION",
+    "SCHEMA_VERSION",
+    "SESSION_SCHEMA_VERSION_WITH_AI",
+    "apply_ai_enrichment",
+    "build_session_result_document",
+    "persist_json_enabled",
+    "persist_session_result",
+    "sessions_dir",
+    "update_session_ai_enrichment",
+    "validate_session_ai_enrichment",
+]

@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.1.0",
+  "description": "Example ai_enrichment block for session JSON v1.1",
+  "ai_enrichment": {
+    "schema_version": "1.0.0",
+    "generated_at": "2026-05-20T10:00:00+00:00",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "prompt_version": "paei_interpretation_v1",
+    "sections": {
+      "interpretation": "На основе ответов клиента преобладает роль Администратор (A)…"
+    },
+    "usage": {
+      "input_tokens": 420,
+      "output_tokens": 430
+    }
+  }
+}

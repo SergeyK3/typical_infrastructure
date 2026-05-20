@@ -182,6 +182,8 @@ dichotomy_scorer → type_code
     → optional AI summary (prompt includes type_code + axis levels)
 ```
 
+PDF-секция MBTI (charts, manifest, on-demand export): [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md) §5.2–5.3.
+
 Core engine **не хранит** 16 описаний — только validates `type_code`; контент в `tests/mbti/` + `data/interpretations/v1/`.
 
 ### 3.8. Telegram UX for MBTI

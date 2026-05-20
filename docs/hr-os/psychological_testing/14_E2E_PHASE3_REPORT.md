@@ -57,7 +57,7 @@ HEXACO: blind intro (без названий факторов) + вопросы 
 3. Smoke-check перед dev: `scripts/skill_assessment/telegram_bot_smoke_check.py` (conflict getUpdates).
 4. ~~`PSYCH_TESTING_PERSIST_JSON=1` + запись JSON~~ — live ✅ (hexaco + disc).
 5. `integration/hr_core.py` — уникальный `Employee` на `telegram_id` (сейчас warning при дублях).
-6. PDF-отчёт в Telegram (порт legacy `enhanced_pdf`).
+6. PDF-отчёт по запросу HR из JSON (не legacy monolith) — [16_PDF_EXPORT_CONTRACT_AND_PLAN.md](16_PDF_EXPORT_CONTRACT_AND_PLAN.md).
 
 ---
 
