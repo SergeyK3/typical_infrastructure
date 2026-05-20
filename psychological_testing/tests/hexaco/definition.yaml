@@ -1,0 +1,22 @@
+# HEXACO plugin (Phase 2) — 6 factors, 1 item each (legacy bot parity)
+test_id: hexaco
+version: "1.0.0"
+scoring_type: likert_sum
+display_name: "HEXACO"
+
+item_bank: data/banks/v1/hexaco_items.csv
+scales: [H, E, X, A, C, O]
+response_scale:
+  min: 1
+  max: 5
+
+scoring:
+  max_val: 5
+
+normalization:
+  method: average_per_scale
+
+channel:
+  question_format: likert_buttons
+  voice_hint: true
+  allowed_inputs: [voice, button, text]

@@ -1,0 +1,53 @@
+# MBTI test plugin (Phase 1 + dialog backup)
+# See docs/hr-os/psychological_testing/13_MBTI_EXTENSION_POINT.md
+
+test_id: mbti
+version: "1.0.0"
+scoring_type: dichotomy_weighted_choice
+display_name: "MBTI (structured)"
+
+# Default delivery for /start mbti — override via PSYCH_TESTING_MBTI_DELIVERY_MODE
+# Explicit: /start mbti_structured | /start mbti_dialog
+delivery_mode: structured
+
+delivery_modes:
+  structured:
+    display_name: "MBTI (структурированный)"
+    channel:
+      question_format: text_with_buttons
+      allowed_inputs: [voice, button, text]
+  dialog:
+    display_name: "MBTI (диалог с Акма)"
+    research: true
+    channel:
+      question_format: free_text_dialog
+      allowed_inputs: [voice, text]
+    ai:
+      roles: [akma, eval, report]
+      note: "LLM in loop — backup UX; cost tracking via llm_calls in session metadata"
+
+item_bank: data/banks/v1/mbti_items.yaml
+interpretation: data/interpretations/v1/mbti_16_types.yaml
+
+channel:
+  question_format: text_with_buttons
+  voice_hint: true
+  allowed_inputs: [voice, button, text]
+
+selection:
+  questions_per_axis: 4
+  max_per_axis: 12
+  sort_by: weight_desc
+  shuffle_axes: true
+  seed: 42
+
+scoring:
+  tie_break: first_pole
+  expression_levels: [0.3, 0.7]
+
+normalization:
+  method: none
+
+ai:
+  role: summary_only
+  prompt: data/prompts/v1/mbti_summary.txt

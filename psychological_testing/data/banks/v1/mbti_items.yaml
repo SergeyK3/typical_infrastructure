@@ -1,0 +1,487 @@
+# MBTI item bank v1 — exported from Colab notebook 1
+# Items: 48 (12 per axis × 4 axes)
+version: 1.0.0
+test_id: mbti
+lang: ru
+source_notebook: research/mbti/colab/structured_questions_scoring.ipynb
+items:
+- id: mbti_ei_001
+  axis: E/I
+  text: При знакомстве с новой командой вы…
+  option_a:
+    text: быстро завожу контакты
+    pole: E
+  option_b:
+    text: сначала наблюдаю со стороны
+    pole: I
+  weight: 3
+- id: mbti_ei_002
+  axis: E/I
+  text: После напряжённого рабочего дня вы…
+  option_a:
+    text: хочу пообщаться с другими
+    pole: E
+  option_b:
+    text: предпочитаю побыть наедине
+    pole: I
+  weight: 3
+- id: mbti_ei_003
+  axis: E/I
+  text: В проектной работе вам ближе…
+  option_a:
+    text: часто взаимодействовать и обмениваться идеями
+    pole: E
+  option_b:
+    text: работать сосредоточенно и самостоятельно
+    pole: I
+  weight: 3
+- id: mbti_ei_004
+  axis: E/I
+  text: На корпоративных мероприятиях вы…
+  option_a:
+    text: легко знакомлюсь и общаюсь
+    pole: E
+  option_b:
+    text: держусь ближе к знакомым или остаюсь в стороне
+    pole: I
+  weight: 3
+- id: mbti_ei_005
+  axis: E/I
+  text: На рабочем совещании вы скорее…
+  option_a:
+    text: активно включаюсь и делюсь идеями
+    pole: E
+  option_b:
+    text: предпочитаю слушать и обдумывать
+    pole: I
+  weight: 2
+- id: mbti_ei_006
+  axis: E/I
+  text: Когда появляется новая задача, вы…
+  option_a:
+    text: обсуждаю её с коллегами
+    pole: E
+  option_b:
+    text: сначала обдумываю её сам
+    pole: I
+  weight: 2
+- id: mbti_ei_007
+  axis: E/I
+  text: Во время обсуждений вы…
+  option_a:
+    text: думаю вслух и делюсь на ходу
+    pole: E
+  option_b:
+    text: предпочитаю высказываться после раздумий
+    pole: I
+  weight: 2
+- id: mbti_ei_008
+  axis: E/I
+  text: В командных проектах вы…
+  option_a:
+    text: быстро предлагаю решения
+    pole: E
+  option_b:
+    text: предпочитаю выслушать всех, а потом говорить
+    pole: I
+  weight: 2
+- id: mbti_ei_009
+  axis: E/I
+  text: При решении сложной задачи вы…
+  option_a:
+    text: обсуждаю её с командой
+    pole: E
+  option_b:
+    text: анализирую в одиночку
+    pole: I
+  weight: 2
+- id: mbti_ei_010
+  axis: E/I
+  text: В перерыве на работе вы…
+  option_a:
+    text: общаюсь с коллегами
+    pole: E
+  option_b:
+    text: провожу время в одиночестве
+    pole: I
+  weight: 1
+- id: mbti_ei_011
+  axis: E/I
+  text: Когда нужно быстро принять решение, вы…
+  option_a:
+    text: советуюсь с коллегами
+    pole: E
+  option_b:
+    text: полагаюсь на собственные мысли
+    pole: I
+  weight: 1
+- id: mbti_ei_012
+  axis: E/I
+  text: В общении с клиентом вы…
+  option_a:
+    text: легко вступаю в диалог
+    pole: E
+  option_b:
+    text: сначала прислушиваюсь, потом говорю
+    pole: I
+  weight: 1
+- id: mbti_sn_001
+  axis: S/N
+  text: В отчётах и документах вы обращаете внимание…
+  option_a:
+    text: на детали и факты
+    pole: S
+  option_b:
+    text: на общую картину и тенденции
+    pole: N
+  weight: 3
+- id: mbti_sn_002
+  axis: S/N
+  text: Когда обсуждается проект, вам ближе…
+  option_a:
+    text: конкретные факты и задачи
+    pole: S
+  option_b:
+    text: будущее и инновации
+    pole: N
+  weight: 3
+- id: mbti_sn_003
+  axis: S/N
+  text: В проекте вы предпочитаете…
+  option_a:
+    text: работать с фактами и реальными результатами
+    pole: S
+  option_b:
+    text: формировать идеи и концепции
+    pole: N
+  weight: 3
+- id: mbti_sn_004
+  axis: S/N
+  text: На совещаниях вы чаще…
+  option_a:
+    text: обсуждаете детали выполнения
+    pole: S
+  option_b:
+    text: говорите о целях и стратегии
+    pole: N
+  weight: 3
+- id: mbti_sn_005
+  axis: S/N
+  text: При изучении новой рабочей задачи вы…
+  option_a:
+    text: предпочитаете пошаговые инструкции
+    pole: S
+  option_b:
+    text: ищете общие идеи и подходы
+    pole: N
+  weight: 3
+- id: mbti_sn_006
+  axis: S/N
+  text: При планировании проекта вы…
+  option_a:
+    text: думаете о конкретных шагах
+    pole: S
+  option_b:
+    text: представляете возможные сценарии
+    pole: N
+  weight: 2
+- id: mbti_sn_007
+  axis: S/N
+  text: В обучении вам проще усвоить…
+  option_a:
+    text: примеры и практику
+    pole: S
+  option_b:
+    text: теории и концепции
+    pole: N
+  weight: 2
+- id: mbti_sn_008
+  axis: S/N
+  text: Обсуждая задачу, вы…
+  option_a:
+    text: держитесь ближе к фактам
+    pole: S
+  option_b:
+    text: рассуждаете образами и возможностями
+    pole: N
+  weight: 2
+- id: mbti_sn_009
+  axis: S/N
+  text: В командной работе вы цените…
+  option_a:
+    text: чёткие инструкции и опыт
+    pole: S
+  option_b:
+    text: новые идеи и креативность
+    pole: N
+  weight: 2
+- id: mbti_sn_010
+  axis: S/N
+  text: В работе с данными вы…
+  option_a:
+    text: цените точность и детали
+    pole: S
+  option_b:
+    text: ищете закономерности и скрытые связи
+    pole: N
+  weight: 2
+- id: mbti_sn_011
+  axis: S/N
+  text: При выборе инструмента или программы вы…
+  option_a:
+    text: смотрите на характеристики и надёжность
+    pole: S
+  option_b:
+    text: думаете о том, как можно использовать
+    pole: N
+  weight: 1
+- id: mbti_sn_012
+  axis: S/N
+  text: Если нужно придумать решение, вы…
+  option_a:
+    text: берёте проверенные методы
+    pole: S
+  option_b:
+    text: экспериментируете с новыми подходами
+    pole: N
+  weight: 1
+- id: mbti_tf_001
+  axis: T/F
+  text: При обсуждении идей вы…
+  option_a:
+    text: оцениваете логику и факты
+    pole: T
+  option_b:
+    text: учитываете эмоции и отношения
+    pole: F
+  weight: 3
+- id: mbti_tf_002
+  axis: T/F
+  text: В конфликтной ситуации вы…
+  option_a:
+    text: настаиваю на логике и правилах
+    pole: T
+  option_b:
+    text: стараюсь сохранить отношения
+    pole: F
+  weight: 3
+- id: mbti_tf_003
+  axis: T/F
+  text: В проектной работе вы больше цените…
+  option_a:
+    text: эффективность и результат
+    pole: T
+  option_b:
+    text: атмосферу и гармонию в команде
+    pole: F
+  weight: 3
+- id: mbti_tf_004
+  axis: T/F
+  text: При оценке решений вы…
+  option_a:
+    text: основываюсь на логике и данных
+    pole: T
+  option_b:
+    text: думаю о влиянии на людей
+    pole: F
+  weight: 3
+- id: mbti_tf_005
+  axis: T/F
+  text: Будучи лидером, вы…
+  option_a:
+    text: ориентируетесь на задачи и цели
+    pole: T
+  option_b:
+    text: заботитесь о людях и атмосфере
+    pole: F
+  weight: 3
+- id: mbti_tf_006
+  axis: T/F
+  text: Когда нужно дать обратную связь, вы…
+  option_a:
+    text: говорю прямо и конкретно
+    pole: T
+  option_b:
+    text: стараюсь смягчить формулировки
+    pole: F
+  weight: 2
+- id: mbti_tf_007
+  axis: T/F
+  text: Коллеги ценят во мне…
+  option_a:
+    text: объективность и рациональность
+    pole: T
+  option_b:
+    text: поддержку и умение слушать
+    pole: F
+  weight: 2
+- id: mbti_tf_008
+  axis: T/F
+  text: При разработке правил в команде вы…
+  option_a:
+    text: делаю их едиными и справедливыми
+    pole: T
+  option_b:
+    text: допускаю исключения ради людей
+    pole: F
+  weight: 2
+- id: mbti_tf_009
+  axis: T/F
+  text: Когда коллега совершает ошибку, вы…
+  option_a:
+    text: указываю на факт и исправление
+    pole: T
+  option_b:
+    text: сначала поддерживаю его
+    pole: F
+  weight: 2
+- id: mbti_tf_010
+  axis: T/F
+  text: В принятии решений вы скорее…
+  option_a:
+    text: выбираю то, что логичнее
+    pole: T
+  option_b:
+    text: выбираю то, что ближе по чувствам
+    pole: F
+  weight: 2
+- id: mbti_tf_011
+  axis: T/F
+  text: Когда в команде спор, вы…
+  option_a:
+    text: отстаиваю аргументы
+    pole: T
+  option_b:
+    text: ищу компромисс
+    pole: F
+  weight: 2
+- id: mbti_tf_012
+  axis: T/F
+  text: При найме нового коллеги вы…
+  option_a:
+    text: оцениваю опыт и компетенции
+    pole: T
+  option_b:
+    text: смотрю на ценности и отношения
+    pole: F
+  weight: 2
+- id: mbti_jp_001
+  axis: J/P
+  text: При выполнении задач вы…
+  option_a:
+    text: стараюсь закончить заранее
+    pole: J
+  option_b:
+    text: могу откладывать до последнего
+    pole: P
+  weight: 3
+- id: mbti_jp_002
+  axis: J/P
+  text: В дедлайнах вы…
+  option_a:
+    text: предпочитаю завершить заранее
+    pole: J
+  option_b:
+    text: работаю в последний момент
+    pole: P
+  weight: 3
+- id: mbti_jp_003
+  axis: J/P
+  text: В работе над проектом вы…
+  option_a:
+    text: заранее планирую и структурирую
+    pole: J
+  option_b:
+    text: действую гибко и по ситуации
+    pole: P
+  weight: 3
+- id: mbti_jp_004
+  axis: J/P
+  text: При выборе решения вы…
+  option_a:
+    text: быстро фиксирую план
+    pole: J
+  option_b:
+    text: оставляю варианты открытыми
+    pole: P
+  weight: 3
+- id: mbti_jp_005
+  axis: J/P
+  text: Планируя рабочую неделю, вы…
+  option_a:
+    text: составляю список задач и следую ему
+    pole: J
+  option_b:
+    text: действую по обстоятельствам
+    pole: P
+  weight: 3
+- id: mbti_jp_006
+  axis: J/P
+  text: В командных проектах вы…
+  option_a:
+    text: любите чёткие планы
+    pole: J
+  option_b:
+    text: предпочитаете импровизацию
+    pole: P
+  weight: 2
+- id: mbti_jp_007
+  axis: J/P
+  text: Когда работа в процессе, вы…
+  option_a:
+    text: довожу дело до конца
+    pole: J
+  option_b:
+    text: открываю новые задачи параллельно
+    pole: P
+  weight: 2
+- id: mbti_jp_008
+  axis: J/P
+  text: В организации рабочего места вы…
+  option_a:
+    text: предпочитаю порядок
+    pole: J
+  option_b:
+    text: спокойно отношусь к хаосу
+    pole: P
+  weight: 2
+- id: mbti_jp_009
+  axis: J/P
+  text: При обучении новому вы…
+  option_a:
+    text: следую структуре и плану
+    pole: J
+  option_b:
+    text: двигаюсь гибко, пробую разное
+    pole: P
+  weight: 2
+- id: mbti_jp_010
+  axis: J/P
+  text: В работе с командой вам ближе…
+  option_a:
+    text: стабильные процессы
+    pole: J
+  option_b:
+    text: свобода и адаптивность
+    pole: P
+  weight: 2
+- id: mbti_jp_011
+  axis: J/P
+  text: Когда планы меняются, вы…
+  option_a:
+    text: перестраиваю расписание
+    pole: J
+  option_b:
+    text: адаптируюсь на ходу
+    pole: P
+  weight: 2
+- id: mbti_jp_012
+  axis: J/P
+  text: В командных встречах вы…
+  option_a:
+    text: ценю организованность
+    pole: J
+  option_b:
+    text: ценю спонтанность и свободу
+    pole: P
+  weight: 2

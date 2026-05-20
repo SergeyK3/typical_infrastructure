@@ -1,0 +1,16 @@
+# PAEI (Adizes) — forced choice per question (Telegram bot parity)
+test_id: paei
+version: "1.0.0"
+scoring_type: forced_choice_count
+display_name: "PAEI (Adizes)"
+
+item_bank: data/banks/v1/paei_items.yaml
+scales: [P, A, E, I]
+
+normalization:
+  method: percentage_of_total
+
+channel:
+  question_format: forced_choice_buttons
+  voice_hint: true
+  allowed_inputs: [voice, button, text]

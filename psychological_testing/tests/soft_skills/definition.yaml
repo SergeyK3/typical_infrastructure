@@ -1,0 +1,34 @@
+# Soft Skills plugin (Phase 2) — one Likert score per dimension
+test_id: soft_skills
+version: "1.0.0"
+scoring_type: likert_per_dimension
+display_name: "Soft Skills"
+
+item_bank: data/banks/v1/soft_skills_items.yaml
+scales:
+  - communication
+  - teamwork
+  - leadership
+  - critical_thinking
+  - time_management
+  - stress_resilience
+  - criticism_receptivity
+  - adaptability
+  - problem_solving
+  - creativity
+
+response_scale:
+  min: 1
+  max: 5
+
+scoring:
+  min_val: 1
+  max_val: 5
+
+normalization:
+  method: none
+
+channel:
+  question_format: likert_buttons
+  voice_hint: true
+  allowed_inputs: [voice, button, text]

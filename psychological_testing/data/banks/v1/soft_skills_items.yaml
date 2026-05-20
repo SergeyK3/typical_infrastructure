@@ -1,0 +1,46 @@
+# Soft Skills item bank v1 — Likert-утверждения (согласие 1–5)
+version: 1.0.0
+test_id: soft_skills
+lang: ru
+source_prompt: data/prompts/soft_user.txt
+items:
+  - id: soft_001
+    dimension: communication
+    skill: Коммуникация
+    text: "Я умею простыми словами объяснять сложные вещи людям без специальной подготовки."
+  - id: soft_002
+    dimension: teamwork
+    skill: Работа в команде
+    text: "Я помогаю команде договориться о ролях и общей цели."
+  - id: soft_003
+    dimension: leadership
+    skill: Лидерство
+    text: "Я беру на себя ответственность за результат команды, когда это нужно."
+  - id: soft_004
+    dimension: critical_thinking
+    skill: Критическое мышление
+    text: "Перед решением я проверяю факты и отделяю мнения от данных."
+  - id: soft_005
+    dimension: time_management
+    skill: Управление временем
+    text: "Я планирую день так, что успеваю сделать главное в срок."
+  - id: soft_006
+    dimension: stress_resilience
+    skill: Стрессоустойчивость
+    text: "В напряжённых ситуациях на работе я сохраняю работоспособность."
+  - id: soft_007
+    dimension: criticism_receptivity
+    skill: Восприимчивость к критике
+    text: "Я спокойно воспринимаю конструктивную критику и использую её для улучшений."
+  - id: soft_008
+    dimension: adaptability
+    skill: Адаптивность
+    text: "Я быстро перестраиваюсь, когда планы резко меняются."
+  - id: soft_009
+    dimension: problem_solving
+    skill: Решение проблем
+    text: "Я помогаю коллегам находить компромисс при разногласиях."
+  - id: soft_010
+    dimension: creativity
+    skill: Креативность
+    text: "Я предлагаю нестандартные варианты, когда привычные решения не работают."

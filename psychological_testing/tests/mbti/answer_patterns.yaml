@@ -1,0 +1,7 @@
+# Voice/text resolver hints for MBTI (see shared_engine/answer_resolver.py)
+test_id: mbti
+patterns:
+  exact_a: ["a", "а", "1"]
+  exact_b: ["b", "б", "2"]
+  spoken_a: ["вариант а", "первый", "первая", "один"]
+  spoken_b: ["вариант б", "второй", "вторая", "два"]

@@ -1,0 +1,22 @@
+# DISC plugin (Phase 2) — short 4-item bank from legacy CSV
+test_id: disc
+version: "1.0.0"
+scoring_type: likert_sum
+display_name: "DISC"
+
+item_bank: data/banks/v1/disc_items.csv
+scales: [D, I, S, C]
+response_scale:
+  min: 1
+  max: 5
+
+scoring:
+  max_val: 5
+
+normalization:
+  method: average_per_scale
+
+channel:
+  question_format: likert_buttons
+  voice_hint: true
+  allowed_inputs: [voice, button, text]

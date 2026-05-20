@@ -1,0 +1,8 @@
+# Voice/text resolver hints for PAEI (see shared_engine/answer_resolver.py)
+test_id: paei
+patterns:
+  exact:
+    P: ["p", "п", "производитель"]
+    A: ["a", "а", "администратор"]
+    E: ["e", "е", "предприниматель", "энтузиаст"]
+    I: ["i", "и", "интегратор"]

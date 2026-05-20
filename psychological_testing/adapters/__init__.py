@@ -1,0 +1,1 @@
+"""Outbound channel adapters (Telegram)."""

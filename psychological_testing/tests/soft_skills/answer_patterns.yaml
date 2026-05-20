@@ -1,0 +1,10 @@
+# Voice/text resolver hints for Soft Skills Likert 1–5
+test_id: soft_skills
+patterns:
+  exact: ["1", "2", "3", "4", "5"]
+  spoken:
+    - ["один", "первый", "1"]
+    - ["два", "второй", "2"]
+    - ["три", "третий", "3"]
+    - ["четыре", "четвертый", "4"]
+    - ["пять", "пятый", "5"]
