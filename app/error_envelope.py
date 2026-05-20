@@ -28,6 +28,12 @@ _ERROR_MESSAGES: dict[str, str] = {
     "wizard_not_found": "Мастер onboarding не найден.",
     "client_mismatch": "Несоответствие клиента.",
     "invalid_role_codes": "Указаны несуществующие коды ролей.",
+    "telegram_chat_not_found": (
+        "Telegram не нашёл чат сотрудника. Пусть сотрудник напишет вашему боту /start, "
+        "затем укажите в карточке числовой chat_id (как в логах worker), не @username."
+    ),
+    "employee_no_telegram": "У сотрудника не заполнено поле Telegram в карточке.",
+    "telegram_bot_token_missing": "Не задан TELEGRAM_BOT_TOKEN в .env.",
 }
 
 

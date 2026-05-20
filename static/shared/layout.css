@@ -140,4 +140,36 @@ a:hover { text-decoration: underline; }
 .data-table th, .data-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
 .data-table th { color: var(--text-muted); font-weight: 500; }
 .meta { color: var(--text-muted); font-size: 0.9rem; }
+
+/* In-app toast (workspace / HR UI) */
+.workspace-toast-host {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+.workspace-toast {
+  pointer-events: auto;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text);
+  animation: workspace-toast-in 0.2s ease-out;
+}
+.workspace-toast--success { border-left: 3px solid var(--success); }
+.workspace-toast--error { border-left: 3px solid var(--error); }
+.workspace-toast--info { border-left: 3px solid var(--accent); }
+@keyframes workspace-toast-in {
+  from { opacity: 0; transform: translateY(-0.35rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .err { color: var(--error); font-size: 0.9rem; }

@@ -123,6 +123,7 @@ def build_session_result_document(
     report_text: str,
     employee_display_name: str | None = None,
     delivery_mode: str = "structured",
+    assignment_id: str | None = None,
 ) -> dict[str, Any]:
     """Build canonical ``pt_session_result`` v1 dict (not yet persisted)."""
     session: TestSession = engine.session
@@ -147,7 +148,7 @@ def build_session_result_document(
     audit = _audit_block()
     audit["engine"] = engine_kind
 
-    return {
+    doc: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "session_id": session.session_id,
         "client_id": session.client_id,
@@ -172,6 +173,9 @@ def build_session_result_document(
         "dialog_akma": dialog_akma,
         "audit": audit,
     }
+    if assignment_id:
+        doc["assignment_id"] = assignment_id
+    return doc
 
 
 def persist_session_result(document: dict[str, Any]) -> Path | None:

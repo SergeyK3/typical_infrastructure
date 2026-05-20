@@ -102,7 +102,19 @@
   const disconnectedHrModuleClass = 'sidebar-item-muted sidebar-item-disabled';
 
   const hrModuleNavigation = [
-    { id: 'hr.psychTesting', label: 'Психологические тестирования', level: 'module', groupId: 'hrPluginModules', tab: 'psych-testing', href: clientTabHref('psych-testing'), order: 10, requiresClient: true, visibilityKey: 'hr.psychTesting', className: disconnectedHrModuleClass, title: DISCONNECTED_HR_MODULE_TITLE },
+    {
+      id: 'hr.psychTesting',
+      label: 'Психологические тестирования',
+      level: 'module',
+      groupId: 'hrPluginModules',
+      tab: 'psych-testing',
+      href: clientTabHref('psych-testing'),
+      order: 10,
+      requiresClient: true,
+      visibilityKey: 'hr.psychTesting',
+      className: 'sidebar-item-prominent',
+      title: 'Подключён модуль психологического тестирования (Telegram + JSON-сессии)',
+    },
     { id: 'hr.learning', label: 'Обучение', level: 'module', groupId: 'hrPluginModules', tab: 'learning', href: clientTabHref('learning'), order: 20, requiresClient: true, visibilityKey: 'hr.learning', className: disconnectedHrModuleClass, title: DISCONNECTED_HR_MODULE_TITLE },
     {
       id: 'hr.attestations',

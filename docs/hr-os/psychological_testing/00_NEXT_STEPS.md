@@ -21,6 +21,21 @@
 
 ---
 
+## Phase 4a (срез, 2026-05-20) — назначения HR
+
+Согласовано с [10_IMPLEMENTATION_ROADMAP.md](10_IMPLEMENTATION_ROADMAP.md) §6 (Org test assignment workflow), без полного RBAC/PDF.
+
+```text
+☑ pt_test_assignments (SQLite) + API /api/psychological-testing/assignments
+☑ Программа standard_hr_v1: mbti → soft_skills → paei|hexaco|disc
+☑ Telegram: проверка очереди при /start; уведомление POST …/notify
+☑ Workspace: назначить / уведомить; toast вместо alert; дедлайн 3 раб. дня + правка в таблице
+☐ UNC + сервисный аккаунт на prod (инфра)
+☐ RBAC, pt_test_sessions в БД, напоминания по cron
+```
+
+---
+
 ## Вы сейчас здесь: Phase 3 (Telegram)
 
 Phase 0–2 ✅ (engine + plugins + session без Telegram). Следующий шаг — **живой бот** (токен в **корневом** `.env`) и ручная проверка на планшете.
@@ -153,7 +168,8 @@ Unit-тест: фиксированные ответы → `type_code == "INTJ"`
 ☑ Каркас Phase 3b: [15_PHASE3B_PERSISTENCE_AND_HR.md](15_PHASE3B_PERSISTENCE_AND_HR.md)  
 ☑ `integration/hr_core.py` — resolve по `telegram_id` (+ dev fallback)  
 ☑ `integration/session_persistence.py` — JSON v1, файлы при `PSYCH_TESTING_PERSIST_JSON=1`  
-□ Включить `PERSIST_JSON=1` в prod и проверить запись на диск / SA  
+☑ Live DISC + HEXACO на @orgskilldevbot (2026-05-20, chat 7826888928)  
+☑ `PERSIST_JSON=1` — live: JSON в `data/sessions/v1/2026-05-20/` (hexaco + disc)  
 □ PDF — экспорт из JSON (Phase 4 или поздний 3b)  
 
 UX-шаблоны: [06_TELEGRAM_INTEGRATION.md](06_TELEGRAM_INTEGRATION.md)

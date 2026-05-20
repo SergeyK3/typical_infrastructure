@@ -247,7 +247,7 @@ class TestTelegramAdapterE2EFull:
         assert any("Ваш тип" in t for t in texts)
         assert any("INTJ" in t for t in texts)
         intro = outbound.messages[0]["text"]
-        assert "16 вопросов" in intro or "4 на ось" in intro
+        assert "Вопросов в сессии: 16" in intro
 
     def test_full_paei_via_buttons(self) -> None:
         adapter, outbound = _full_adapter()

@@ -12,6 +12,7 @@ from app.routers.employees import router as employees_router
 from app.routers.kpi_templates import router as kpi_templates_router
 from app.routers.onboarding import router as onboarding_router
 from app.routers.org_units import router as org_units_router
+from app.routers.psychological_testing import router as psychological_testing_router
 from app.routers.position_catalog import router as position_catalog_router
 from app.routers.positions import router as positions_router
 from app.routers.regulations import router as regulations_router
@@ -29,6 +30,7 @@ router.include_router(employees_router)
 router.include_router(kpi_templates_router)
 router.include_router(onboarding_router)
 router.include_router(org_units_router)
+router.include_router(psychological_testing_router)
 router.include_router(position_catalog_router)
 router.include_router(positions_router)
 router.include_router(regulations_router)

@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Рабочее пространство — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css?v=hr-modules-sidebar-20260517">
+  <link rel="stylesheet" href="/static/shared/layout.css?v=workspace-toast-20260520">
   <style>
     :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
     .panel { display: none; }
@@ -136,6 +136,7 @@
   </style>
 </head>
 <body>
+  <div id="workspaceToastHost" class="workspace-toast-host" aria-live="polite"></div>
   <div class="app-layout">
     <aside class="sidebar workspace-sidebar" id="workspaceSidebar"></aside>
     <main class="main">
@@ -350,11 +351,62 @@
     </div>
 
     <!-- Static HR module placeholders -->
-    <div id="panel-psych-testing" class="panel hr-module-muted">
+    <div id="panel-psych-testing" class="panel">
       <h2>Психологические тестирования</h2>
-      <div class="empty-state module-placeholder is-muted">
-        <p class="empty-message">Модуль пока не подключён.</p>
-        <p class="empty-hint">Маршрут привязан к выбранной организации и зарезервирован как статический слой для будущего HR-модуля.</p>
+      <div class="empty-state module-entry" style="margin-bottom: 1rem;">
+        <h3>Telegram-бот</h3>
+        <p class="empty-message">Сотрудник проходит тест в Telegram; результаты сохраняются в JSON при <code>PSYCH_TESTING_PERSIST_JSON=1</code>.</p>
+        <p class="empty-hint" id="psychTestingCommands">Загрузка доступных команд…</p>
+        <p class="meta" id="psychTestingStatus" style="margin-top:0.5rem;"></p>
+        <div class="module-entry-actions">
+          <button type="button" class="btn btn-secondary" id="btnPsychRefresh">Обновить список</button>
+        </div>
+      </div>
+      <div class="org-actions" style="margin-bottom:0.75rem;flex-wrap:wrap;">
+        <select id="psychAssignEmployee" title="Сотрудник с Telegram" style="min-width:220px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">— сотрудник —</option>
+        </select>
+        <label class="meta" style="margin:0;display:flex;align-items:center;gap:0.35rem;" title="Только для нового назначения">
+          <span style="white-space:nowrap;">Дедлайн (новое):</span>
+          <input type="date" id="psychAssignDue" title="3 рабочих дня по умолчанию" style="padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+        </label>
+        <button type="button" class="btn btn-primary" id="btnPsychAssign">Назначить программу (MBTI → …)</button>
+        <button type="button" class="btn btn-secondary" id="btnPsychAssignNotify">Назначить и уведомить в Telegram</button>
+      </div>
+      <p class="meta" style="margin:0 0 0.5rem 0;">Программа <code>standard_hr_v1</code>: MBTI → Soft Skills → PAEI / HEXACO / DISC. Дедлайн по умолчанию — <strong>3 рабочих дня</strong> (сб/вс не считаются). Без активного назначения сотрудник может начать тест сам (/start).</p>
+      <p class="meta hidden" id="psychAssignmentsMeta"></p>
+      <div style="overflow-x:auto;margin-bottom:1.25rem;">
+        <table class="ws-table" id="psychAssignmentsTable">
+          <thead>
+            <tr>
+              <th>Сотрудник</th>
+              <th>Telegram</th>
+              <th>Статус</th>
+              <th>След. тест</th>
+              <th>Пройдено</th>
+              <th>Дедлайн</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="psychAssignmentsTbody"></tbody>
+        </table>
+      </div>
+      <p class="meta hidden" id="psychSessionsMeta"></p>
+      <div style="overflow-x:auto;">
+        <table class="ws-table" id="psychSessionsTable">
+          <thead>
+            <tr>
+              <th style="width:14%;">Сотрудник</th>
+              <th style="width:8%;">Тест</th>
+              <th style="width:8%;">Статус</th>
+              <th style="width:12%;">Типология</th>
+              <th style="width:14%;">Завершён</th>
+              <th style="width:28%;">Краткий отчёт</th>
+              <th style="width:6rem;"></th>
+            </tr>
+          </thead>
+          <tbody id="psychSessionsTbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -452,6 +504,17 @@
     </div>
       </div>
     </main>
+  </div>
+
+  <!-- Modal: Psych testing session detail -->
+  <div id="modalPsychSession" class="modal">
+    <div class="modal-content" style="max-width: 720px;">
+      <h3 id="modalPsychSessionTitle">Сессия тестирования</h3>
+      <pre id="modalPsychSessionBody" style="white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:0.85rem;background:var(--bg);padding:0.75rem;border-radius:6px;border:1px solid var(--border);"></pre>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnPsychSessionClose">Закрыть</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Add/Edit Org Unit -->
@@ -710,8 +773,8 @@
     </div>
   </div>
 
-  <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260517"></script>
-  <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260517"></script>
+  <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
+  <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -736,13 +799,24 @@
       return m ? m[1] : '';
     }
 
+    function parseApiErrorText(text) {
+      try {
+        const j = JSON.parse(text);
+        if (j.error && (j.error.message || j.error.code)) {
+          return j.error.message || j.error.code;
+        }
+        if (typeof j.detail === 'string') return j.detail;
+        if (j.detail && typeof j.detail === 'object' && j.detail.message) return j.detail.message;
+        if (j.message) return j.message;
+      } catch (_) {}
+      return text;
+    }
+
     async function fetchApi(path, opts = {}) {
       const r = await fetch(API + path, opts);
       const text = await r.text();
       if (!r.ok) {
-        let detail = text;
-        try { const j = JSON.parse(text); detail = j.detail || j.message || text; } catch (_) {}
-        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+        throw new Error(parseApiErrorText(text) || ('HTTP ' + r.status));
       }
       return text ? JSON.parse(text) : null;
     }
@@ -750,6 +824,56 @@
     function showErr(el, msg) {
       el.textContent = msg || '';
       el.classList.toggle('hidden', !msg);
+    }
+
+    function showWorkspaceToast(message, kind) {
+      const host = document.getElementById('workspaceToastHost');
+      if (!host || !message) return;
+      const type = kind === 'error' ? 'error' : (kind === 'info' ? 'info' : 'success');
+      const el = document.createElement('div');
+      el.className = 'workspace-toast workspace-toast--' + type;
+      el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      el.textContent = message;
+      host.appendChild(el);
+      window.setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.25s';
+        window.setTimeout(() => el.remove(), 280);
+      }, type === 'error' ? 7000 : 4500);
+    }
+
+    function addBusinessDaysLocal(fromDate, businessDays) {
+      const d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+      let added = 0;
+      while (added < businessDays) {
+        d.setDate(d.getDate() + 1);
+        const w = d.getDay();
+        if (w !== 0 && w !== 6) added += 1;
+      }
+      return d;
+    }
+
+    function formatDateInputValue(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function defaultPsychDueInputValue() {
+      return formatDateInputValue(addBusinessDaysLocal(new Date(), 3));
+    }
+
+    function psychDueIsoToInput(isoOrDate) {
+      if (!isoOrDate) return '';
+      const s = String(isoOrDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      return s.slice(0, 10);
+    }
+
+    function ensurePsychAssignDueDefault() {
+      const inp = document.getElementById('psychAssignDue');
+      if (inp && !inp.value) inp.value = defaultPsychDueInputValue();
     }
 
     function escapeHtml(s) {
@@ -972,6 +1096,7 @@
       else if (tab === 'local-skills') loadLocalSkills();
       else if (tab === 'employees') loadEmployees();
       else if (tab === 'accounts') loadAccounts();
+      else if (tab === 'psych-testing') loadPsychTesting();
     }
 
     bindWorkspaceSidebarInteractions();
@@ -1566,6 +1691,203 @@
         tbody.innerHTML = '<tr><td colspan="4" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
+
+    function formatPsychDate(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? iso : d.toLocaleString('ru-RU');
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    function showPsychSessionModal(sessionId) {
+      const modal = document.getElementById('modalPsychSession');
+      const title = document.getElementById('modalPsychSessionTitle');
+      const body = document.getElementById('modalPsychSessionBody');
+      if (!modal || !body) return;
+      title.textContent = 'Сессия ' + sessionId;
+      body.textContent = 'Загрузка…';
+      modal.classList.add('show');
+      fetchApi('/psychological-testing/sessions/' + encodeURIComponent(sessionId))
+        .then((doc) => {
+          const report = doc.report && doc.report.text_telegram ? doc.report.text_telegram : '';
+          const scores = doc.scores ? JSON.stringify(doc.scores, null, 2) : '';
+          body.textContent = [report, scores ? '\n--- scores ---\n' + scores : ''].filter(Boolean).join('\n') || JSON.stringify(doc, null, 2);
+        })
+        .catch((e) => { body.textContent = e.message || String(e); });
+    }
+
+    async function loadPsychTestingStatus() {
+      const cmdEl = document.getElementById('psychTestingCommands');
+      const statusEl = document.getElementById('psychTestingStatus');
+      if (!cmdEl) return;
+      try {
+        const st = await fetchApi('/psychological-testing/status');
+        const cmds = (st.telegram_commands || []).join(', ') || '—';
+        cmdEl.textContent = 'Команды в боте: ' + cmds + '. Сотрудник должен быть привязан к организации (Telegram в карточке сотрудника).';
+        if (statusEl) {
+          const persist = st.persist_json_enabled ? 'включено' : 'выключено (PSYCH_TESTING_PERSIST_JSON)';
+          statusEl.textContent = 'Сохранение JSON: ' + persist + '. Каталог: ' + (st.sessions_dir || '—') + '. Всего файлов сессий: ' + (st.session_count || 0) + '.';
+        }
+      } catch (e) {
+        cmdEl.textContent = 'Не удалось загрузить статус модуля: ' + (e.message || e);
+      }
+    }
+
+    async function fillPsychAssignEmployeeSelect() {
+      const sel = document.getElementById('psychAssignEmployee');
+      if (!sel || !clientId) return;
+      await loadEmployeesForSelect();
+      const withTg = employeesAllCache.filter((e) => String(e.telegram_id || '').trim());
+      sel.innerHTML = '<option value="">— сотрудник (есть Telegram) —</option>' +
+        withTg.map((e) => {
+          const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+          return '<option value="' + escapeHtml(e.id) + '">' + escapeHtml(name) + '</option>';
+        }).join('');
+    }
+
+    async function loadPsychAssignments() {
+      const tbody = document.getElementById('psychAssignmentsTbody');
+      const meta = document.getElementById('psychAssignmentsMeta');
+      if (!tbody || !clientId) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        return;
+      }
+      await fillPsychAssignEmployeeSelect();
+      try {
+        const data = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId));
+        const items = data.items || [];
+        if (meta) {
+          meta.textContent = 'Назначений: ' + (data.total != null ? data.total : items.length);
+          meta.classList.remove('hidden');
+        }
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет назначений. Выберите сотрудника и нажмите «Назначить».</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map((a) => (
+          '<tr>' +
+            '<td class="td-ellipsis">' + escapeHtml(a.employee_display_name || '—') + '</td>' +
+            '<td><code title="Из карточки сотрудника">' + escapeHtml(a.employee_telegram_id || '—') + '</code></td>' +
+            '<td>' + escapeHtml(a.status || '') + '</td>' +
+            '<td><code>' + escapeHtml(a.next_test_id || '—') + '</code></td>' +
+            '<td>' + escapeHtml((a.completed_tests || []).join(', ') || '—') + '</td>' +
+            '<td><input type="date" class="psych-due-input" data-assignment-id="' + escapeHtml(a.id) + '" value="' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at)) + '" title="Дедлайн назначения (сохраняется при изменении)" style="padding:0.25rem 0.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;min-width:9.5rem;"></td>' +
+            '<td><button type="button" class="btn btn-secondary btn-sm btn-psych-notify" data-assignment-id="' + escapeHtml(a.id) + '">Уведомить</button></td>' +
+          '</tr>'
+        )).join('');
+        tbody.querySelectorAll('.psych-due-input').forEach((inp) => {
+          inp.onchange = async () => {
+            const dueVal = inp.value;
+            const payload = { due_at: dueVal ? dueVal + 'T23:59:59' : null };
+            try {
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(inp.dataset.assignmentId), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              showWorkspaceToast('Дедлайн обновлён.', 'success');
+            } catch (e) {
+              showWorkspaceToast(e.message || String(e), 'error');
+              loadPsychAssignments();
+            }
+          };
+        });
+        tbody.querySelectorAll('.btn-psych-notify').forEach((btn) => {
+          btn.onclick = async () => {
+            try {
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(btn.dataset.assignmentId) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+              showWorkspaceToast('Уведомление отправлено в Telegram.', 'success');
+              loadPsychAssignments();
+            } catch (e) {
+              showWorkspaceToast(e.message || String(e), 'error');
+            }
+          };
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    async function createPsychAssignment(notify) {
+      const empId = document.getElementById('psychAssignEmployee') && document.getElementById('psychAssignEmployee').value;
+      if (!clientId || !empId) {
+        showWorkspaceToast('Выберите организацию и сотрудника с Telegram.', 'error');
+        return;
+      }
+      ensurePsychAssignDueDefault();
+      const dueRaw = document.getElementById('psychAssignDue') && document.getElementById('psychAssignDue').value;
+      const body = {
+        client_id: clientId,
+        employee_id: empId,
+        program_id: 'standard_hr_v1',
+        notify: !!notify,
+        due_at: (dueRaw || defaultPsychDueInputValue()) + 'T23:59:59',
+      };
+      try {
+        await fetchApi('/psychological-testing/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        showWorkspaceToast(notify ? 'Назначение создано, уведомление отправлено в Telegram.' : 'Назначение создано.', 'success');
+        loadPsychAssignments();
+      } catch (e) {
+        showWorkspaceToast(e.message || String(e), 'error');
+      }
+    }
+
+    async function loadPsychTesting() {
+      const tbody = document.getElementById('psychSessionsTbody');
+      const meta = document.getElementById('psychSessionsMeta');
+      if (!tbody) return;
+      await loadPsychTestingStatus();
+      if (!clientId) {
+        tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        if (meta) meta.classList.add('hidden');
+        return;
+      }
+      ensurePsychAssignDueDefault();
+      await loadPsychAssignments();
+      try {
+        const data = await fetchApi('/psychological-testing/sessions?client_id=' + encodeURIComponent(clientId) + '&limit=200');
+        const items = data.items || [];
+        if (meta) {
+          meta.textContent = 'Сессий по организации: ' + (data.total != null ? data.total : items.length);
+          meta.classList.remove('hidden');
+        }
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Пока нет завершённых сессий для этой организации. Запустите worker и пройдите тест в Telegram.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map((s) => (
+          '<tr>' +
+            '<td class="td-ellipsis">' + escapeHtml(s.employee_display_name || '—') + '</td>' +
+            '<td><code>' + escapeHtml(s.test_id || '') + '</code></td>' +
+            '<td>' + escapeHtml(s.status || '') + '</td>' +
+            '<td>' + escapeHtml(s.typology_code || '—') + '</td>' +
+            '<td>' + escapeHtml(formatPsychDate(s.completed_at || s.started_at)) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(s.report_preview || '') + '</td>' +
+            '<td><button type="button" class="btn btn-secondary btn-sm btn-psych-detail" data-session-id="' + escapeHtml(s.session_id) + '">Отчёт</button></td>' +
+          '</tr>'
+        )).join('');
+        tbody.querySelectorAll('.btn-psych-detail').forEach((btn) => {
+          btn.onclick = () => showPsychSessionModal(btn.dataset.sessionId);
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    const btnPsychRefresh = document.getElementById('btnPsychRefresh');
+    if (btnPsychRefresh) btnPsychRefresh.onclick = () => loadPsychTesting();
+    const btnPsychAssign = document.getElementById('btnPsychAssign');
+    if (btnPsychAssign) btnPsychAssign.onclick = () => createPsychAssignment(false);
+    const btnPsychAssignNotify = document.getElementById('btnPsychAssignNotify');
+    if (btnPsychAssignNotify) btnPsychAssignNotify.onclick = () => createPsychAssignment(true);
+    const btnPsychSessionClose = document.getElementById('btnPsychSessionClose');
+    if (btnPsychSessionClose) btnPsychSessionClose.onclick = () => {
+      const modal = document.getElementById('modalPsychSession');
+      if (modal) modal.classList.remove('show');
+    };
 
     document.getElementById('btnImportExcel').onclick = () => document.getElementById('fileExcel').click();
     document.getElementById('fileExcel').onchange = async function() {

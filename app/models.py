@@ -350,6 +350,24 @@ class RegulationKpi(Base):
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class PtTestAssignment(Base, TimestampMixin):
+    """Назначение программы психологического тестирования сотруднику (Phase 4a)."""
+
+    __tablename__ = "pt_test_assignments"
+    __table_args__ = (
+        Index("ix_pt_assignments_client_employee", "client_id", "employee_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    program_id: Mapped[str] = mapped_column(String(64), nullable=False, default="standard_hr_v1")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="scheduled")
+    completed_tests_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class RegulationInstruction(Base):
     """Связь регламента с должностными инструкциями."""
 
