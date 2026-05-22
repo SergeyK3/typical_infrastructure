@@ -14,6 +14,14 @@ os.environ["SQLITE_PATH"] = ":memory:"
 from app.main import app  # noqa: E402 — after env
 
 
+@pytest.fixture(autouse=True)
+def psych_rbac_off_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests opt into RBAC via monkeypatch; local .env may have pilot flags on."""
+    monkeypatch.setenv("PSYCH_TESTING_RBAC_ASSIGN", "0")
+    monkeypatch.setenv("PSYCH_TESTING_RBAC_VIEW", "0")
+    monkeypatch.setenv("PSYCH_TESTING_RBAC_EXPORT", "0")
+
+
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
     with TestClient(app) as c:
