@@ -27,11 +27,12 @@
 
 ```text
 ☑ pt_test_assignments (SQLite) + API /api/psychological-testing/assignments
-☑ Программа standard_hr_v1: mbti → soft_skills → paei|hexaco|disc
-☑ Telegram: проверка очереди при /start; уведомление POST …/notify
-☑ Workspace: назначить / уведомить; toast вместо alert; дедлайн 3 раб. дня + правка в таблице
+☑ single-test назначение + PD consent + упрощённый PDF export
+☑ pt_test_sessions + pt_telegram_bindings (resume после рестарта worker)
+☑ RBAC hooks: export / assign / view (env-флаги)
+☑ напоминания о дедлайне (Telegram, фон в worker)
 ☐ UNC + сервисный аккаунт на prod (инфра)
-☐ RBAC, pt_test_sessions в БД, напоминания по cron
+☐ полная RBAC-матрица (manager view_team) + audit log
 ```
 
 ---
@@ -170,7 +171,7 @@ Unit-тест: фиксированные ответы → `type_code == "INTJ"`
 ☑ `integration/session_persistence.py` — JSON v1, файлы при `PSYCH_TESTING_PERSIST_JSON=1`  
 ☑ Live DISC + HEXACO на @orgskilldevbot (2026-05-20, chat 7826888928)  
 ☑ `PERSIST_JSON=1` — live: JSON в `data/sessions/v1/2026-05-20/` (hexaco + disc)  
-□ PDF — Phase A ✅ + Phase B ✅ (CLI export); Phase C 🔄 AI enrichment — [16](16_PDF_EXPORT_CONTRACT_AND_PLAN.md)  
+☑ PDF — Phase A–E ✅; UI single-test export ✅ — [16](16_PDF_EXPORT_CONTRACT_AND_PLAN.md)  
 
 UX-шаблоны: [06_TELEGRAM_INTEGRATION.md](06_TELEGRAM_INTEGRATION.md)
 

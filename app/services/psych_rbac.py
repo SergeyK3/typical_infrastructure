@@ -1,4 +1,4 @@
-"""RBAC hooks for psychological testing (Phase E — export)."""
+"""RBAC hooks for psychological testing (Phase 4)."""
 
 from __future__ import annotations
 
@@ -11,27 +11,60 @@ from sqlalchemy.orm import Session
 from app.models import Account, AccountRole, Employee, Role
 
 PERMISSION_EXPORT = "hr.psych_testing.export"
+PERMISSION_ASSIGN = "hr.psych_testing.assign"
+PERMISSION_VIEW = "hr.psych_testing.view_team"
 
-# Role codes that may export PDF in v1 (onboarding creates ``admin``).
-EXPORT_ROLE_CODES = frozenset({"admin", "hr_admin", "platform_admin"})
+HR_ADMIN_ROLE_CODES = frozenset({"admin", "hr_admin", "platform_admin"})
+
+
+def _env_enabled(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes")
 
 
 def export_rbac_enforced() -> bool:
-    return os.getenv("PSYCH_TESTING_RBAC_EXPORT", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+    return _env_enabled("PSYCH_TESTING_RBAC_EXPORT")
 
 
-def account_has_export_permission(db: Session, account_id: str) -> bool:
+def assign_rbac_enforced() -> bool:
+    return _env_enabled("PSYCH_TESTING_RBAC_ASSIGN")
+
+
+def view_rbac_enforced() -> bool:
+    return _env_enabled("PSYCH_TESTING_RBAC_VIEW")
+
+
+def _account_role_codes(db: Session, account_id: str) -> set[str]:
     rows = db.execute(
         select(Role.code)
         .join(AccountRole, AccountRole.role_id == Role.id)
         .where(AccountRole.account_id == account_id, Role.is_active == True)  # noqa: E712
     ).all()
-    codes = {str(r[0]) for r in rows}
-    return bool(codes & EXPORT_ROLE_CODES)
+    return {str(r[0]) for r in rows}
+
+
+def _assert_active_account(db: Session, account_id: str | None) -> Account:
+    if not account_id:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "permission_denied",
+                "message": "Требуется account_id",
+            },
+        )
+    acc = db.get(Account, account_id)
+    if not acc or acc.status != "active":
+        raise HTTPException(status_code=403, detail="account_not_found")
+    return acc
+
+
+def _assert_account_client(db: Session, account: Account, client_id: str) -> None:
+    actor_emp = db.get(Employee, account.employee_id)
+    if actor_emp and str(actor_emp.client_id) != str(client_id):
+        raise HTTPException(status_code=403, detail="account_client_mismatch")
+
+
+def account_has_hr_admin_role(db: Session, account_id: str) -> bool:
+    return bool(_account_role_codes(db, account_id) & HR_ADMIN_ROLE_CODES)
 
 
 def assert_can_export_pdf(
@@ -41,27 +74,11 @@ def assert_can_export_pdf(
     client_id: str,
     employee_id: str | None = None,
 ) -> None:
-    """
-    Enforce ``hr.psych_testing.export`` when ``PSYCH_TESTING_RBAC_EXPORT=1``.
-
-    Requires ``account_id`` with role ``admin`` (or hr_admin) and same ``client_id``
-    as target employee.
-    """
+    """Enforce ``hr.psych_testing.export`` when ``PSYCH_TESTING_RBAC_EXPORT=1``."""
     if not export_rbac_enforced():
         return
-    if not account_id:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "export_permission_denied",
-                "message": "Требуется account_id с правом hr.psych_testing.export",
-                "permission": PERMISSION_EXPORT,
-            },
-        )
-    acc = db.get(Account, account_id)
-    if not acc or acc.status != "active":
-        raise HTTPException(status_code=403, detail="account_not_found")
-    if not account_has_export_permission(db, account_id):
+    acc = _assert_active_account(db, account_id)
+    if not account_has_hr_admin_role(db, acc.id):
         raise HTTPException(
             status_code=403,
             detail={
@@ -70,12 +87,54 @@ def assert_can_export_pdf(
                 "message": "У аккаунта нет роли для экспорта PDF",
             },
         )
+    _assert_account_client(db, acc, client_id)
     if employee_id:
         emp = db.get(Employee, employee_id)
         if not emp:
             raise HTTPException(status_code=404, detail="employee_not_found")
         if str(emp.client_id) != str(client_id):
             raise HTTPException(status_code=403, detail="employee_client_mismatch")
-    actor_emp = db.get(Employee, acc.employee_id)
-    if actor_emp and str(actor_emp.client_id) != str(client_id):
-        raise HTTPException(status_code=403, detail="account_client_mismatch")
+
+
+def assert_can_manage_assignments(
+    db: Session,
+    *,
+    account_id: str | None,
+    client_id: str,
+) -> None:
+    """Enforce ``hr.psych_testing.assign`` when ``PSYCH_TESTING_RBAC_ASSIGN=1``."""
+    if not assign_rbac_enforced():
+        return
+    acc = _assert_active_account(db, account_id)
+    if not account_has_hr_admin_role(db, acc.id):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "assign_permission_denied",
+                "permission": PERMISSION_ASSIGN,
+                "message": "У аккаунта нет роли для назначения тестов",
+            },
+        )
+    _assert_account_client(db, acc, client_id)
+
+
+def assert_can_view_psych_data(
+    db: Session,
+    *,
+    account_id: str | None,
+    client_id: str,
+) -> None:
+    """Enforce ``hr.psych_testing.view_team`` when ``PSYCH_TESTING_RBAC_VIEW=1``."""
+    if not view_rbac_enforced():
+        return
+    acc = _assert_active_account(db, account_id)
+    if not account_has_hr_admin_role(db, acc.id):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "view_permission_denied",
+                "permission": PERMISSION_VIEW,
+                "message": "У аккаунта нет роли для просмотра результатов",
+            },
+        )
+    _assert_account_client(db, acc, client_id)

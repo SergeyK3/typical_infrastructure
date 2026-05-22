@@ -490,6 +490,119 @@ def migrate_pt_assignment_completion_history() -> None:
             conn.execute(
                 text("ALTER TABLE pt_test_assignments ADD COLUMN session_id VARCHAR(64) NULL")
             )
+        if not _column_exists("pt_test_assignments", "due_reminder_sent_at"):
+            conn.execute(
+                text(
+                    "ALTER TABLE pt_test_assignments ADD COLUMN due_reminder_sent_at DATETIME NULL"
+                )
+            )
+        conn.commit()
+
+
+def migrate_pt_sessions_and_telegram() -> None:
+    """Phase 4: pt_test_sessions, telegram bindings, process context."""
+    with engine.connect() as conn:
+        if not _table_exists("pt_test_sessions"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE pt_test_sessions (
+                        id VARCHAR(64) PRIMARY KEY,
+                        client_id VARCHAR(32) NOT NULL,
+                        employee_id VARCHAR(32) NOT NULL,
+                        test_id VARCHAR(64) NOT NULL,
+                        test_version VARCHAR(32) NOT NULL DEFAULT '1.0.0',
+                        status VARCHAR(32) NOT NULL DEFAULT 'questioning',
+                        assignment_id VARCHAR(32) NULL,
+                        telegram_chat_id VARCHAR(32) NULL,
+                        delivery_mode VARCHAR(32) NOT NULL DEFAULT 'structured',
+                        step_key VARCHAR(64) NULL,
+                        started_at DATETIME NULL,
+                        completed_at DATETIME NULL,
+                        payload_json TEXT NOT NULL DEFAULT '{}',
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_pt_sessions_client_employee "
+                    "ON pt_test_sessions (client_id, employee_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_pt_sessions_telegram_chat "
+                    "ON pt_test_sessions (telegram_chat_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_pt_sessions_status ON pt_test_sessions (status)"
+                )
+            )
+        if not _table_exists("pt_telegram_bindings"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE pt_telegram_bindings (
+                        id VARCHAR(36) PRIMARY KEY,
+                        telegram_chat_id VARCHAR(32) NOT NULL,
+                        client_id VARCHAR(32) NOT NULL,
+                        employee_id VARCHAR(32) NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_pt_tg_chat "
+                    "ON pt_telegram_bindings (telegram_chat_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_pt_tg_bindings_chat "
+                    "ON pt_telegram_bindings (telegram_chat_id)"
+                )
+            )
+        if not _table_exists("pt_telegram_process_context"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE pt_telegram_process_context (
+                        id VARCHAR(36) PRIMARY KEY,
+                        telegram_chat_id VARCHAR(32) NOT NULL,
+                        client_id VARCHAR(32) NULL,
+                        employee_id VARCHAR(32) NULL,
+                        active_flow VARCHAR(32) NOT NULL DEFAULT 'idle',
+                        active_session_id VARCHAR(64) NULL,
+                        active_test_id VARCHAR(64) NULL,
+                        active_step_key VARCHAR(64) NULL,
+                        active_assignment_id VARCHAR(32) NULL,
+                        mbti_delivery_mode VARCHAR(32) NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_pt_tg_process_chat "
+                    "ON pt_telegram_process_context (telegram_chat_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_pt_tg_process_chat "
+                    "ON pt_telegram_process_context (telegram_chat_id)"
+                )
+            )
         conn.commit()
 
 
@@ -506,3 +619,4 @@ def run_migrations() -> None:
     migrate_pt_test_programs_and_assignment_steps()
     migrate_pt_assignment_test_id()
     migrate_pt_assignment_completion_history()
+    migrate_pt_sessions_and_telegram()

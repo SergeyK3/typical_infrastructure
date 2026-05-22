@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -415,6 +415,62 @@ class PtTestAssignment(Base, TimestampMixin):
     notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    due_reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PtTestSession(Base, TimestampMixin):
+    """Психологическое тестирование: сессия (in-progress snapshot или финальный JSON)."""
+
+    __tablename__ = "pt_test_sessions"
+    __table_args__ = (
+        Index("ix_pt_sessions_client_employee", "client_id", "employee_id"),
+        Index("ix_pt_sessions_telegram_chat", "telegram_chat_id"),
+        Index("ix_pt_sessions_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    test_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    test_version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="questioning")
+    assignment_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    delivery_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="structured")
+    step_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+
+class PtTelegramBinding(Base, TimestampMixin):
+    """Привязка Telegram chat_id к сотруднику (psych testing)."""
+
+    __tablename__ = "pt_telegram_bindings"
+    __table_args__ = (UniqueConstraint("telegram_chat_id", name="uq_pt_tg_chat"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    telegram_chat_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+
+
+class PtTelegramProcessContext(Base, TimestampMixin):
+    """Активный psych-поток для chat_id (resume после рестарта worker)."""
+
+    __tablename__ = "pt_telegram_process_context"
+    __table_args__ = (UniqueConstraint("telegram_chat_id", name="uq_pt_tg_process_chat"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    telegram_chat_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    client_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    employee_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    active_flow: Mapped[str] = mapped_column(String(32), nullable=False, default="idle", index=True)
+    active_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    active_test_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    active_step_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    active_assignment_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    mbti_delivery_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class RegulationInstruction(Base):

@@ -67,6 +67,10 @@ def main() -> None:
     lock_path = acquire_single_worker_lock()
     probe_get_updates_available(token)
 
+    from app.migrate import run_migrations
+
+    run_migrations()
+
     outbound = os.getenv("PSYCH_TESTING_TELEGRAM_OUTBOUND", "http").strip()
     stt = os.getenv("PSYCH_TESTING_STT_PROVIDER", "(auto)").strip()
     _log.info(
@@ -80,8 +84,15 @@ def main() -> None:
     )
 
     from psychological_testing.integration.telegram_poller import run_long_polling
+    from app.services.psych_assignment_reminders import run_psych_assignment_reminder_loop
 
-    asyncio.run(run_long_polling(token))
+    async def _run() -> None:
+        await asyncio.gather(
+            run_long_polling(token),
+            run_psych_assignment_reminder_loop(),
+        )
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

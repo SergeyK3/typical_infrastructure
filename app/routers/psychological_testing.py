@@ -14,10 +14,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Client, Employee
+from app.models import Client, Employee, PtTestAssignment
 from app.schemas import ListEnvelope
 from app.services import psych_test_assignments as assign_svc
-from app.services.psych_rbac import assert_can_export_pdf
+from app.services.psych_rbac import (
+    assert_can_export_pdf,
+    assert_can_manage_assignments,
+    assert_can_view_psych_data,
+)
 from psychological_testing.integration.manifest_store import resolve_pdf_ref
 from psychological_testing.integration.report_storage import export_artifact_metadata
 from psychological_testing.integration.pdf_export_api import (
@@ -61,6 +65,7 @@ class PsychTestInfoOut(BaseModel):
 
 class PsychModuleStatusOut(BaseModel):
     persist_json_enabled: bool
+    persist_db_enabled: bool = False
     sessions_dir: str
     session_count: int
     available_tests: list[PsychTestInfoOut]
@@ -84,10 +89,18 @@ class PsychAssignmentCreateIn(BaseModel):
         default=False,
         description="Заменить текущее активное назначение другим тестом (иначе — ошибка active_assignment_exists)",
     )
+    account_id: str | None = Field(
+        default=None,
+        description="Для RBAC hr.psych_testing.assign при PSYCH_TESTING_RBAC_ASSIGN=1",
+    )
 
 
 class PsychAssignmentPatchIn(BaseModel):
     due_at: datetime | None = None
+    account_id: str | None = Field(
+        default=None,
+        description="Для RBAC hr.psych_testing.assign при PSYCH_TESTING_RBAC_ASSIGN=1",
+    )
 
 
 class PsychSectionOverrideIn(BaseModel):
@@ -198,12 +211,14 @@ def get_psych_testing_status() -> PsychModuleStatusOut:
 @router.get("/sessions", response_model=ListEnvelope[PsychSessionSummaryOut])
 def list_psych_sessions(
     client_id: str | None = Query(None, description="Фильтр по организации"),
+    account_id: str | None = Query(None),
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[PsychSessionSummaryOut]:
     if client_id:
         _assert_client(db, client_id)
+        assert_can_view_psych_data(db, account_id=account_id, client_id=client_id)
     items, total = list_session_summaries(client_id=client_id, limit=limit, offset=offset)
     return ListEnvelope[PsychSessionSummaryOut](
         items=[PsychSessionSummaryOut.model_validate(x) for x in items],
@@ -214,10 +229,19 @@ def list_psych_sessions(
 
 
 @router.get("/sessions/{session_id}")
-def get_psych_session(session_id: str) -> dict:
+def get_psych_session(
+    session_id: str,
+    client_id: str | None = Query(None),
+    account_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict:
     doc = get_session_document(session_id)
     if not doc:
         raise HTTPException(status_code=404, detail="psych_session_not_found")
+    cid = str(doc.get("client_id") or client_id or "")
+    if cid:
+        _assert_client(db, cid)
+        assert_can_view_psych_data(db, account_id=account_id, client_id=cid)
     return doc
 
 
@@ -225,11 +249,13 @@ def get_psych_session(session_id: str) -> dict:
 def list_psych_assignments(
     client_id: str = Query(..., description="Организация"),
     employee_id: str | None = Query(None, description="Фильтр по сотруднику (история назначений)"),
+    account_id: str | None = Query(None),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[PsychAssignmentOut]:
     _assert_client(db, client_id)
+    assert_can_view_psych_data(db, account_id=account_id, client_id=client_id)
     items, total = assign_svc.list_assignments(
         db,
         client_id=client_id,
@@ -251,6 +277,7 @@ def create_psych_assignment(
     db: Session = Depends(get_db),
 ) -> PsychAssignmentOut:
     _assert_client(db, body.client_id)
+    assert_can_manage_assignments(db, account_id=body.account_id, client_id=body.client_id)
     existing_before = assign_svc.get_active_assignment(
         db, client_id=body.client_id, employee_id=body.employee_id
     )
@@ -290,6 +317,10 @@ def patch_psych_assignment(
     body: PsychAssignmentPatchIn,
     db: Session = Depends(get_db),
 ) -> PsychAssignmentOut:
+    row = db.get(PtTestAssignment, assignment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="assignment_not_found")
+    assert_can_manage_assignments(db, account_id=body.account_id, client_id=row.client_id)
     try:
         data = assign_svc.update_assignment_due_at(
             db, assignment_id, due_at=body.due_at
@@ -499,8 +530,13 @@ def get_export_pdf_file(
 @router.post("/assignments/{assignment_id}/notify", response_model=PsychAssignmentOut)
 def notify_psych_assignment(
     assignment_id: str,
+    account_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> PsychAssignmentOut:
+    row = db.get(PtTestAssignment, assignment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="assignment_not_found")
+    assert_can_manage_assignments(db, account_id=account_id, client_id=row.client_id)
     try:
         data = assign_svc.notify_assignment(db, assignment_id)
     except assign_svc.NotifyTelegramError as e:

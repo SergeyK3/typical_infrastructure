@@ -123,9 +123,8 @@ def _session_lost_message(store: PsychTestingSessionStore, chat_id: str) -> str:
     if binding and binding.active_test_id == "mbti" and binding.mbti_delivery_mode == "dialog":
         restart = "/start mbti_dialog"
     return (
-        "Сессия прервана: бот перезапускался или одновременно работает "
-        "несколько процессов telegram_worker (Telegram 409).\n\n"
-        f"Начните тест заново: {restart}\n"
+        "Сессия не активна в памяти бота (перезапуск worker или второй процесс polling).\n\n"
+        f"Продолжите тест или начните заново: {restart}\n"
         "Перед запуском worker должен быть только один."
     )
 
@@ -257,6 +256,84 @@ class PsychTestingTelegramAdapter:
         self._store = store or get_session_store()
         self._outbound = outbound or get_telegram_outbound()
         self._voice_pipeline = voice_pipeline or VoicePipeline()
+
+    def _ensure_runtime_loaded(self, chat_id: str) -> SessionEngine | AkmaDialogEngine | None:
+        engine = self._store.get_engine(chat_id)
+        if engine is not None:
+            return engine
+        try:
+            from app.db import SessionLocal
+            from app.services.psych_session_db import try_restore_engine_for_chat
+
+            db = SessionLocal()
+            try:
+                return try_restore_engine_for_chat(
+                    db,
+                    self._store,
+                    telegram_chat_id=chat_id,
+                    registry=self._registry,
+                    voice_pipeline=self._voice_pipeline,
+                )
+            finally:
+                db.close()
+        except Exception:
+            _log.debug("psych_testing: runtime restore skipped", exc_info=True)
+            return None
+
+    def _persist_participant_binding(self, chat_id: str, client_id: str, employee_id: str) -> None:
+        try:
+            from app.db import SessionLocal
+            from app.services.psych_session_db import upsert_telegram_binding
+
+            db = SessionLocal()
+            try:
+                upsert_telegram_binding(
+                    db,
+                    telegram_chat_id=chat_id,
+                    client_id=client_id,
+                    employee_id=employee_id,
+                )
+            finally:
+                db.close()
+        except Exception:
+            _log.debug("psych_testing: binding persist skipped", exc_info=True)
+
+    def _persist_runtime(self, chat_id: str) -> None:
+        engine = self._store.get_engine(chat_id)
+        if engine is None or isinstance(engine, AkmaDialogEngine):
+            return
+        binding = self._store.get_binding(chat_id)
+        try:
+            from app.db import SessionLocal
+            from app.services.psych_session_db import save_in_progress_engine
+
+            db = SessionLocal()
+            try:
+                save_in_progress_engine(
+                    db,
+                    telegram_chat_id=chat_id,
+                    engine=engine,
+                    binding=binding,
+                )
+            finally:
+                db.close()
+        except Exception:
+            _log.debug("psych_testing: runtime persist skipped", exc_info=True)
+
+    def _clear_runtime_db(self, chat_id: str, *, session_id: str | None = None, cancelled: bool = False) -> None:
+        try:
+            from app.db import SessionLocal
+            from app.services.psych_session_db import clear_process_context, mark_session_cancelled
+
+            db = SessionLocal()
+            try:
+                clear_process_context(db, telegram_chat_id=chat_id)
+                if cancelled and session_id:
+                    mark_session_cancelled(db, session_id)
+            finally:
+                db.close()
+        except Exception:
+            _log.debug("psych_testing: runtime clear skipped", exc_info=True)
 
     def _dev_ids(self) -> tuple[str, str]:
         client_id = (os.getenv("PSYCH_TESTING_DEV_CLIENT_ID") or "dev-client").strip()
@@ -584,6 +661,8 @@ class PsychTestingTelegramAdapter:
             return
 
         self._store.set_engine(chat_id, engine)
+        self._persist_participant_binding(chat_id, client_id, employee_id)
+        self._persist_runtime(chat_id)
         dialog = _is_dialog_engine(engine)
         intro = _session_intro(
             test_id,
@@ -610,8 +689,11 @@ class PsychTestingTelegramAdapter:
     def cancel_session(self, chat_id: str) -> None:
         engine = self._store.get_engine(chat_id)
         if engine is None:
+            engine = self._ensure_runtime_loaded(chat_id)
+        if engine is None:
             self._send(chat_id, "Нет активной сессии.")
             return
+        session_id = engine.session.session_id
         engine.cancel()
         self._store.clear_engine(chat_id)
         binding = self._store.get_binding(chat_id)
@@ -621,6 +703,7 @@ class PsychTestingTelegramAdapter:
             binding.active_step_key = None
             binding.active_assignment_id = None
             binding.mbti_delivery_mode = None
+        self._clear_runtime_db(chat_id, session_id=session_id, cancelled=True)
         self._send(chat_id, "Сессия отменена.")
 
     def _apply_transition(self, chat_id: str, transition: SessionTransition) -> None:
@@ -681,6 +764,7 @@ class PsychTestingTelegramAdapter:
                 binding.active_step_key = None
                 binding.active_assignment_id = None
                 binding.mbti_delivery_mode = None
+            self._clear_runtime_db(chat_id)
             report = transition.report_text
             if transition.user_ack:
                 report = f"{transition.user_ack}\n\n{report}"
@@ -732,10 +816,13 @@ class PsychTestingTelegramAdapter:
                 else None
             )
             self._send(chat_id, _with_cancel_footer(text), keyboard)
+            self._persist_runtime(chat_id)
             return
 
         if transition.status == SessionStatus.CANCELLED:
+            session_id = engine.session.session_id
             self._store.clear_engine(chat_id)
+            self._clear_runtime_db(chat_id, session_id=session_id, cancelled=True)
             self._send(chat_id, "Сессия завершена.")
             return
 
@@ -748,6 +835,7 @@ class PsychTestingTelegramAdapter:
                     transition.current_item,
                 )
                 self._send(chat_id, _with_cancel_footer(msg), keyboard)
+        self._persist_runtime(chat_id)
 
     def handle_text(self, chat_id: str, text: str, *, is_command: bool = False) -> None:
         stripped = text.strip()
@@ -778,7 +866,7 @@ class PsychTestingTelegramAdapter:
                 self._send(chat_id, _psych_help_text())
                 return
 
-        engine = self._store.get_engine(chat_id)
+        engine = self._ensure_runtime_loaded(chat_id)
         if engine is None:
             self._send_welcome(chat_id)
             return
@@ -801,7 +889,7 @@ class PsychTestingTelegramAdapter:
             self._handle_menu_action(chat_id, menu_action)
             return
 
-        engine = self._store.get_engine(chat_id)
+        engine = self._ensure_runtime_loaded(chat_id)
         if engine is None:
             self._send(chat_id, _session_lost_message(self._store, chat_id))
             return
@@ -818,7 +906,7 @@ class PsychTestingTelegramAdapter:
         self._apply_transition(chat_id, transition)
 
     def handle_voice(self, chat_id: str, audio: bytes) -> None:
-        engine = self._store.get_engine(chat_id)
+        engine = self._ensure_runtime_loaded(chat_id)
         if engine is None:
             self._send(chat_id, _session_lost_message(self._store, chat_id))
             return

@@ -106,6 +106,7 @@ def main() -> None:
 
     from skill_assessment.integration.telegram_poller import run_long_polling
     from skill_assessment.services.docs_survey_consent_timeout import run_docs_survey_consent_timeout_loop
+    from app.services.psych_assignment_reminders import run_psych_assignment_reminder_loop
 
     async def _polling_supervisor() -> None:
         """Перезапуск long polling после сбоя (не выходим из процесса)."""
@@ -127,6 +128,7 @@ def main() -> None:
         await asyncio.gather(
             _polling_supervisor(),
             run_docs_survey_consent_timeout_loop(),
+            run_psych_assignment_reminder_loop(),
         )
 
     try:

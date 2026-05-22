@@ -237,7 +237,25 @@ def persist_session_result(document: dict[str, Any]) -> Path | None:
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
     _log.info("psych_testing: session result saved %s", path)
     _maybe_upload_session_to_drive(document, path)
+    _maybe_persist_session_db(document)
     return path
+
+
+def _maybe_persist_session_db(document: dict[str, Any]) -> None:
+    try:
+        from app.services.psych_session_db import persist_db_enabled, save_completed_session_document
+
+        if not persist_db_enabled():
+            return
+        from app.db import SessionLocal
+
+        db = SessionLocal()
+        try:
+            save_completed_session_document(db, document)
+        finally:
+            db.close()
+    except Exception:
+        _log.exception("psych_testing: DB session persist failed")
 
 
 def _maybe_upload_session_to_drive(document: dict[str, Any], local_path: Path) -> None:

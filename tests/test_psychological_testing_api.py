@@ -135,7 +135,12 @@ def test_psych_assignment_create_single_test(client):
 
     replaced = client.post(
         "/api/psychological-testing/assignments",
-        json={"client_id": client_id, "employee_id": emp_id, "test_id": "disc"},
+        json={
+            "client_id": client_id,
+            "employee_id": emp_id,
+            "test_id": "disc",
+            "replace_active": True,
+        },
     )
     assert replaced.status_code == 200
     assert replaced.json()["test_id"] == "disc"
