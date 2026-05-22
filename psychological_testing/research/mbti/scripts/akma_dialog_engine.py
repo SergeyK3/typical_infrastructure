@@ -72,8 +72,11 @@ class AkmaDialogEngine:
         llm: LlmClient | None = None,
         voice_pipeline: VoicePipeline | None = None,
     ) -> AkmaDialogEngine:
-        greeting = participant_greeting_name(employee_id)
-        profile = user or UserProfile(name=greeting or "Участник")
+        if user is not None:
+            profile = user
+        else:
+            greeting = participant_greeting_name(employee_id)
+            profile = UserProfile(name=greeting or "Участник")
         max_q = _max_questions_from_env()
         akma_state, zero_q = begin_dialog(profile, max_questions=max_q)
         session = TestSession(

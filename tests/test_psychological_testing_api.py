@@ -98,7 +98,7 @@ def test_psych_sessions_filter_by_client(client, tmp_path, monkeypatch):
     assert detail.json()["client_id"] == client_id
 
 
-def test_psych_assignment_create_and_programs(client):
+def test_psych_assignment_create_single_test(client):
     onboard = client.post(
         "/api/onboarding-runs",
         json=onboarding_payload(
@@ -113,22 +113,17 @@ def test_psych_assignment_create_and_programs(client):
     assert employees
     emp_id = employees[0]["id"]
 
-    progs = client.get("/api/psychological-testing/programs")
-    assert progs.status_code == 200
-    assert any(p["program_id"] == "standard_hr_v1" for p in progs.json()["items"])
-
     created = client.post(
         "/api/psychological-testing/assignments",
         json={
             "client_id": client_id,
             "employee_id": emp_id,
-            "program_id": "standard_hr_v1",
+            "test_id": "mbti",
         },
     )
     assert created.status_code == 200
     body = created.json()
-    assert body["program_id"] == "standard_hr_v1"
-    assert body["next_test_id"] == "mbti"
+    assert body["test_id"] == "mbti"
     assert body["status"] == "scheduled"
 
     listed = client.get(
@@ -138,11 +133,12 @@ def test_psych_assignment_create_and_programs(client):
     assert listed.status_code == 200
     assert listed.json()["total"] >= 1
 
-    dup = client.post(
+    replaced = client.post(
         "/api/psychological-testing/assignments",
-        json={"client_id": client_id, "employee_id": emp_id},
+        json={"client_id": client_id, "employee_id": emp_id, "test_id": "disc"},
     )
-    assert dup.status_code == 400
+    assert replaced.status_code == 200
+    assert replaced.json()["test_id"] == "disc"
     assert body.get("due_at")
     assert body.get("due_date")
 
@@ -185,6 +181,72 @@ def test_psych_assignment_list_backfills_missing_due_at(client, monkeypatch):
     assert item["due_at"]
 
 
+def test_psych_assignment_notify_message_patronymic_and_consent(client, monkeypatch):
+    from app.db import SessionLocal
+    from app.models import Employee
+    from app.services.employee_consent import record_pd_consent_yes
+    from app.services.psych_test_assignments import build_notify_message, create_assignment
+    from psychological_testing.adapters.telegram_outbound import FakeTelegramOutbound
+
+    fake = FakeTelegramOutbound()
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token-for-notify")
+    monkeypatch.setenv("PSYCH_TESTING_TELEGRAM_OUTBOUND", "mock")
+    monkeypatch.setattr(
+        "app.services.psych_test_assignments.get_telegram_outbound",
+        lambda: fake,
+    )
+
+    onboard = client.post(
+        "/api/onboarding-runs",
+        json=onboarding_payload(
+            client_code="psych_notify_fio",
+            client_name="Psych Notify FIO",
+            admin_login="psych_notify_fio_admin",
+        ),
+    )
+    client_id = onboard.json()["client_id"]
+    emp_id = client.get(f"/api/employees?client_id={client_id}&limit=5").json()["items"][0]["id"]
+    client.patch(
+        f"/api/employees/{emp_id}",
+        json={
+            "first_name": "Жадыра",
+            "middle_name": "Хабибуловна",
+            "last_name": "Адилова",
+            "telegram_id": "7826888929",
+        },
+    )
+
+    with SessionLocal() as db:
+        record_pd_consent_yes(db, client_id, emp_id)
+        row = create_assignment(
+            db, client_id=client_id, employee_id=emp_id, test_id="paei"
+        )
+        emp = db.get(Employee, emp_id)
+        text = build_notify_message(row, emp, db)
+
+    assert "Жадыра Хабибуловна" in text
+    assert "Согласие на обработку персональных данных принято ранее" in text
+    assert "Нажмите" not in text
+    assert "/start" not in text
+    assert "http" not in text
+    assert "Тест Адизеса" in text
+
+    created = client.post(
+        "/api/psychological-testing/assignments",
+        json={"client_id": client_id, "employee_id": emp_id, "test_id": "paei"},
+    )
+    assert created.status_code == 200
+    aid = created.json()["id"]
+    notified = client.post(f"/api/psychological-testing/assignments/{aid}/notify")
+    assert notified.status_code == 200
+    msg = fake.messages[0]
+    assert msg["chat_id"] == "7826888929"
+    assert "Пройти" in str(
+        [b["text"] for row in msg["reply_markup"]["inline_keyboard"] for b in row]
+    )
+    assert "Справка" not in str(msg["reply_markup"])
+
+
 def test_psych_assignment_notify_mock_telegram(client, monkeypatch):
     from psychological_testing.adapters.telegram_outbound import FakeTelegramOutbound
 
@@ -213,7 +275,7 @@ def test_psych_assignment_notify_mock_telegram(client, monkeypatch):
 
     created = client.post(
         "/api/psychological-testing/assignments",
-        json={"client_id": client_id, "employee_id": emp_id},
+        json={"client_id": client_id, "employee_id": emp_id, "test_id": "mbti"},
     )
     assert created.status_code == 200
     aid = created.json()["id"]
@@ -253,8 +315,9 @@ def test_psych_notify_chat_not_found_message(client, monkeypatch):
     client.patch(f"/api/employees/{emp_id}", json={"telegram_id": "999888777"})
     created = client.post(
         "/api/psychological-testing/assignments",
-        json={"client_id": client_id, "employee_id": emp_id},
+        json={"client_id": client_id, "employee_id": emp_id, "test_id": "mbti"},
     )
+    assert created.status_code == 200
     aid = created.json()["id"]
     r = client.post(f"/api/psychological-testing/assignments/{aid}/notify")
     assert r.status_code == 400

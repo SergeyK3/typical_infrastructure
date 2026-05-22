@@ -201,6 +201,54 @@ def build_default_manifest(
     return manifest
 
 
+def align_manifest_sections_to_sessions(
+    manifest: dict[str, Any],
+    *,
+    registry: SectionRegistry | None = None,
+) -> list[str]:
+    """
+    Отключить секции тестов без session_refs (чтобы экспорт не требовал «лишних» сессий).
+
+    Возвращает пояснения для UI (не ошибки).
+    """
+    reg = registry or load_section_registry()
+    refs_by_test: dict[str, str] = {}
+    for ref in manifest.get("session_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        tid = str(ref.get("test_id") or "").strip()
+        sid = str(ref.get("session_id") or "").strip()
+        if tid and sid:
+            refs_by_test[tid] = sid
+
+    notes: list[str] = []
+    for item in manifest.get("sections") or []:
+        if not isinstance(item, dict) or not item.get("enabled", True):
+            continue
+        section_id = str(item.get("section_id") or "")
+        spec = reg.sections.get(section_id)
+        if spec is None or not spec.test_id:
+            continue
+        if spec.test_id in refs_by_test:
+            continue
+        item["enabled"] = False
+        notes.append(f"Секция «{spec.label_ru}» снята — нет завершённого теста {spec.test_id}.")
+
+    if len(refs_by_test) == 1:
+        for item in manifest.get("sections") or []:
+            if not isinstance(item, dict) or not item.get("enabled", True):
+                continue
+            section_id = str(item.get("section_id") or "")
+            spec = reg.sections.get(section_id)
+            if spec is None or not spec.cross_test:
+                continue
+            item["enabled"] = False
+            notes.append(
+                f"Секция «{spec.label_ru}» снята — доступен один тест, сводка по батарее не формируется."
+            )
+    return notes
+
+
 def validate_manifest(
     manifest: dict[str, Any],
     *,

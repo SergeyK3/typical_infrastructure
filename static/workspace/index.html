@@ -381,26 +381,27 @@
         <select id="psychAssignEmployee" title="Сотрудник с Telegram" style="min-width:220px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
           <option value="">— сотрудник —</option>
         </select>
+        <select id="psychAssignTest" title="Тест для назначения" style="min-width:240px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">— тест —</option>
+        </select>
         <label class="meta" style="margin:0;display:flex;align-items:center;gap:0.35rem;" title="Только для нового назначения">
           <span style="white-space:nowrap;">Дедлайн (новое):</span>
           <input type="date" id="psychAssignDue" title="3 рабочих дня по умолчанию" style="padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
         </label>
-        <button type="button" class="btn btn-primary" id="btnPsychAssign">Назначить программу (MBTI → …)</button>
-        <button type="button" class="btn btn-secondary" id="btnPsychAssignNotify">Назначить и уведомить в Telegram</button>
+        <button type="button" class="btn btn-primary" id="btnPsychAssignNotify">Назначить и уведомить в Telegram</button>
       </div>
-      <p class="meta" style="margin:0 0 0.5rem 0;">Программа <code>standard_hr_v1</code>: MBTI → Soft Skills → PAEI / HEXACO / DISC. Дедлайн по умолчанию — <strong>3 рабочих дня</strong> (сб/вс не считаются). Без активного назначения сотрудник может начать тест сам (/start).</p>
+      <p class="meta" style="margin:0 0 0.5rem 0;">ОК назначает <strong>один тест</strong> сотруднику (по устному распоряжению руководства). Каждое назначение и каждое прохождение сохраняются в истории (таблица ниже + JSON-сессии). Следующий тест — новое назначение. Дедлайн по умолчанию — <strong>3 рабочих дня</strong>.</p>
       <p class="meta hidden" id="psychAssignmentsMeta"></p>
       <div style="overflow-x:auto;margin-bottom:1.25rem;">
         <table class="ws-table" id="psychAssignmentsTable">
           <thead>
             <tr>
-              <th>Сотрудник</th>
-              <th>Telegram</th>
-              <th>Статус</th>
-              <th>След. тест</th>
-              <th>Пройдено</th>
-              <th>Дедлайн</th>
-              <th></th>
+              <th style="width:14%;">Сотрудник</th>
+              <th style="width:10%;">Telegram</th>
+              <th style="width:16%;">Тест</th>
+              <th style="width:10%;">Дедлайн</th>
+              <th style="width:12%;">Завершён</th>
+              <th style="width:12%;">Действия</th>
             </tr>
           </thead>
           <tbody id="psychAssignmentsTbody"></tbody>
@@ -540,12 +541,14 @@
   <div id="modalPsychExport" class="modal">
     <div class="modal-content" style="max-width: 640px;">
       <h3 id="modalPsychExportTitle">Экспорт PDF отчёта</h3>
-      <p class="meta" id="psychExportMeta">Загрузка…</p>
+      <p class="meta" id="psychExportMeta">Подготовка…</p>
       <div id="psychExportWarnings" class="meta" style="color:var(--warn, #b8860b);"></div>
-      <p class="meta" style="margin:0.5rem 0 0.25rem;">Секции отчёта:</p>
-      <div id="psychExportSections" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;background:var(--bg);"></div>
-      <p class="meta" style="margin:0.75rem 0 0.25rem;">Доступные сессии (latest per test):</p>
-      <ul id="psychExportSessions" class="meta" style="margin:0 0 0.75rem 1rem;padding:0;list-style:disc;"></ul>
+      <div id="psychExportAdvanced">
+        <p class="meta" style="margin:0.5rem 0 0.25rem;">Секции отчёта:</p>
+        <div id="psychExportSections" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;background:var(--bg);"></div>
+        <p class="meta" style="margin:0.75rem 0 0.25rem;">Доступные сессии (latest per test):</p>
+        <ul id="psychExportSessions" class="meta" style="margin:0 0 0.75rem 1rem;padding:0;list-style:disc;"></ul>
+      </div>
       <div class="psych-export-options">
       <label class="meta">
         <input type="checkbox" id="psychExportRegenerateAi">
@@ -974,7 +977,116 @@
       if (serverPath) serverPath.classList.add('hidden');
     }
 
-    let psychExportState = { employeeId: null, preview: null, downloadUrl: null, downloadName: null, downloadBlob: null };
+    let psychExportState = {
+      employeeId: null,
+      preview: null,
+      simpleMode: false,
+      downloadUrl: null,
+      downloadName: null,
+      downloadBlob: null,
+    };
+
+    function setPsychExportAdvancedVisible(visible) {
+      const block = document.getElementById('psychExportAdvanced');
+      if (block) block.classList.toggle('hidden', !visible);
+    }
+
+    function psychExportSectionsPayload() {
+      if (psychExportState.simpleMode && psychExportState.preview) {
+        return ((psychExportState.preview.manifest && psychExportState.preview.manifest.sections) || [])
+          .map((s) => ({ section_id: s.section_id, enabled: !!s.enabled }));
+      }
+      const sections = [];
+      document.querySelectorAll('.psych-export-section-cb').forEach((cb) => {
+        sections.push({ section_id: cb.dataset.sectionId, enabled: cb.checked });
+      });
+      return sections;
+    }
+
+    function renderPsychExportPreview(data) {
+      const meta = document.getElementById('psychExportMeta');
+      const sectionsEl = document.getElementById('psychExportSections');
+      const sessionsEl = document.getElementById('psychExportSessions');
+      const warnEl = document.getElementById('psychExportWarnings');
+      const runBtn = document.getElementById('btnPsychExportRun');
+      const uiMode = data.export_ui_mode || ((data.available_sessions || []).length <= 1 ? 'single_test' : 'multi_test');
+      psychExportState.simpleMode = uiMode === 'single_test';
+
+      if (uiMode === 'empty') {
+        if (meta) meta.textContent = 'Нет завершённых тестов — PDF сформировать нельзя.';
+        setPsychExportAdvancedVisible(false);
+        if (sectionsEl) sectionsEl.innerHTML = '';
+        if (sessionsEl) sessionsEl.innerHTML = '';
+        if (warnEl) warnEl.textContent = '';
+        if (runBtn) runBtn.disabled = true;
+        return;
+      }
+
+      if (runBtn) runBtn.disabled = false;
+
+      if (uiMode === 'single_test') {
+        const primary = data.primary_test || {};
+        const label = primary.label_ru || primary.test_id || 'тест';
+        const typology = primary.typology_code ? (' (' + primary.typology_code + ')') : '';
+        if (meta) meta.textContent = 'Отчёт по тесту: ' + label + typology + '.';
+        setPsychExportAdvancedVisible(false);
+        if (sectionsEl) sectionsEl.innerHTML = '';
+        if (sessionsEl) sessionsEl.innerHTML = '';
+        if (warnEl) warnEl.textContent = '';
+        return;
+      }
+
+      psychExportState.simpleMode = false;
+      setPsychExportAdvancedVisible(true);
+      if (meta) {
+        meta.textContent = 'Шаблон: ' + (data.manifest && data.manifest.template_id ? data.manifest.template_id : 'legacy_team_assessment_v1');
+      }
+      const notes = (data.section_notes || []).concat(
+        (data.validation && data.validation.warnings) || []
+      ).filter(Boolean);
+      if (warnEl && notes.length) {
+        warnEl.style.color = 'var(--warn, #b8860b)';
+        warnEl.textContent = notes.join(' ');
+      } else if (warnEl) {
+        warnEl.textContent = '';
+      }
+      const availTests = new Set(
+        ((data.available_sessions) || []).map((a) => String(a.test_id || ''))
+      );
+      const testBySection = Object.fromEntries(
+        ((data.sections_catalog) || [])
+          .filter((s) => s.test_id)
+          .map((s) => [s.section_id, s.test_id])
+      );
+      const sections = (data.manifest && data.manifest.sections) || [];
+      const labels = Object.fromEntries(
+        ((data.sections_catalog) || []).map((s) => [s.section_id, s.label_ru || s.section_id])
+      );
+      if (sectionsEl) {
+        sectionsEl.innerHTML = sections.map((s) => {
+          const label = labels[s.section_id] || s.section_id;
+          const reqTest = testBySection[s.section_id];
+          const missingSession = reqTest && !availTests.has(reqTest);
+          const title = missingSession
+            ? 'Нет завершённой сессии ' + reqTest + ' — секция не попадёт в PDF'
+            : s.section_id;
+          return (
+            '<label title="' + escapeHtml(title) + '">' +
+              '<input type="checkbox" class="psych-export-section-cb" data-section-id="' + escapeHtml(s.section_id) + '" ' + (s.enabled ? 'checked' : '') + (missingSession ? ' disabled' : '') + '>' +
+              '<span class="psych-export-section-label">' + escapeHtml(label) +
+              (s.requires_ai ? ' <span class="meta">(AI)</span>' : '') +
+              (missingSession ? ' <span class="meta">(нет теста)</span>' : '') +
+              '</span></label>'
+          );
+        }).join('');
+      }
+      const avail = data.available_sessions || [];
+      if (sessionsEl) {
+        sessionsEl.innerHTML = avail.length
+          ? avail.map((a) => '<li><code>' + escapeHtml(a.test_id) + '</code> — ' + escapeHtml(a.session_id || '') + (a.typology_code ? ' (' + escapeHtml(a.typology_code) + ')' : '') + '</li>').join('')
+          : '<li class="meta">Нет завершённых сессий</li>';
+      }
+    }
 
     function openPsychExportModal(employeeId, employeeName) {
       const modal = document.getElementById('modalPsychExport');
@@ -987,43 +1099,33 @@
         showWorkspaceToast('Выберите организацию и сотрудника.', 'error');
         return;
       }
-      psychExportState = { employeeId, preview: null, downloadUrl: null, downloadName: null, downloadBlob: null };
+      psychExportState = {
+        employeeId,
+        preview: null,
+        simpleMode: false,
+        downloadUrl: null,
+        downloadName: null,
+        downloadBlob: null,
+      };
       resetPsychExportModalState();
       title.textContent = 'Экспорт PDF: ' + (employeeName || employeeId);
-      meta.textContent = 'Загрузка настроек…';
+      meta.textContent = 'Подготовка…';
       sectionsEl.innerHTML = '';
       sessionsEl.innerHTML = '';
+      setPsychExportAdvancedVisible(false);
       if (warnEl) warnEl.textContent = '';
       if (warnEl) warnEl.style.color = 'var(--warn, #b8860b)';
       modal.classList.add('show');
       fetchApi('/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-preview?client_id=' + encodeURIComponent(clientId))
         .then((data) => {
           psychExportState.preview = data;
-          meta.textContent = 'Шаблон: ' + (data.manifest && data.manifest.template_id ? data.manifest.template_id : 'legacy_team_assessment_v1');
-          if (warnEl && data.validation && data.validation.warnings && data.validation.warnings.length) {
-            warnEl.textContent = data.validation.warnings.join(' ');
-          }
-          const sections = (data.manifest && data.manifest.sections) || [];
-          const labels = Object.fromEntries(
-            ((data.sections_catalog) || []).map((s) => [s.section_id, s.label_ru || s.section_id])
-          );
-          sectionsEl.innerHTML = sections.map((s) => {
-            const label = labels[s.section_id] || s.section_id;
-            return (
-            '<label title="' + escapeHtml(s.section_id) + '">' +
-              '<input type="checkbox" class="psych-export-section-cb" data-section-id="' + escapeHtml(s.section_id) + '" ' + (s.enabled ? 'checked' : '') + '>' +
-              '<span class="psych-export-section-label">' + escapeHtml(label) +
-              (s.requires_ai ? ' <span class="meta">(AI)</span>' : '') +
-              '</span></label>'
-            );
-          }).join('');
-          const avail = data.available_sessions || [];
-          sessionsEl.innerHTML = avail.length
-            ? avail.map((a) => '<li><code>' + escapeHtml(a.test_id) + '</code> — ' + escapeHtml(a.session_id || '') + (a.typology_code ? ' (' + escapeHtml(a.typology_code) + ')' : '') + '</li>').join('')
-            : '<li class="meta">Нет завершённых сессий</li>';
+          renderPsychExportPreview(data);
         })
         .catch((e) => {
           meta.textContent = e.message || String(e);
+          setPsychExportAdvancedVisible(false);
+          const runBtn = document.getElementById('btnPsychExportRun');
+          if (runBtn) runBtn.disabled = true;
         });
     }
 
@@ -1039,10 +1141,11 @@
     async function runPsychExportPdf() {
       const employeeId = psychExportState.employeeId;
       if (!employeeId || !clientId) return;
-      const sections = [];
-      document.querySelectorAll('.psych-export-section-cb').forEach((cb) => {
-        sections.push({ section_id: cb.dataset.sectionId, enabled: cb.checked });
-      });
+      const sections = psychExportSectionsPayload();
+      if (!sections.length) {
+        showWorkspaceToast('Не выбраны секции отчёта.', 'error');
+        return;
+      }
       const regenerateAi = !!(document.getElementById('psychExportRegenerateAi') && document.getElementById('psychExportRegenerateAi').checked);
       const forceRegenerate = !!(document.getElementById('psychExportForceRegenerate') && document.getElementById('psychExportForceRegenerate').checked);
       const body = {
@@ -2120,6 +2223,32 @@
       }
     }
 
+    let psychAvailableTests = [];
+
+    async function fillPsychAssignTestSelect() {
+      const sel = document.getElementById('psychAssignTest');
+      if (!sel) return;
+      const prev = sel.value;
+      try {
+        const st = await fetchApi('/psychological-testing/status');
+        psychAvailableTests = st.available_tests || [];
+      } catch (_) {
+        psychAvailableTests = [];
+      }
+      const items = psychAvailableTests.length ? psychAvailableTests : [
+        { test_id: 'mbti', display_name: 'MBTI' },
+        { test_id: 'soft_skills', display_name: 'Soft Skills' },
+        { test_id: 'hexaco', display_name: 'HEXACO' },
+        { test_id: 'paei', display_name: 'PAEI' },
+        { test_id: 'disc', display_name: 'DISC' },
+      ];
+      sel.innerHTML = '<option value="">— тест —</option>' +
+        items.map((t) =>
+          '<option value="' + escapeHtml(t.test_id) + '">' + escapeHtml(t.display_name || t.test_id) + '</option>'
+        ).join('');
+      if (prev && items.some((t) => t.test_id === prev)) sel.value = prev;
+    }
+
     async function fillPsychAssignEmployeeSelect() {
       const sel = document.getElementById('psychAssignEmployee');
       if (!sel || !clientId) return;
@@ -2136,9 +2265,10 @@
       const tbody = document.getElementById('psychAssignmentsTbody');
       const meta = document.getElementById('psychAssignmentsMeta');
       if (!tbody || !clientId) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         return;
       }
+      await fillPsychAssignTestSelect();
       await fillPsychAssignEmployeeSelect();
       try {
         const data = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId));
@@ -2148,20 +2278,33 @@
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет назначений. Выберите сотрудника и нажмите «Назначить».</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Нет назначений. Выберите сотрудника, тест и нажмите «Назначить».</td></tr>';
           return;
         }
-        tbody.innerHTML = items.map((a) => (
-          '<tr>' +
-            '<td class="td-ellipsis">' + escapeHtml(a.employee_display_name || '—') + '</td>' +
-            '<td><code title="Из карточки сотрудника">' + escapeHtml(a.employee_telegram_id || '—') + '</code></td>' +
-            '<td>' + escapeHtml(a.status || '') + '</td>' +
-            '<td><code>' + escapeHtml(a.next_test_id || '—') + '</code></td>' +
-            '<td>' + escapeHtml((a.completed_tests || []).join(', ') || '—') + '</td>' +
-            '<td><input type="date" class="psych-due-input" data-assignment-id="' + escapeHtml(a.id) + '" value="' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at)) + '" title="Дедлайн назначения (сохраняется при изменении)" style="padding:0.25rem 0.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;min-width:9.5rem;"></td>' +
-            '<td><button type="button" class="btn btn-secondary btn-sm btn-psych-notify" data-assignment-id="' + escapeHtml(a.id) + '">Уведомить</button></td>' +
-          '</tr>'
-        )).join('');
+        tbody.innerHTML = items.map((a) => {
+          const testLabel = a.test_label_ru || a.test_id || '—';
+          const terminal = a.is_complete || a.status === 'completed' || a.status === 'superseded' || a.status === 'cancelled';
+          const isActive = !terminal && (a.status === 'scheduled' || a.status === 'notified' || a.status === 'in_progress');
+          const statusRu = a.status === 'completed' ? 'выполнено'
+            : a.status === 'superseded' ? 'заменено новым'
+            : a.status === 'cancelled' ? 'отменено'
+            : (a.status || '');
+          const dueDisabled = terminal ? ' disabled' : '';
+          const notifyDisabled = terminal ? ' disabled' : '';
+          const sessionBtn = a.session_id
+            ? ' <button type="button" class="btn btn-secondary btn-sm btn-psych-session" data-session-id="' + escapeHtml(a.session_id) + '">JSON</button>'
+            : '';
+          return (
+            '<tr>' +
+              '<td class="td-ellipsis">' + escapeHtml(a.employee_display_name || '—') + '<br><span class="meta">' + escapeHtml(statusRu) + '</span></td>' +
+              '<td><code title="Из карточки сотрудника">' + escapeHtml(a.employee_telegram_id || '—') + '</code></td>' +
+              '<td class="td-ellipsis" title="' + escapeHtml(a.test_id || '') + '">' + escapeHtml(testLabel) + '</td>' +
+              '<td><input type="date" class="psych-due-input" data-assignment-id="' + escapeHtml(a.id) + '" value="' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at)) + '"' + dueDisabled + ' title="Дедлайн" style="padding:0.25rem 0.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;min-width:9.5rem;"></td>' +
+              '<td class="meta">' + escapeHtml(a.completed_at ? formatPsychDate(a.completed_at) : '—') + '</td>' +
+              '<td class="row-actions"><button type="button" class="btn btn-secondary btn-sm btn-psych-notify" data-assignment-id="' + escapeHtml(a.id) + '" data-employee-id="' + escapeHtml(a.employee_id || '') + '"' + notifyDisabled + (isActive ? ' title="Активное назначение"' : '') + '>Уведомить</button>' + sessionBtn + '</td>' +
+            '</tr>'
+          );
+        }).join('');
         tbody.querySelectorAll('.psych-due-input').forEach((inp) => {
           inp.onchange = async () => {
             const dueVal = inp.value;
@@ -2180,9 +2323,16 @@
           };
         });
         tbody.querySelectorAll('.btn-psych-notify').forEach((btn) => {
+          if (btn.disabled) return;
           btn.onclick = async () => {
             try {
-              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(btn.dataset.assignmentId) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+              let notifyId = btn.dataset.assignmentId;
+              const empId = btn.dataset.employeeId;
+              if (empId) {
+                const active = items.find((a) => a.employee_id === empId && (a.status === 'scheduled' || a.status === 'notified' || a.status === 'in_progress'));
+                if (active && active.id) notifyId = active.id;
+              }
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(notifyId) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
               showWorkspaceToast('Уведомление отправлено в Telegram.', 'success');
               loadPsychAssignments();
             } catch (e) {
@@ -2190,15 +2340,23 @@
             }
           };
         });
+        tbody.querySelectorAll('.btn-psych-session').forEach((btn) => {
+          btn.onclick = () => showPsychSessionModal(btn.dataset.sessionId);
+        });
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
     async function createPsychAssignment(notify) {
       const empId = document.getElementById('psychAssignEmployee') && document.getElementById('psychAssignEmployee').value;
+      const testId = document.getElementById('psychAssignTest') && document.getElementById('psychAssignTest').value;
       if (!clientId || !empId) {
         showWorkspaceToast('Выберите организацию и сотрудника с Telegram.', 'error');
+        return;
+      }
+      if (!testId) {
+        showWorkspaceToast('Выберите тест для назначения.', 'error');
         return;
       }
       ensurePsychAssignDueDefault();
@@ -2206,7 +2364,7 @@
       const body = {
         client_id: clientId,
         employee_id: empId,
-        program_id: 'standard_hr_v1',
+        test_id: testId,
         notify: !!notify,
         due_at: (dueRaw || defaultPsychDueInputValue()) + 'T23:59:59',
       };
@@ -2216,11 +2374,11 @@
         loadPsychAssignments();
       } catch (e) {
         const msg = e.message || String(e);
-        if (notify && msg.indexOf('active_assignment_exists') >= 0) {
+        if (notify && (msg.indexOf('active_assignment_exists') >= 0 || msg.indexOf('активное назначение') >= 0)) {
           try {
             const list = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId) + '&limit=50');
             const items = (list && list.items) || [];
-            const row = items.find((a) => a.employee_id === empId && a.status !== 'completed' && a.status !== 'cancelled');
+            const row = items.find((a) => a.employee_id === empId && (a.status === 'scheduled' || a.status === 'notified' || a.status === 'in_progress'));
             if (row && row.id) {
               await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(row.id) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
               showWorkspaceToast('Назначение уже было — повторно отправлено уведомление в Telegram.', 'success');
@@ -2244,6 +2402,8 @@
       if (!clientId) {
         tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         if (meta) meta.classList.add('hidden');
+        const assignTbody = document.getElementById('psychAssignmentsTbody');
+        if (assignTbody) assignTbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         return;
       }
       ensurePsychAssignDueDefault();
@@ -2286,8 +2446,6 @@
 
     const btnPsychRefresh = document.getElementById('btnPsychRefresh');
     if (btnPsychRefresh) btnPsychRefresh.onclick = () => loadPsychTesting();
-    const btnPsychAssign = document.getElementById('btnPsychAssign');
-    if (btnPsychAssign) btnPsychAssign.onclick = () => createPsychAssignment(false);
     const btnPsychAssignNotify = document.getElementById('btnPsychAssignNotify');
     if (btnPsychAssignNotify) btnPsychAssignNotify.onclick = () => createPsychAssignment(true);
     const btnPsychSessionClose = document.getElementById('btnPsychSessionClose');

@@ -107,16 +107,32 @@ def main() -> None:
     from skill_assessment.integration.telegram_poller import run_long_polling
     from skill_assessment.services.docs_survey_consent_timeout import run_docs_survey_consent_timeout_loop
 
+    async def _polling_supervisor() -> None:
+        """Перезапуск long polling после сбоя (не выходим из процесса)."""
+        while True:
+            try:
+                await run_long_polling(token)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _log.exception(
+                    "telegram_worker: long polling завершился с ошибкой — перезапуск через 5 с"
+                )
+                await asyncio.sleep(5)
+
     async def _run_bot_and_schedulers() -> None:
         _log.info(
             "telegram_worker: long polling + фоновые проверки (согласие ПДн, таймаут ответов экзамена, напоминание за N мин до слота)"
         )
         await asyncio.gather(
-            run_long_polling(token),
+            _polling_supervisor(),
             run_docs_survey_consent_timeout_loop(),
         )
 
-    asyncio.run(_run_bot_and_schedulers())
+    try:
+        asyncio.run(_run_bot_and_schedulers())
+    except KeyboardInterrupt:
+        _log.info("telegram_worker: остановлен (Ctrl+C)")
 
 
 if __name__ == "__main__":

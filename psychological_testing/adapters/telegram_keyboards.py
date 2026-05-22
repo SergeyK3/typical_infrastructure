@@ -19,11 +19,17 @@ MENU_CALLBACK_PREFIX = f"{CALLBACK_PREFIX}:menu:"
 
 
 def build_menu_callback_data(action: str) -> str:
-    """``pt:menu:{action}`` — главное меню (старт теста, отмена, справка)."""
+    """``pt:menu:{action}`` — главное меню (legacy test id, cancel, help)."""
     data = f"{MENU_CALLBACK_PREFIX}{action}"
     if len(data.encode("utf-8")) > 64:
         raise ValueError(f"callback_data too long: {data!r}")
     return data
+
+
+def build_step_menu_callback_data(step_key: str, *, dialog: bool = False) -> str:
+    """``pt:menu:step:{step_key}`` или ``...:dialog`` для MBTI-диалога."""
+    action = f"step:{step_key}:dialog" if dialog else f"step:{step_key}"
+    return build_menu_callback_data(action)
 
 
 def parse_menu_callback(data: str) -> str | None:
@@ -33,45 +39,95 @@ def parse_menu_callback(data: str) -> str | None:
     return action or None
 
 
-def welcome_menu_keyboard(allowed_test_ids: frozenset[str] | None = None) -> dict[str, Any]:
-    """Кнопки главного меню. ``allowed_test_ids=None`` — все тесты (режим без назначения HR)."""
+def parse_menu_step_action(action: str) -> tuple[str, bool] | None:
+    """``step:{step_key}`` или ``step:{step_key}:dialog`` → (step_key, is_dialog)."""
+    if not action.startswith("step:"):
+        return None
+    rest = action[5:]
+    if rest.endswith(":dialog"):
+        return rest[: -len(":dialog")], True
+    return rest, False
+
+
+def welcome_menu_keyboard(
+    *,
+    allowed_steps: list[dict[str, str]] | None = None,
+    allowed_test_ids: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Кнопки главного меню.
+
+    ``allowed_steps`` — режим HR-назначения (по step_key, подпись label_ru).
+    ``allowed_test_ids=None`` без ``allowed_steps`` — все тесты (свободный режим).
+    При одном назначенном тесте — одна кнопка «Пройти» (без «Справка» и без отмены).
+    """
     rows: list[list[tuple[str, str]]] = []
-    allowed = allowed_test_ids
-
-    def _show(test_id: str) -> bool:
-        return allowed is None or test_id in allowed
-
-    test_rows: list[list[tuple[str, str]]] = []
-    if _show("mbti"):
-        test_rows.append(
-            [
-                ("MBTI", build_menu_callback_data("mbti")),
-                ("MBTI, диалог с Акма", build_menu_callback_data("mbti_dialog")),
-            ]
-        )
-    pair_row: list[tuple[str, str]] = []
-    for test_id, label in (
-        ("paei", "PAEI"),
-        ("soft_skills", "Soft Skills"),
-        ("disc", "DISC"),
-        ("hexaco", "HEXACO"),
-    ):
-        if not _show(test_id):
-            continue
-        pair_row.append((label, build_menu_callback_data(test_id)))
-        if len(pair_row) == 2:
-            test_rows.append(pair_row)
-            pair_row = []
-    if pair_row:
-        test_rows.append(pair_row)
-
-    rows.extend(test_rows)
-    rows.append(
-        [
-            ("Отменить текущий тест", build_menu_callback_data("cancel")),
-            ("Справка", build_menu_callback_data("help")),
-        ]
+    single_assignment = (
+        allowed_steps is None
+        and allowed_test_ids is not None
+        and len(allowed_test_ids) == 1
     )
+
+    if allowed_steps is not None:
+        pair_row: list[tuple[str, str]] = []
+        single_step = len(allowed_steps) == 1
+        for step in allowed_steps:
+            step_key = str(step["step_key"])
+            test_id = str(step["test_id"])
+            start_label = "Пройти" if single_step else str(step.get("label_ru") or test_id)
+            if test_id == "mbti":
+                rows.append(
+                    [
+                        (start_label, build_step_menu_callback_data(step_key)),
+                        (
+                            "Диалог с Akma",
+                            build_step_menu_callback_data(step_key, dialog=True),
+                        ),
+                    ]
+                )
+                continue
+            pair_row.append((start_label, build_step_menu_callback_data(step_key)))
+            if len(pair_row) == 2:
+                rows.append(pair_row)
+                pair_row = []
+        if pair_row:
+            rows.append(pair_row)
+    elif single_assignment:
+        test_id = next(iter(allowed_test_ids))  # type: ignore[arg-type]
+        if test_id == "mbti":
+            rows.append([("Пройти", build_menu_callback_data("mbti"))])
+        else:
+            rows.append([("Пройти", build_menu_callback_data(test_id))])
+    else:
+        allowed = allowed_test_ids
+
+        def _show(test_id: str) -> bool:
+            return allowed is None or test_id in allowed
+
+        test_rows: list[list[tuple[str, str]]] = []
+        if _show("mbti"):
+            test_rows.append(
+                [
+                    ("MBTI", build_menu_callback_data("mbti")),
+                    ("MBTI, диалог с Акma", build_menu_callback_data("mbti_dialog")),
+                ]
+            )
+        pair_row = []
+        for test_id, label in (
+            ("paei", "PAEI"),
+            ("soft_skills", "Soft Skills"),
+            ("disc", "DISC"),
+            ("hexaco", "HEXACO"),
+        ):
+            if not _show(test_id):
+                continue
+            pair_row.append((label, build_menu_callback_data(test_id)))
+            if len(pair_row) == 2:
+                test_rows.append(pair_row)
+                pair_row = []
+        if pair_row:
+            test_rows.append(pair_row)
+        rows.extend(test_rows)
+
     return inline_keyboard(rows)
 
 

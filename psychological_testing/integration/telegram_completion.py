@@ -98,7 +98,9 @@ def build_completion_footer(
     engine: SessionEngine | AkmaDialogEngine,
     *,
     has_hr_assignment: bool,
+    assignment_complete: bool = False,
     allowed_next_test_ids: list[str] | None = None,
+    pending_hr_release_steps: list[dict[str, str]] | None = None,
     program_complete: bool = False,
     mbti_dialog: bool = False,
 ) -> str:
@@ -120,15 +122,33 @@ def build_completion_footer(
         _hr_contact_block(),
     ]
 
-    if program_complete:
-        lines.extend(["", "Программа психологического тестирования по назначению HR завершена."])
+    done = assignment_complete or program_complete
+    if done and has_hr_assignment:
+        lines.extend(
+            [
+                "",
+                "Назначение HR по этому тесту выполнено. "
+                "Следующий тест назначит отдел кадров при необходимости.",
+            ]
+        )
     elif has_hr_assignment:
         if allowed_next_test_ids:
             opts = ", ".join(_TEST_LABELS.get(t, t) for t in allowed_next_test_ids)
             lines.extend(
                 [
                     "",
-                    f"Следующий доступный этап: {opts}. Откройте /start и выберите тест кнопкой.",
+                    f"Доступен тест: {opts}. Откройте /start и выберите кнопку в меню.",
+                ]
+            )
+        elif pending_hr_release_steps:
+            opts = ", ".join(
+                str(s.get("label_ru") or s.get("test_id") or s.get("step_key"))
+                for s in pending_hr_release_steps
+            )
+            lines.extend(
+                [
+                    "",
+                    f"Следующий этап: {opts}. Его откроет отдел кадров.",
                 ]
             )
         else:

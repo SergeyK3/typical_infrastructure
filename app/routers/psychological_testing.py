@@ -1,5 +1,5 @@
 # route: /api/psychological-testing | file: app/routers/psychological_testing.py
-"""Psychological testing: sessions (JSON), assignments, programs (Phase 4a)."""
+"""Psychological testing: sessions (JSON), HR assignments (один test_id)."""
 
 from __future__ import annotations
 
@@ -77,9 +77,13 @@ class PsychModuleStatusOut(BaseModel):
 class PsychAssignmentCreateIn(BaseModel):
     client_id: str
     employee_id: str
-    program_id: str = "standard_hr_v1"
+    test_id: str = Field(description="Код теста из /status → available_tests")
     due_at: datetime | None = None
     notify: bool = False
+    replace_active: bool = Field(
+        default=False,
+        description="Заменить текущее активное назначение другим тестом (иначе — ошибка active_assignment_exists)",
+    )
 
 
 class PsychAssignmentPatchIn(BaseModel):
@@ -129,36 +133,24 @@ class PsychExportPdfOut(BaseModel):
 
 
 class PsychAssignmentOut(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     id: str
     client_id: str
     employee_id: str
     employee_display_name: str | None = None
     employee_telegram_id: str | None = None
-    program_id: str = "standard_hr_v1"
-    program_title_ru: str | None = None
+    test_id: str = ""
+    test_label_ru: str = ""
     status: str
-    completed_tests: list[str] = Field(default_factory=list)
     due_at: str | None = None
     due_date: str | None = None
     notified_at: str | None = None
-    total_steps: int | None = None
-    completed_steps: int | None = None
+    completed_at: str | None = None
+    session_id: str | None = None
     is_complete: bool | None = None
-    allowed_test_ids: list[str] = Field(default_factory=list)
-    next_test_id: str | None = None
-    released_test_ids: list[str] | None = None
-    pending_hr_release_test_ids: list[str] = Field(default_factory=list)
-    needs_hr_release: bool | None = None
-
-
-class PsychAssignmentReleaseIn(BaseModel):
-    test_ids: list[str] | None = Field(
-        default=None,
-        description="Какие тесты открыть; если пусто — следующий рекомендованный шаг",
-    )
-    notify: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 def _assert_client(db: Session, client_id: str) -> None:
@@ -176,19 +168,31 @@ def _value_error_to_http(exc: ValueError) -> HTTPException:
         code = "telegram_bot_token_missing: задайте TELEGRAM_BOT_TOKEN в .env"
     if code in ("telegram_chat_not_found", "employee_no_telegram"):
         status = 400
+    if code.startswith("unknown_test_id"):
+        status = 400
     if code.startswith("telegram_send_failed") or code == "telegram_send_failed":
         status = 502
+    if code == "assignment_terminal":
+        code = (
+            "Назначение завершено или заменено. Создайте новое назначение "
+            "и нажмите «Уведомить» у активной строки."
+        )
+    if code == "assignment_no_active":
+        code = (
+            "Нет активного назначения для уведомления. "
+            "Создайте новое назначение теста для сотрудника."
+        )
+    if code == "active_assignment_exists":
+        code = (
+            "У сотрудника уже есть активное назначение другого теста. "
+            "Дождитесь завершения, отмените его в HR или создайте с replace_active=true."
+        )
     return HTTPException(status_code=status, detail=code)
 
 
 @router.get("/status", response_model=PsychModuleStatusOut)
 def get_psych_testing_status() -> PsychModuleStatusOut:
     return PsychModuleStatusOut.model_validate(module_status())
-
-
-@router.get("/programs")
-def list_psych_programs() -> dict:
-    return {"items": assign_svc.programs_payload()}
 
 
 @router.get("/sessions", response_model=ListEnvelope[PsychSessionSummaryOut])
@@ -220,12 +224,19 @@ def get_psych_session(session_id: str) -> dict:
 @router.get("/assignments", response_model=ListEnvelope[PsychAssignmentOut])
 def list_psych_assignments(
     client_id: str = Query(..., description="Организация"),
+    employee_id: str | None = Query(None, description="Фильтр по сотруднику (история назначений)"),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[PsychAssignmentOut]:
     _assert_client(db, client_id)
-    items, total = assign_svc.list_assignments(db, client_id=client_id, limit=limit, offset=offset)
+    items, total = assign_svc.list_assignments(
+        db,
+        client_id=client_id,
+        employee_id=employee_id,
+        limit=limit,
+        offset=offset,
+    )
     return ListEnvelope[PsychAssignmentOut](
         items=[PsychAssignmentOut.model_validate(x) for x in items],
         total=total,
@@ -240,27 +251,37 @@ def create_psych_assignment(
     db: Session = Depends(get_db),
 ) -> PsychAssignmentOut:
     _assert_client(db, body.client_id)
+    existing_before = assign_svc.get_active_assignment(
+        db, client_id=body.client_id, employee_id=body.employee_id
+    )
     try:
         row = assign_svc.create_assignment(
             db,
             client_id=body.client_id,
             employee_id=body.employee_id,
-            program_id=body.program_id,
+            test_id=body.test_id,
             due_at=body.due_at,
+            replace_active=body.replace_active,
         )
     except ValueError as e:
         raise _value_error_to_http(e) from e
+    created_new = existing_before is None or row.id != existing_before.id
     if body.notify:
         try:
             data = assign_svc.notify_assignment(db, row.id)
             return PsychAssignmentOut.model_validate(data)
         except ValueError as e:
+            if created_new:
+                db.delete(row)
+                db.commit()
             raise _value_error_to_http(e) from e
     emp = db.get(Employee, row.employee_id)
     name = None
     if emp:
         name = " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
-    return PsychAssignmentOut.model_validate(assign_svc.assignment_to_dict(row, employee_name=name))
+    return PsychAssignmentOut.model_validate(
+        assign_svc.assignment_to_dict(row, employee_name=name, db=db)
+    )
 
 
 @router.patch("/assignments/{assignment_id}", response_model=PsychAssignmentOut)
@@ -496,21 +517,3 @@ def notify_psych_assignment(
         raise _value_error_to_http(e) from e
     return PsychAssignmentOut.model_validate(data)
 
-
-@router.post("/assignments/{assignment_id}/release", response_model=PsychAssignmentOut)
-def release_psych_assignment_tests(
-    assignment_id: str,
-    body: PsychAssignmentReleaseIn,
-    db: Session = Depends(get_db),
-) -> PsychAssignmentOut:
-    """Открыть следующий тест (или указанные) после обратной связи HR."""
-    try:
-        data = assign_svc.release_assignment_tests(
-            db,
-            assignment_id,
-            test_ids=body.test_ids,
-            notify=body.notify,
-        )
-    except ValueError as e:
-        raise _value_error_to_http(e) from e
-    return PsychAssignmentOut.model_validate(data)

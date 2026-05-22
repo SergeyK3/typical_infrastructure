@@ -17,6 +17,7 @@ from psychological_testing.adapters.telegram_keyboards import (
     keyboard_for_item,
     parse_callback_data,
     parse_menu_callback,
+    parse_menu_step_action,
     welcome_menu_keyboard,
 )
 from psychological_testing.adapters.telegram_outbound import (
@@ -65,28 +66,26 @@ _MBTI_START_ALIASES = frozenset(
 )
 
 
+def _psych_help_text() -> str:
+    return (
+        "Психологическое тестирование (HR OS).\n\n"
+        "• /start <тест> — начать тест\n"
+        "• /cancel — прервать текущую сессию"
+    )
+
+
 def _welcome_text(*, has_assignment: bool = False, allowed_count: int = 0) -> str:
     voice_note = "" if _voice_enabled() else f"\n{_VOICE_DEV_NOTE}"
     if has_assignment and allowed_count == 0:
         body = (
             "Психологическое тестирование (HR OS).\n\n"
             "Сейчас нет открытых тестов. Отдел кадров сообщит, когда будет следующий этап.\n"
-            "Команды /start, /cancel и /help тоже работают."
+            "Команды /start и /cancel тоже работают."
         )
     elif has_assignment:
-        body = (
-            "Психологическое тестирование (HR OS).\n\n"
-            "Доступные тесты по назначению HR — выберите кнопкой ниже.\n"
-            "Команды /start, /cancel и /help тоже работают.\n"
-            "Structured-тесты: кнопка или текст."
-        )
+        body = "Психологическое тестирование (HR OS).\n\nНазначение от отдела кадров."
     else:
-        body = (
-            "Психологическое тестирование (HR OS).\n\n"
-            "Выберите тест или действие кнопкой ниже.\n"
-            "Команды /start, /cancel и /help тоже работают.\n"
-            "Structured-тесты: кнопка или текст."
-        )
+        body = "Психологическое тестирование (HR OS).\n\nВыберите тест кнопкой ниже."
     return f"{body}{voice_note}"
 
 _VOICE_MOCK_HINT = f"{_VOICE_DEV_NOTE}\nИспользуйте кнопки или текст."
@@ -264,29 +263,61 @@ class PsychTestingTelegramAdapter:
         employee_id = (os.getenv("PSYCH_TESTING_DEV_EMPLOYEE_ID") or "dev-employee").strip()
         return client_id, employee_id
 
-    def _resolve_participant(self, chat_id: str) -> tuple[str, str, str | None]:
-        """``(client_id, employee_id, display_name)`` via HR или dev fallback."""
+    def _employee_snapshot(self, chat_id: str):
+        """Карточка сотрудника по Telegram chat_id (HR или dev fallback)."""
+        from psychological_testing.integration.hr_core import EmployeeSnapshot, resolve_employee_by_telegram
+
         default_client, default_employee = self._dev_ids()
         try:
             from app.db import SessionLocal
 
             db = SessionLocal()
             try:
-                snap = resolve_employee_by_telegram(
+                return resolve_employee_by_telegram(
                     db,
                     chat_id,
                     default_client_id=default_client,
                     default_employee_id=default_employee,
                 )
-                return snap.client_id, snap.id, employee_display_label(snap)
             finally:
                 db.close()
         except Exception:
             _log.debug("psych_testing: HR resolve unavailable, using dev ids", exc_info=True)
-        return default_client, default_employee, None
+        return EmployeeSnapshot(id=default_employee, client_id=default_client)
+
+    def _resolve_participant(self, chat_id: str) -> tuple[str, str, str | None]:
+        """``(client_id, employee_id, display_name)`` via HR или dev fallback."""
+        snap = self._employee_snapshot(chat_id)
+        return snap.client_id, snap.id, employee_display_label(snap)
+
+    def _apply_pd_consent_gate(self, chat_id: str, client_id: str, employee_id: str) -> bool:
+        """
+        Единый слой ПДн: False — сценарий остановлен (отправлен prompt или block).
+        """
+        try:
+            from app.db import SessionLocal
+            from app.services.employee_consent import PdConsentGate, require_pd_consent_or_prompt
+
+            db = SessionLocal()
+            try:
+                gate = require_pd_consent_or_prompt(db, client_id, employee_id)
+            finally:
+                db.close()
+            if gate.outcome == PdConsentGate.ALLOW:
+                return True
+            self._send(chat_id, gate.message or "", gate.reply_markup)
+            return False
+        except Exception:
+            _log.debug("pd consent gate skipped", exc_info=True)
+            return True
 
     def _assignment_gate(
-        self, client_id: str, employee_id: str, test_id: str
+        self,
+        client_id: str,
+        employee_id: str,
+        test_id: str,
+        *,
+        step_key: str | None = None,
     ) -> tuple[bool, str | None, object | None]:
         try:
             from app.db import SessionLocal
@@ -299,6 +330,7 @@ class PsychTestingTelegramAdapter:
                     client_id=client_id,
                     employee_id=employee_id,
                     test_id=test_id,
+                    step_key=step_key,
                 )
                 if ok and assignment is not None:
                     mark_test_started(db, assignment)
@@ -327,19 +359,47 @@ class PsychTestingTelegramAdapter:
             return None
 
     def _send_welcome(self, chat_id: str) -> None:
+        client_id, employee_id, _ = self._resolve_participant(chat_id)
+        if not self._apply_pd_consent_gate(chat_id, client_id, employee_id):
+            return
         ctx = self._assignment_menu_context(chat_id)
         if ctx is None:
             self._send(
                 chat_id,
                 _welcome_text(has_assignment=False),
-                welcome_menu_keyboard(None),
+                welcome_menu_keyboard(),
             )
             return
-        allowed = list(ctx.get("allowed_test_ids") or [])
+        allowed_ids = list(ctx.get("allowed_test_ids") or [])
+        allowed = frozenset(allowed_ids)
+        text: str | None = None
+        if len(allowed_ids) == 1:
+            try:
+                from app.db import SessionLocal
+                from app.models import Employee
+                from app.services.psych_test_assignments import (
+                    build_notify_message,
+                    get_active_assignment,
+                )
+
+                db = SessionLocal()
+                try:
+                    assignment = get_active_assignment(
+                        db, client_id=client_id, employee_id=employee_id
+                    )
+                    emp = db.get(Employee, employee_id)
+                    if assignment and emp:
+                        text = build_notify_message(assignment, emp, db)
+                finally:
+                    db.close()
+            except Exception:
+                _log.debug("assignment welcome message skipped", exc_info=True)
+        if text is None:
+            text = _welcome_text(has_assignment=True, allowed_count=len(allowed_ids))
         self._send(
             chat_id,
-            _welcome_text(has_assignment=True, allowed_count=len(allowed)),
-            welcome_menu_keyboard(frozenset(allowed)),
+            text,
+            welcome_menu_keyboard(allowed_test_ids=allowed),
         )
 
     def _handle_menu_action(self, chat_id: str, action: str) -> None:
@@ -347,7 +407,25 @@ class PsychTestingTelegramAdapter:
             self.cancel_session(chat_id)
             return
         if action == "help":
-            self._send_welcome(chat_id)
+            self._send(chat_id, _psych_help_text())
+            return
+        step_parsed = parse_menu_step_action(action)
+        if step_parsed is not None:
+            step_key, is_dialog = step_parsed
+            test_id, delivery_mode = self._test_id_for_step(chat_id, step_key)
+            if test_id not in _SUPPORTED_TESTS:
+                self._send_welcome(chat_id)
+                return
+            if is_dialog and test_id == "mbti":
+                delivery_mode = "dialog"
+            elif delivery_mode is None:
+                delivery_mode = "structured" if test_id == "mbti" else None
+            self.start_test(
+                chat_id,
+                test_id,
+                delivery_mode=delivery_mode if test_id == "mbti" else None,
+                step_key=step_key,
+            )
             return
         test_id, delivery_mode = resolve_mbti_start_arg(action)
         if test_id not in _SUPPORTED_TESTS:
@@ -358,6 +436,19 @@ class PsychTestingTelegramAdapter:
             test_id,
             delivery_mode=delivery_mode if test_id == "mbti" else None,
         )
+
+    def _test_id_for_step(self, chat_id: str, step_key: str) -> tuple[str, MbtiDeliveryMode | None]:
+        ctx = self._assignment_menu_context(chat_id)
+        if ctx:
+            for step in ctx.get("allowed_steps") or []:
+                if str(step.get("step_key")) == step_key:
+                    return str(step["test_id"]), None
+            for step in ctx.get("all_steps") or []:
+                if str(step.get("step_key")) == step_key:
+                    return str(step["test_id"]), None
+        if step_key.endswith("_1"):
+            return step_key[: -len("_1")], None
+        return step_key, None
 
     def _send(
         self,
@@ -409,6 +500,7 @@ class PsychTestingTelegramAdapter:
         test_id: str,
         *,
         delivery_mode: MbtiDeliveryMode | None = None,
+        step_key: str | None = None,
     ) -> None:
         if test_id not in _SUPPORTED_TESTS:
             self._send(
@@ -419,16 +511,16 @@ class PsychTestingTelegramAdapter:
 
         client_id, employee_id, _display_name = self._resolve_participant(chat_id)
 
+        if not self._apply_pd_consent_gate(chat_id, client_id, employee_id):
+            return
+
         allowed, block_msg, assignment = self._assignment_gate(
-            client_id, employee_id, test_id
+            client_id, employee_id, test_id, step_key=step_key
         )
         if not allowed:
             self._send(chat_id, block_msg or "Тест недоступен по назначению HR.")
             return
 
-        binding = self._store.ensure_binding(
-            chat_id, client_id=client_id, employee_id=employee_id
-        )
         existing = self._store.get_engine(chat_id)
         if existing is not None and _session_is_active(existing):
             label = _active_test_label(existing, self._store, chat_id)
@@ -440,8 +532,13 @@ class PsychTestingTelegramAdapter:
             )
             return
 
+        binding = self._store.ensure_binding(
+            chat_id, client_id=client_id, employee_id=employee_id
+        )
         binding.context = "psych_testing"
         binding.active_test_id = test_id
+        binding.active_step_key = step_key or test_id
+        binding.active_assignment_id = assignment.id if assignment is not None else None
         binding.mbti_delivery_mode = None
 
         self._store.clear_engine(chat_id)
@@ -458,10 +555,16 @@ class PsychTestingTelegramAdapter:
             _log.info("psych_testing start chat=%s test=%s mode=%s", chat_id, test_id, mode)
 
             if test_id == "mbti" and mode == "dialog":
+                from psychological_testing.integration.hr_core import employee_greeting_label
+                from psychological_testing.research.mbti.scripts.akma_dialog import UserProfile
+
+                snap = self._employee_snapshot(chat_id)
+                greeting = employee_greeting_label(snap)
                 engine: SessionEngine | AkmaDialogEngine = AkmaDialogEngine.start(
                     definition,
                     client_id=client_id,
                     employee_id=employee_id,
+                    user=UserProfile(name=greeting or "Участник"),
                     voice_pipeline=self._voice_pipeline,
                 )
                 qpa = engine.akma_state.max_questions
@@ -515,6 +618,8 @@ class PsychTestingTelegramAdapter:
         if binding:
             binding.context = "idle"
             binding.active_test_id = None
+            binding.active_step_key = None
+            binding.active_assignment_id = None
             binding.mbti_delivery_mode = None
         self._send(chat_id, "Сессия отменена.")
 
@@ -529,22 +634,15 @@ class PsychTestingTelegramAdapter:
                 binding.mbti_delivery_mode if binding and binding.mbti_delivery_mode else "structured"
             )
             client_id, employee_id, display_name = self._resolve_participant(chat_id)
-            assignment_id = None
+            assignment_id = binding.active_assignment_id if binding else None
+            completed_step_key = binding.active_step_key if binding else None
             updated = None
             try:
                 from app.db import SessionLocal
-                from app.services.psych_test_assignments import (
-                    get_active_assignment,
-                    record_test_completed,
-                )
+                from app.services.psych_test_assignments import record_test_completed
 
                 db = SessionLocal()
                 try:
-                    active = get_active_assignment(
-                        db, client_id=client_id, employee_id=employee_id
-                    )
-                    if active:
-                        assignment_id = active.id
                     doc = build_session_result_document(
                         engine,
                         telegram_chat_id=chat_id,
@@ -553,23 +651,35 @@ class PsychTestingTelegramAdapter:
                         delivery_mode=delivery_mode,
                         assignment_id=assignment_id,
                     )
+                    if completed_step_key:
+                        doc["step_key"] = completed_step_key
                     persist_session_result(doc)
                     test_id = str(doc.get("test_id") or "")
+                    session_id = str(doc.get("session_id") or "")
                     updated = record_test_completed(
                         db,
                         client_id=client_id,
                         employee_id=employee_id,
                         test_id=test_id,
+                        assignment_id=assignment_id,
+                        session_id=session_id or None,
                     )
                 finally:
                     db.close()
             except Exception:
                 _log.exception("persist session result failed")
                 updated = None
+            mbti_dialog = bool(
+                binding
+                and binding.active_test_id == "mbti"
+                and binding.mbti_delivery_mode == "dialog"
+            )
             self._store.clear_engine(chat_id)
             if binding:
                 binding.context = "idle"
                 binding.active_test_id = None
+                binding.active_step_key = None
+                binding.active_assignment_id = None
                 binding.mbti_delivery_mode = None
             report = transition.report_text
             if transition.user_ack:
@@ -592,16 +702,10 @@ class PsychTestingTelegramAdapter:
                 except Exception:
                     _log.debug("completion menu context failed", exc_info=True)
 
-            mbti_dialog = bool(
-                binding and binding.active_test_id == "mbti" and binding.mbti_delivery_mode == "dialog"
-            )
             report += "\n\n" + build_completion_footer(
                 engine,
                 has_hr_assignment=updated is not None,
-                allowed_next_test_ids=(
-                    list(menu_ctx.get("allowed_test_ids") or []) if menu_ctx else None
-                ),
-                program_complete=bool(menu_ctx and menu_ctx.get("is_complete")),
+                assignment_complete=bool(menu_ctx and menu_ctx.get("is_complete")),
                 mbti_dialog=mbti_dialog,
             )
             self._send(chat_id, report)
@@ -671,7 +775,7 @@ class PsychTestingTelegramAdapter:
                 self.cancel_session(chat_id)
                 return
             if cmd == "/help":
-                self._send_welcome(chat_id)
+                self._send(chat_id, _psych_help_text())
                 return
 
         engine = self._store.get_engine(chat_id)

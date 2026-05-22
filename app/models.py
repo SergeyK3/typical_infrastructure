@@ -350,8 +350,50 @@ class RegulationKpi(Base):
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class EmployeeConsentRecord(Base, TimestampMixin):
+    """Согласие сотрудника (client_id + employee_id), единый слой для Telegram-сценариев."""
+
+    __tablename__ = "employee_consent_records"
+    __table_args__ = (
+        Index(
+            "ix_employee_consent_client_emp_type",
+            "client_id",
+            "employee_id",
+            "consent_type",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: ``pd_processing`` — согласие на обработку ПДн (задел на другие типы).
+    consent_type: Mapped[str] = mapped_column(String(32), nullable=False, default="pd_processing")
+    #: ``pending`` | ``decline_pending`` | ``accepted`` | ``declined`` | ``revoked``
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    document_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: ``telegram`` | ``migrated_part1`` | ``migrated_examination`` | ``hr_manual``
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class PtTestProgram(Base, TimestampMixin):
+    """Глобальный шаблон программы психотестирования (не привязан к client_id)."""
+
+    __tablename__ = "pt_test_programs"
+    __table_args__ = (Index("ix_pt_test_programs_code", "code", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    title_ru: Mapped[str] = mapped_column(String(256), nullable=False)
+    steps_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
 class PtTestAssignment(Base, TimestampMixin):
-    """Назначение программы психологического тестирования сотруднику (Phase 4a)."""
+    """Назначение одного психологического теста сотруднику (HR)."""
 
     __tablename__ = "pt_test_assignments"
     __table_args__ = (
@@ -361,12 +403,18 @@ class PtTestAssignment(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     client_id: Mapped[str] = mapped_column(String(32), nullable=False)
     employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    test_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     program_id: Mapped[str] = mapped_column(String(64), nullable=False, default="standard_hr_v1")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="scheduled")
     completed_tests_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     released_tests_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    steps_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    completed_step_keys_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    released_step_keys_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class RegulationInstruction(Base):

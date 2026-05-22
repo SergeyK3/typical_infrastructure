@@ -20,6 +20,8 @@ class ChatBinding:
     employee_id: str
     context: ProcessContext = "idle"
     active_test_id: str | None = None
+    active_step_key: str | None = None
+    active_assignment_id: str | None = None
     mbti_delivery_mode: str | None = None
 
 

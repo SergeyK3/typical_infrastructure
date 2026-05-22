@@ -1,4 +1,4 @@
-"""Psychological testing assignments (Phase 4a): DB + program unlock + Telegram notify."""
+"""Psychological testing assignments: один тест на назначение + Telegram notify."""
 
 from __future__ import annotations
 
@@ -13,22 +13,13 @@ from app.business_days import default_assignment_due_at
 from app.models import Employee, PtTestAssignment
 from app.utils import new_id32
 from psychological_testing.adapters.telegram_outbound import get_telegram_outbound
+from psychological_testing.domain.test_registry import TestRegistry
 from psychological_testing.integration.session_repository import (
     latest_telegram_chat_for_employee,
 )
-from psychological_testing.domain.test_programs import (
-    DEFAULT_PROGRAM_ID,
-    allowed_test_ids,
-    completed_set,
-    get_program,
-    list_programs,
-    next_recommended_test,
-    pending_hr_release_test_ids,
-    program_progress,
-)
 
 ACTIVE_STATUSES = frozenset({"scheduled", "notified", "in_progress"})
-TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
+TERMINAL_STATUSES = frozenset({"completed", "cancelled", "superseded"})
 
 
 class NotifyTelegramError(Exception):
@@ -50,66 +41,38 @@ class NotifyTelegramError(Exception):
 
 
 def normalize_telegram_chat_id(raw: str) -> str:
-    """Strip whitespace; keep numeric chat_id or @username as entered."""
     return str(raw or "").strip()
 
 
+def _registry() -> TestRegistry:
+    return TestRegistry()
+
+
+def _known_test_ids() -> frozenset[str]:
+    return frozenset(_registry().list_test_ids())
+
+
+def _test_label(test_id: str) -> str:
+    try:
+        return _registry().get(test_id).display_name or test_id
+    except KeyError:
+        return test_id
+
+
+def _assignment_test_id(row: PtTestAssignment) -> str | None:
+    tid = str(row.test_id or "").strip()
+    if tid:
+        return tid
+    released = json.loads(row.released_tests_json or "[]")
+    if isinstance(released, list) and released:
+        return str(released[0]).strip() or None
+    return None
+
+
 def _ensure_row_due_at(db: Session, row: PtTestAssignment) -> bool:
-    """Fill missing due_at for active assignments (legacy rows). Returns True if updated."""
     if row.due_at is not None or row.status in TERMINAL_STATUSES:
         return False
     row.due_at = default_assignment_due_at()
-    db.add(row)
-    return True
-
-
-def load_completed_tests(raw: str | None) -> list[str]:
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return []
-    if isinstance(data, list):
-        return [str(x) for x in data]
-    if isinstance(data, dict):
-        return [str(k) for k in data.keys()]
-    return []
-
-
-def load_released_tests(raw: str | None) -> set[str]:
-    return completed_set(load_completed_tests(raw))
-
-
-def _dump_released(test_ids: set[str]) -> str:
-    return json.dumps(sorted(test_ids), ensure_ascii=False)
-
-
-def _initial_released_test_ids(program_id: str) -> set[str]:
-    prog = get_program(program_id)
-    if not prog.steps:
-        return set()
-    return {prog.steps[0].test_id}
-
-
-def _backfill_released_tests(row: PtTestAssignment) -> set[str]:
-    """Legacy rows: сохранить прежнее авто-разблокирование."""
-    done = completed_set(load_completed_tests(row.completed_tests_json))
-    prog = get_program(row.program_id)
-    released = set(allowed_test_ids(prog, done, released=None))
-    released.update(done)
-    return released
-
-
-def _dump_completed(test_ids: list[str]) -> str:
-    return json.dumps(sorted(set(test_ids)), ensure_ascii=False)
-
-
-def _ensure_row_released_tests(db: Session, row: PtTestAssignment) -> bool:
-    released = load_released_tests(row.released_tests_json)
-    if released:
-        return False
-    row.released_tests_json = _dump_released(_backfill_released_tests(row))
     db.add(row)
     return True
 
@@ -119,28 +82,29 @@ def assignment_to_dict(
     *,
     employee_name: str | None = None,
     employee_telegram_id: str | None = None,
+    db: Session | None = None,
 ) -> dict:
-    done = completed_set(load_completed_tests(row.completed_tests_json))
-    released = load_released_tests(row.released_tests_json)
-    prog = get_program(row.program_id)
-    progress = program_progress(prog, done, released=released)
+    del db
+    test_id = _assignment_test_id(row) or ""
+    label = _test_label(test_id) if test_id else ""
+    is_complete = row.status == "completed"
     return {
         "id": row.id,
         "client_id": row.client_id,
         "employee_id": row.employee_id,
         "employee_display_name": employee_name,
         "employee_telegram_id": employee_telegram_id,
-        "program_id": row.program_id,
-        "program_title_ru": prog.title_ru,
+        "test_id": test_id,
+        "test_label_ru": label,
         "status": row.status,
-        "completed_tests": sorted(done),
-        "released_tests": sorted(released),
         "due_at": row.due_at.isoformat() if row.due_at else None,
         "due_date": row.due_at.date().isoformat() if row.due_at else None,
         "notified_at": row.notified_at.isoformat() if row.notified_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "session_id": row.session_id,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-        **progress,
+        "is_complete": is_complete,
     }
 
 
@@ -163,31 +127,67 @@ def get_active_assignment(
     return db.scalars(stmt).first()
 
 
+def _supersede_active_assignments(
+    db: Session,
+    *,
+    client_id: str,
+    employee_id: str,
+) -> None:
+    """Закрыть незавершённые активные назначения (история строк сохраняется)."""
+    stmt = select(PtTestAssignment).where(
+        PtTestAssignment.client_id == client_id,
+        PtTestAssignment.employee_id == employee_id,
+        PtTestAssignment.status.in_(tuple(ACTIVE_STATUSES)),
+    )
+    for row in db.scalars(stmt).all():
+        row.status = "superseded"
+        db.add(row)
+
+
 def create_assignment(
     db: Session,
     *,
     client_id: str,
     employee_id: str,
-    program_id: str = DEFAULT_PROGRAM_ID,
+    test_id: str,
     due_at: datetime | None = None,
+    replace_active: bool = False,
 ) -> PtTestAssignment:
-    get_program(program_id)
+    tid = str(test_id or "").strip()
+    if not tid:
+        raise ValueError("test_id_required")
+    if tid not in _known_test_ids():
+        raise ValueError(f"unknown_test_id:{tid}")
     emp = db.get(Employee, employee_id)
     if not emp or emp.client_id != client_id:
         raise ValueError("employee_not_found")
     existing = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
     if existing:
-        raise ValueError("active_assignment_exists")
+        existing_tid = _assignment_test_id(existing)
+        if existing_tid == tid:
+            if due_at is not None:
+                existing.due_at = due_at
+                db.add(existing)
+                db.commit()
+                db.refresh(existing)
+            return existing
+        if not replace_active:
+            raise ValueError("active_assignment_exists")
+        _supersede_active_assignments(db, client_id=client_id, employee_id=employee_id)
     if due_at is None:
         due_at = default_assignment_due_at()
     row = PtTestAssignment(
         id=new_id32(),
         client_id=client_id,
         employee_id=employee_id,
-        program_id=program_id,
+        test_id=tid,
+        program_id=tid,
         status="scheduled",
+        steps_snapshot_json="[]",
+        completed_step_keys_json="[]",
+        released_step_keys_json="[]",
         completed_tests_json="[]",
-        released_tests_json=_dump_released(_initial_released_test_ids(program_id)),
+        released_tests_json=json.dumps([tid], ensure_ascii=False),
         due_at=due_at,
     )
     db.add(row)
@@ -200,10 +200,13 @@ def list_assignments(
     db: Session,
     *,
     client_id: str,
+    employee_id: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
     stmt = select(PtTestAssignment).where(PtTestAssignment.client_id == client_id)
+    if employee_id:
+        stmt = stmt.where(PtTestAssignment.employee_id == employee_id)
     total = len(db.scalars(stmt).all())
     rows = (
         db.scalars(
@@ -215,15 +218,15 @@ def list_assignments(
     for row in rows:
         if _ensure_row_due_at(db, row):
             touched = True
-        if _ensure_row_released_tests(db, row):
-            touched = True
         emp = db.get(Employee, row.employee_id)
         name = None
         if emp:
             name = " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
         tg = normalize_telegram_chat_id(str(emp.telegram_id or "")) if emp else None
         out.append(
-            assignment_to_dict(row, employee_name=name, employee_telegram_id=tg or None)
+            assignment_to_dict(
+                row, employee_name=name, employee_telegram_id=tg or None, db=db
+            )
         )
     if touched:
         db.commit()
@@ -236,51 +239,29 @@ def check_may_start_test(
     client_id: str,
     employee_id: str,
     test_id: str,
+    step_key: str | None = None,
 ) -> tuple[bool, str | None, PtTestAssignment | None]:
-    """
-    Returns (allowed, user_message_ru, assignment).
-    No active assignment → allow (legacy free /start).
-    """
+    del step_key
     assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
     if assignment is None:
         return True, None, None
-    released = load_released_tests(assignment.released_tests_json)
-    if not released:
-        released = _backfill_released_tests(assignment)
-        assignment.released_tests_json = _dump_released(released)
-        db.add(assignment)
-        db.commit()
-    prog = get_program(assignment.program_id)
-    if test_id not in prog.all_test_ids():
+    assigned = _assignment_test_id(assignment)
+    if not assigned:
+        return True, None, assignment
+    if assignment.status == "completed":
         return (
             False,
-            f"Тест «{test_id}» не входит в назначенную программу «{prog.title_ru}».",
+            "Назначение HR уже выполнено. Дождитесь нового назначения от отдела кадров.",
             assignment,
         )
-    done = completed_set(load_completed_tests(assignment.completed_tests_json))
-    if test_id in done:
-        allowed = allowed_test_ids(prog, done, released=released)
-        if allowed:
-            opts = ", ".join(f"/start {t}" for t in allowed)
-            return False, f"Тест «{test_id}» уже пройден по назначению HR. Доступно: {opts}.", assignment
-        return False, "Тест «{test_id}» уже пройден. Ожидайте следующий шаг от HR.".format(test_id=test_id), assignment
-    allowed = allowed_test_ids(prog, done, released=released)
-    if test_id not in allowed:
-        pending = pending_hr_release_test_ids(prog, done, released)
-        if test_id in pending:
-            return (
-                False,
-                "Этот тест откроет отдел кадров после обратной связи по предыдущему этапу.",
-                assignment,
-            )
-        if allowed:
-            opts = ", ".join(f"/start {t}" for t in allowed)
-            return (
-                False,
-                f"Сначала завершите доступные шаги программы HR. Сейчас доступно: {opts}.",
-                assignment,
-            )
-        return False, "Ожидайте сообщения от отдела кадров о следующем тесте.", assignment
+    if test_id != assigned:
+        label = _test_label(assigned)
+        return (
+            False,
+            f"По назначению HR вам доступен тест «{label}». "
+            f"Нажмите /start {assigned} или кнопку в меню.",
+            assignment,
+        )
     return True, None, assignment
 
 
@@ -299,50 +280,74 @@ def record_test_completed(
     client_id: str,
     employee_id: str,
     test_id: str,
+    step_key: str | None = None,
+    assignment_id: str | None = None,
+    session_id: str | None = None,
 ) -> PtTestAssignment | None:
-    assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
-    if assignment is None:
+    del step_key
+    row: PtTestAssignment | None = None
+    if assignment_id:
+        candidate = db.get(PtTestAssignment, assignment_id)
+        if (
+            candidate
+            and candidate.client_id == client_id
+            and candidate.employee_id == employee_id
+        ):
+            row = candidate
+    if row is None:
+        active = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
+        if active and _assignment_test_id(active) == test_id:
+            row = active
+    if row is None:
         return None
-    done = completed_set(load_completed_tests(assignment.completed_tests_json))
-    if test_id not in done:
-        done.add(test_id)
-        assignment.completed_tests_json = _dump_completed(sorted(done))
-    prog = get_program(assignment.program_id)
-    if program_progress(prog, done)["is_complete"]:
-        assignment.status = "completed"
-    elif assignment.status == "notified":
-        assignment.status = "in_progress"
-    db.add(assignment)
+    if row.status == "completed":
+        return row
+    row.completed_tests_json = json.dumps([test_id], ensure_ascii=False)
+    row.status = "completed"
+    row.completed_at = datetime.utcnow()
+    if session_id:
+        row.session_id = str(session_id).strip() or None
+    db.add(row)
     db.commit()
-    db.refresh(assignment)
-    return assignment
+    db.refresh(row)
+    return row
 
 
-def build_notify_message(assignment: PtTestAssignment, employee: Employee) -> str:
-    prog = get_program(assignment.program_id)
-    done = completed_set(load_completed_tests(assignment.completed_tests_json))
-    released = load_released_tests(assignment.released_tests_json)
-    if not released:
-        released = _backfill_released_tests(assignment)
-    allowed = allowed_test_ids(prog, done, released=released)
-    nxt = allowed[0] if allowed else next_recommended_test(prog, done, released=released)
-    name = employee.first_name or employee.last_name or "коллега"
-    due = ""
-    if assignment.due_at:
-        due = f"\nДедлайн: {assignment.due_at.strftime('%d.%m.%Y')}."
-    if nxt:
-        step = prog.step_for(nxt)
-        label = (step.label_ru if step else None) or nxt.upper()
-        test_line = f"Доступный тест: {label} — нажмите кнопку в меню или /start {nxt}."
-    else:
-        test_line = "Сейчас нет открытых тестов — HR сообщит, когда будет следующий этап."
-    return (
-        f"Здравствуйте, {name}!\n\n"
-        f"Вам назначено психологическое тестирование ({prog.title_ru}).\n"
-        f"{test_line}"
-        f"{due}\n\n"
-        "Отмена текущей сессии: /cancel"
+record_step_completed = record_test_completed
+
+
+def _test_intro_blurb(test_id: str) -> str:
+    from psychological_testing.shared_engine.report_sections.constants import (
+        TEST_SECTION_INTROS,
     )
+
+    return (TEST_SECTION_INTROS.get(test_id) or "").strip()
+
+
+def build_notify_message(assignment: PtTestAssignment, employee: Employee, db: Session) -> str:
+    from app.services.employee_consent import (
+        PD_CONSENT_ACK_LINE,
+        employee_greeting_first_patronymic,
+        get_pd_consent,
+        is_pd_consent_valid,
+    )
+
+    test_id = _assignment_test_id(assignment) or ""
+    label = _test_label(test_id)
+    name = employee_greeting_first_patronymic(employee.first_name, employee.middle_name)
+    chunks = [
+        f"Здравствуйте, {name}!",
+        f"\n\nВам назначено психологическое тестирование: {label}.",
+    ]
+    blurb = _test_intro_blurb(test_id)
+    if blurb:
+        chunks.append(f"\n\n{blurb}")
+    if assignment.due_at:
+        chunks.append(f"\n\nДедлайн: {assignment.due_at.strftime('%d.%m.%Y')}.")
+    snap = get_pd_consent(db, assignment.client_id, assignment.employee_id)
+    if is_pd_consent_valid(snap):
+        chunks.append(f"\n\n{PD_CONSENT_ACK_LINE}")
+    return "".join(chunks)
 
 
 def _telegram_bot_token() -> str:
@@ -371,29 +376,70 @@ def update_assignment_due_at(
     name = None
     if emp:
         name = " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
-    return assignment_to_dict(row, employee_name=name)
+    return assignment_to_dict(row, employee_name=name, db=db)
 
 
-def notify_assignment(db: Session, assignment_id: str) -> dict:
-    row = db.get(PtTestAssignment, assignment_id)
-    if not row:
-        raise ValueError("assignment_not_found")
-    if row.status in TERMINAL_STATUSES:
-        raise ValueError("assignment_terminal")
-    emp = db.get(Employee, row.employee_id)
+def build_psych_post_consent_followup(
+    db: Session,
+    client_id: str,
+    employee_id: str,
+) -> tuple[str, dict] | None:
+    from psychological_testing.adapters.telegram_keyboards import welcome_menu_keyboard
+
+    assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
+    if assignment is None:
+        return None
+    emp = db.get(Employee, employee_id)
     if not emp:
-        raise ValueError("employee_not_found")
-    chat_id = normalize_telegram_chat_id(str(emp.telegram_id or ""))
-    if not chat_id:
-        raise ValueError("employee_no_telegram")
-    session_chat = latest_telegram_chat_for_employee(row.employee_id)
-    text = build_notify_message(row, emp)
+        return None
+    ctx = assignment_menu_context(db, client_id=client_id, employee_id=employee_id)
+    text = build_notify_message(assignment, emp, db)
+    allowed = frozenset(ctx["allowed_test_ids"]) if ctx else None
+    markup = welcome_menu_keyboard(allowed_test_ids=allowed)
+    return text, markup
+
+
+def build_psych_assignment_consent_intro(employee: Employee) -> str:
+    from app.services.employee_consent import employee_greeting_first_patronymic
+
+    name = employee_greeting_first_patronymic(employee.first_name, employee.middle_name)
+    return (
+        f"Здравствуйте, {name}!\n\n"
+        "Вам назначено психологическое тестирование командных качеств."
+    )
+
+
+def _telegram_outbound_send_pd_consent_aware(
+    db: Session,
+    *,
+    client_id: str,
+    employee_id: str,
+    chat_id: str,
+    primary_text: str,
+    primary_reply_markup: dict | None = None,
+    session_chat: str | None = None,
+    consent_intro: str | None = None,
+) -> None:
+    from app.services.employee_consent import PdConsentGate, require_pd_consent_or_prompt
+
+    gate = require_pd_consent_or_prompt(
+        db, client_id, employee_id, intro=consent_intro
+    )
+    if gate.outcome == PdConsentGate.ALLOW:
+        text = primary_text
+        markup = primary_reply_markup
+    elif gate.outcome == PdConsentGate.BLOCKED:
+        text = gate.message or primary_text
+        markup = None
+    else:
+        text = gate.message or primary_text
+        markup = gate.reply_markup
     outbound = get_telegram_outbound()
     result = outbound.send_message(
         token=_telegram_bot_token(),
         chat_id=chat_id,
         text=text,
-        reply_markup=None,
+        reply_markup=markup,
     )
     if not result.ok:
         desc = (result.description or "telegram_send_failed").lower()
@@ -409,7 +455,10 @@ def notify_assignment(db: Session, assignment_id: str) -> dict:
                     "— возможно, в карточке указан другой идентификатор."
                 )
             elif session_chat:
-                msg += f" В JSON сессий chat_id {session_chat} совпадает с карточкой — возможно, другой TELEGRAM_BOT_TOKEN у API и у worker."
+                msg += (
+                    f" В JSON сессий chat_id {session_chat} совпадает с карточкой — возможно, "
+                    "другой TELEGRAM_BOT_TOKEN у API и у worker."
+                )
             raise NotifyTelegramError(
                 "telegram_chat_not_found",
                 msg,
@@ -417,6 +466,52 @@ def notify_assignment(db: Session, assignment_id: str) -> dict:
                 session_telegram_chat_id=session_chat,
             )
         raise ValueError("telegram_send_failed")
+
+
+def _resolve_assignment_for_notify(
+    db: Session, assignment_id: str
+) -> PtTestAssignment:
+    """Строка для отправки Telegram: активная или восстановленная из истории."""
+    clicked = db.get(PtTestAssignment, assignment_id)
+    if not clicked:
+        raise ValueError("assignment_not_found")
+
+    active = get_active_assignment(
+        db, client_id=clicked.client_id, employee_id=clicked.employee_id
+    )
+    if active is not None:
+        return active
+
+    if clicked.status not in TERMINAL_STATUSES:
+        return clicked
+
+    raise ValueError("assignment_no_active")
+
+
+def notify_assignment(db: Session, assignment_id: str) -> dict:
+    row = _resolve_assignment_for_notify(db, assignment_id)
+    emp = db.get(Employee, row.employee_id)
+    if not emp:
+        raise ValueError("employee_not_found")
+    chat_id = normalize_telegram_chat_id(str(emp.telegram_id or ""))
+    if not chat_id:
+        raise ValueError("employee_no_telegram")
+    session_chat = latest_telegram_chat_for_employee(row.employee_id)
+    from psychological_testing.adapters.telegram_keyboards import welcome_menu_keyboard
+
+    ctx = assignment_menu_context(db, client_id=row.client_id, employee_id=row.employee_id)
+    allowed = frozenset(ctx["allowed_test_ids"]) if ctx else None
+    text = build_notify_message(row, emp, db)
+    _telegram_outbound_send_pd_consent_aware(
+        db,
+        client_id=row.client_id,
+        employee_id=row.employee_id,
+        chat_id=chat_id,
+        primary_text=text,
+        primary_reply_markup=welcome_menu_keyboard(allowed_test_ids=allowed),
+        session_chat=session_chat,
+        consent_intro=build_psych_assignment_consent_intro(emp),
+    )
     row.notified_at = datetime.utcnow()
     if row.status == "scheduled":
         row.status = "notified"
@@ -426,92 +521,8 @@ def notify_assignment(db: Session, assignment_id: str) -> dict:
     return assignment_to_dict(
         row,
         employee_name=" ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name])),
+        db=db,
     )
-
-
-def build_release_notify_message(
-    assignment: PtTestAssignment,
-    employee: Employee,
-    *,
-    released_test_ids: list[str],
-) -> str:
-    prog = get_program(assignment.program_id)
-    name = employee.first_name or employee.last_name or "коллега"
-    labels = []
-    for tid in released_test_ids:
-        step = prog.step_for(tid)
-        labels.append((step.label_ru if step else None) or tid.upper())
-    tests_text = ", ".join(labels)
-    return (
-        f"Здравствуйте, {name}!\n\n"
-        f"Отдел кадров открыл для вас следующий этап: {tests_text}.\n"
-        "Откройте меню (/start) и выберите тест кнопкой."
-    )
-
-
-def release_assignment_tests(
-    db: Session,
-    assignment_id: str,
-    *,
-    test_ids: list[str] | None = None,
-    notify: bool = False,
-) -> dict:
-    row = db.get(PtTestAssignment, assignment_id)
-    if not row:
-        raise ValueError("assignment_not_found")
-    if row.status in TERMINAL_STATUSES:
-        raise ValueError("assignment_terminal")
-    prog = get_program(row.program_id)
-    done = completed_set(load_completed_tests(row.completed_tests_json))
-    released = load_released_tests(row.released_tests_json)
-    if not released:
-        released = _backfill_released_tests(row)
-    pending = pending_hr_release_test_ids(prog, done, released)
-    if test_ids is None:
-        if not pending:
-            raise ValueError("nothing_to_release")
-        # По умолчанию — следующий рекомендованный шаг (один).
-        nxt = next_recommended_test(prog, done, released=released)
-        if nxt and nxt in pending:
-            to_release = [nxt]
-        else:
-            to_release = [pending[0]]
-    else:
-        to_release = [str(t).strip() for t in test_ids if str(t).strip()]
-    invalid = [t for t in to_release if t not in pending and t not in released]
-    if invalid:
-        raise ValueError(f"tests_not_pending_release:{','.join(invalid)}")
-    newly = [t for t in to_release if t not in released]
-    if not newly:
-        raise ValueError("nothing_to_release")
-    released.update(newly)
-    row.released_tests_json = _dump_released(released)
-    if row.status == "scheduled":
-        row.status = "notified"
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    emp = db.get(Employee, row.employee_id)
-    if notify and emp:
-        chat_id = normalize_telegram_chat_id(str(emp.telegram_id or ""))
-        if chat_id:
-            from psychological_testing.adapters.telegram_keyboards import welcome_menu_keyboard
-
-            allowed = allowed_test_ids(prog, done, released=released)
-            text = build_release_notify_message(row, emp, released_test_ids=newly)
-            outbound = get_telegram_outbound()
-            result = outbound.send_message(
-                token=_telegram_bot_token(),
-                chat_id=chat_id,
-                text=text,
-                reply_markup=welcome_menu_keyboard(frozenset(allowed)),
-            )
-            if not result.ok:
-                raise ValueError("telegram_send_failed")
-    name = None
-    if emp:
-        name = " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
-    return assignment_to_dict(row, employee_name=name)
 
 
 def assignment_menu_context(
@@ -520,41 +531,22 @@ def assignment_menu_context(
     client_id: str,
     employee_id: str,
 ) -> dict[str, object] | None:
-    """Контекст меню Telegram: None = свободный режим без назначения."""
     assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
     if assignment is None:
         return None
-    released = load_released_tests(assignment.released_tests_json)
-    if not released:
-        released = _backfill_released_tests(assignment)
-    prog = get_program(assignment.program_id)
-    done = completed_set(load_completed_tests(assignment.completed_tests_json))
-    allowed = allowed_test_ids(prog, done, released=released)
-    pending = pending_hr_release_test_ids(prog, done, released)
+    test_id = _assignment_test_id(assignment)
+    if not test_id or assignment.status == "completed":
+        return {
+            "assignment_id": assignment.id,
+            "test_id": test_id,
+            "test_label_ru": _test_label(test_id) if test_id else "",
+            "allowed_test_ids": [],
+            "is_complete": True,
+        }
     return {
         "assignment_id": assignment.id,
-        "program_title_ru": prog.title_ru,
-        "allowed_test_ids": allowed,
-        "pending_hr_release_test_ids": pending,
-        "needs_hr_release": bool(pending),
-        "is_complete": program_progress(prog, done, released=released)["is_complete"],
+        "test_id": test_id,
+        "test_label_ru": _test_label(test_id),
+        "allowed_test_ids": [test_id],
+        "is_complete": False,
     }
-
-
-def programs_payload() -> list[dict]:
-    return [
-        {
-            "program_id": p.program_id,
-            "title_ru": p.title_ru,
-            "steps": [
-                {
-                    "test_id": s.test_id,
-                    "unlock_after": list(s.unlock_after),
-                    "parallel_group": s.parallel_group,
-                    "label_ru": s.label_ru or s.test_id,
-                }
-                for s in p.steps
-            ],
-        }
-        for p in list_programs()
-    ]

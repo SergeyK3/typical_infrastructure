@@ -255,6 +255,19 @@ def handle_telegram_message(
     phase = ExaminationPhase(row.phase)
     msg = (text or "").strip()
 
+    from app.services.telegram_cancel import is_cancel_command
+
+    if is_cancel_command(msg):
+        from app.services.telegram_cancel import _dismiss_examination_consent_intro
+
+        dismissed = _dismiss_examination_consent_intro(db, client_id, employee_id)
+        if dismissed:
+            return [dismissed]
+        return [
+            "Нет активного шага опроса по регламентам для отмены. "
+            "Для психологического тестирования откройте сообщение от HR."
+        ]
+
     try:
         if phase == ExaminationPhase.BLOCKED_NO_REGULATION:
             return [

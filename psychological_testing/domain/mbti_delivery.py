@@ -108,16 +108,17 @@ def dialog_voice_reprompt(*, empty: bool = False) -> str:
 def participant_greeting_name(
     employee_id: str,
     *,
+    hr_greeting_name: str | None = None,
     hr_display_name: str | None = None,
 ) -> str | None:
     """
-    Имя для приветствия в чате.
+    Имя для приветствия в чате («Имя Отчество»).
 
     Сейчас: dev-заглушки и UUID без имени → ``None`` (без «Здравствуйте, dev-employee!»).
-    После ``hr_core``: передать ``hr_display_name`` из карточки Employee.
     """
-    if hr_display_name and hr_display_name.strip():
-        return hr_display_name.strip()
+    greeting = (hr_greeting_name or hr_display_name or "").strip()
+    if greeting:
+        return greeting
     eid = (employee_id or "").strip()
     if not eid:
         return None

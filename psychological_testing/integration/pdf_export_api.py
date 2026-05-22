@@ -32,6 +32,7 @@ from psychological_testing.shared_engine.pdf_export_service import build_pdf_byt
 from psychological_testing.shared_engine.report_contract import (
     DEFAULT_TEMPLATE_ID,
     SectionRegistry,
+    align_manifest_sections_to_sessions,
     build_default_manifest,
     load_section_registry,
     validate_manifest,
@@ -134,7 +135,25 @@ def build_export_manifest(
         manifest["sections"] = sections
     if client_name and str(client_name).strip():
         manifest["client_name"] = str(client_name).strip()
+    align_manifest_sections_to_sessions(manifest, registry=reg)
     return manifest
+
+
+def _test_section_label(registry: SectionRegistry, test_id: str) -> str:
+    tid = str(test_id or "").strip()
+    for spec in registry.sections.values():
+        if spec.test_id == tid:
+            return spec.label_ru
+    return tid or "тест"
+
+
+def _export_ui_mode(available_sessions: list[dict[str, Any]]) -> str:
+    count = len(available_sessions)
+    if count == 0:
+        return "empty"
+    if count == 1:
+        return "single_test"
+    return "multi_test"
 
 
 def export_preview(
@@ -153,8 +172,21 @@ def export_preview(
         sections=sections,
         session_refs=session_refs,
     )
+    section_notes = align_manifest_sections_to_sessions(manifest, registry=reg)
     validation = validate_manifest(manifest, registry=reg, strict=False)
     templates, section_list = sections_catalog(reg)
+    available_sessions = available_sessions_payload(employee_id, client_id=client_id)
+    ui_mode = _export_ui_mode(available_sessions)
+    primary_test: dict[str, Any] | None = None
+    if ui_mode == "single_test":
+        row = available_sessions[0]
+        test_id = str(row.get("test_id") or "")
+        primary_test = {
+            "test_id": test_id,
+            "label_ru": _test_section_label(reg, test_id),
+            "session_id": row.get("session_id"),
+            "typology_code": row.get("typology_code"),
+        }
     return {
         "manifest": manifest,
         "validation": {
@@ -162,9 +194,12 @@ def export_preview(
             "errors": list(validation.errors),
             "warnings": list(validation.warnings),
         },
+        "section_notes": section_notes,
         "templates": templates,
         "sections_catalog": section_list,
-        "available_sessions": available_sessions_payload(employee_id, client_id=client_id),
+        "available_sessions": available_sessions,
+        "export_ui_mode": ui_mode,
+        "primary_test": primary_test,
         "pdf_cache_enabled": pdf_cache_mode() not in ("off", "", "0", "false"),
         "gdrive_enabled": gdrive_enabled(),
     }

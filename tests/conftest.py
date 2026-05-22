@@ -49,3 +49,13 @@ def valid_payload() -> dict:
 @pytest.fixture
 def idempotency_key() -> str:
     return "test-idem-key-001"
+
+
+def ensure_employee_consent_schema() -> None:
+    """Создать таблицу единого согласия ПДн в in-memory SQLite (без полного app startup)."""
+    import app.models  # noqa: F401
+    from app.db import Base, engine
+    from app.migrate import migrate_employee_consent_records
+
+    Base.metadata.create_all(bind=engine)
+    migrate_employee_consent_records()

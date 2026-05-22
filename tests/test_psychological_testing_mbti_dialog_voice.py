@@ -21,6 +21,20 @@ from psychological_testing.shared_engine.voice_pipeline import MockSttProvider, 
 
 
 @pytest.fixture(autouse=True)
+def _pd_consent_for_dev_employee() -> None:
+    from app.db import SessionLocal
+    from app.services.employee_consent import record_pd_consent_yes
+    from tests.conftest import ensure_employee_consent_schema
+
+    ensure_employee_consent_schema()
+    client_id = (os.getenv("PSYCH_TESTING_DEV_CLIENT_ID") or "dev-client").strip()
+    employee_id = (os.getenv("PSYCH_TESTING_DEV_EMPLOYEE_ID") or "dev-employee").strip()
+    with SessionLocal() as db:
+        record_pd_consent_yes(db, client_id, employee_id)
+        db.commit()
+
+
+@pytest.fixture(autouse=True)
 def _clean() -> None:
     reset_session_store()
     clear_fake_telegram_outbound()

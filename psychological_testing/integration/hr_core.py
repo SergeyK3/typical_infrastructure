@@ -18,6 +18,7 @@ __all__ = [
     "CORE_HR_AVAILABLE",
     "EmployeeSnapshot",
     "employee_display_label",
+    "employee_greeting_label",
     "get_employee",
     "resolve_employee_by_telegram",
 ]
@@ -46,6 +47,7 @@ class EmployeeSnapshot:
     telegram_chat_id: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    middle_name: str | None = None
 
 
 def _telegram_chat_ids_equal(stored: str, incoming: str) -> bool:
@@ -108,6 +110,7 @@ def _adapt_core_employee(obj: Any, client_id: str, employee_id: str) -> Employee
         telegram_chat_id=tg_s or None,
         first_name=getattr(obj, "first_name", None),
         last_name=getattr(obj, "last_name", None),
+        middle_name=getattr(obj, "middle_name", None),
     )
 
 
@@ -125,12 +128,36 @@ def get_employee(db: Session, client_id: str, employee_id: str | None) -> Employ
     return _stub_employee(client_id, employee_id)
 
 
+def employee_greeting_label(snapshot: EmployeeSnapshot | None) -> str | None:
+    """Обращение в Telegram: «Имя Отчество»."""
+    if snapshot is None:
+        return None
+    from app.services.employee_consent import employee_greeting_first_patronymic
+    from psychological_testing.domain.mbti_delivery import participant_greeting_name
+
+    name = employee_greeting_first_patronymic(
+        snapshot.first_name, snapshot.middle_name, fallback=""
+    )
+    if not name:
+        dn = (snapshot.display_name or "").strip()
+        parts = dn.split()
+        if len(parts) >= 3:
+            name = f"{parts[1]} {parts[2]}"
+        elif len(parts) == 2:
+            name = parts[0]
+    return participant_greeting_name(snapshot.id, hr_greeting_name=name or None)
+
+
 def employee_display_label(snapshot: EmployeeSnapshot | None) -> str | None:
     if snapshot is None:
         return None
     if snapshot.display_name and snapshot.display_name.strip():
         return snapshot.display_name.strip()
-    parts = [p for p in (snapshot.last_name, snapshot.first_name) if isinstance(p, str) and p.strip()]
+    parts = [
+        p
+        for p in (snapshot.last_name, snapshot.first_name, snapshot.middle_name)
+        if isinstance(p, str) and p.strip()
+    ]
     return " ".join(parts) if parts else snapshot.id
 
 

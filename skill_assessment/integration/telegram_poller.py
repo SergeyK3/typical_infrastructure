@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
+from app.services.telegram_cancel import is_cancel_command
 from skill_assessment.services import stt_service as stt_svc
 from skill_assessment.services.llm_post_stt_blacklist import assert_user_text_allowed_after_stt
 
@@ -126,6 +127,20 @@ def _run_psych_telegram_turn(
         return True
     adapter.handle_text(cid, text or "", is_command=is_start_command)
     return True
+
+
+def _run_cancel_command_turn(
+    chat_id: int, *, telegram_token: str
+) -> list[tuple[str, dict[str, Any] | None]]:
+    from app.db import SessionLocal
+
+    from app.services.telegram_cancel import handle_cancel_command
+
+    db = SessionLocal()
+    try:
+        return handle_cancel_command(db, str(chat_id), telegram_token=telegram_token)
+    finally:
+        db.close()
 
 
 def _run_dialog_dispatch_turn(
@@ -288,6 +303,57 @@ def _run_readiness_callback_turn(chat_id: str, callback_data: str, query_id: str
         db.close()
 
 
+def _run_epc_consent_callback_turn(chat_id: str, callback_data: str) -> Any:
+    from app.db import SessionLocal
+
+    from app.services.telegram_employee_consent import handle_consent_callback
+
+    db = SessionLocal()
+    try:
+        return handle_consent_callback(db, chat_id, callback_data)
+    finally:
+        db.close()
+
+
+def _run_epc_consent_message_turn(
+    chat_id: str, text: str | None, is_start_command: bool
+) -> list[tuple[str, dict[str, Any] | None]]:
+    from app.db import SessionLocal
+
+    from app.services.telegram_employee_consent import handle_consent_message
+
+    db = SessionLocal()
+    try:
+        result = handle_consent_message(db, chat_id, text)
+    finally:
+        db.close()
+    if result is None:
+        return []
+    return list(result.outgoing)
+
+
+async def _deliver_consent_callback_turn(
+    client: httpx.AsyncClient,
+    token: str,
+    chat_id: int,
+    query_id: str,
+    result: Any,
+) -> None:
+    """Исходящие после inline «Да»/«Нет» (dsp| или epc|)."""
+    if result is None:
+        await _answer_callback_query(client, token, query_id, None)
+        return
+    has_out = any((t or "").strip() for t, _ in getattr(result, "outgoing", []) or [])
+    if has_out:
+        await _answer_callback_query(client, token, query_id, None)
+        for text, markup in result.outgoing:
+            if text:
+                await _send_message(client, token, chat_id, text, reply_markup=markup)
+    else:
+        tip = (getattr(result, "popup_text", None) or "").strip() or "Готово."
+        await _answer_callback_query(client, token, query_id, tip, show_alert=True)
+
+
 async def _dispatch_callback_query(client: httpx.AsyncClient, token: str, cq: dict[str, Any]) -> None:
     qid = cq.get("id")
     raw = cq.get("data")
@@ -301,6 +367,19 @@ async def _dispatch_callback_query(client: httpx.AsyncClient, token: str, cq: di
         return
     cid = cid_int
     chat_id = str(cid_int)
+
+    if data.startswith("epc|"):
+        try:
+            result = await asyncio.to_thread(_run_epc_consent_callback_turn, chat_id, data)
+        except Exception:
+            _log.exception("telegram: обработка epc| callback не удалась")
+            await _answer_callback_query(
+                client, token, str(qid), "Ошибка сервера, попробуйте позже.", show_alert=True
+            )
+            await _send_message(client, token, int(cid), "Ошибка сервера, попробуйте позже.")
+            return
+        await _deliver_consent_callback_turn(client, token, int(cid), str(qid), result)
+        return
 
     if await asyncio.to_thread(
         _run_psych_telegram_turn,
@@ -342,19 +421,7 @@ async def _dispatch_callback_query(client: httpx.AsyncClient, token: str, cq: di
             await _answer_callback_query(client, token, str(qid), "Ошибка сервера, попробуйте позже.", show_alert=True)
             await _send_message(client, token, int(cid), "Ошибка сервера, попробуйте позже.")
             return
-        if result is None:
-            await _answer_callback_query(client, token, str(qid), None)
-            return
-        has_out = any((t or "").strip() for t, _ in result.outgoing)
-        if has_out:
-            await _answer_callback_query(client, token, str(qid), None)
-            for text, markup in result.outgoing:
-                if text:
-                    await _send_message(client, token, int(cid), text, reply_markup=markup)
-        else:
-            # Раньше ответ был только в popup_text; без sendMessage пользователь не видел реакции.
-            tip = (result.popup_text or "").strip() or "Готово."
-            await _answer_callback_query(client, token, str(qid), tip, show_alert=True)
+        await _deliver_consent_callback_turn(client, token, int(cid), str(qid), result)
         return
     if not data.startswith(("dsd|", "dst|")):
         return
@@ -449,6 +516,16 @@ async def run_long_polling(token: str) -> None:
                         continue
                     chat_id, text, voice_file_id = _extract_incoming_message(upd)
                     if chat_id is None:
+                        continue
+                    if is_cancel_command(text):
+                        cancel_parts = await asyncio.to_thread(
+                            _run_cancel_command_turn, chat_id, telegram_token=token
+                        )
+                        for txt, markup in cancel_parts:
+                            if txt:
+                                await _send_message(
+                                    client, token, chat_id, txt, reply_markup=markup
+                                )
                         continue
                     parts = text.strip().split() if text else []
                     first_cmd = parts[0] if parts else ""
@@ -552,6 +629,14 @@ async def run_long_polling(token: str) -> None:
                     )
                     if consent_parts:
                         for txt, markup in consent_parts:
+                            if txt:
+                                await _send_message(client, token, chat_id, txt, reply_markup=markup)
+                        continue
+                    epc_parts = await asyncio.to_thread(
+                        _run_epc_consent_message_turn, chat_id, text, is_start
+                    )
+                    if epc_parts:
+                        for txt, markup in epc_parts:
                             if txt:
                                 await _send_message(client, token, chat_id, txt, reply_markup=markup)
                         continue

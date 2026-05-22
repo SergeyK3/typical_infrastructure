@@ -105,6 +105,68 @@ def test_export_preview_and_pdf_stream(
     assert len(export.content) > 3000
 
 
+def test_export_preview_single_test_simplified_ui(
+    client,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PSYCH_TESTING_PERSIST_JSON", "1")
+    monkeypatch.setenv("PSYCH_TESTING_SESSIONS_DIR", str(tmp_path / "sessions"))
+
+    onboard = client.post(
+        "/api/onboarding-runs",
+        json=onboarding_payload(
+            client_code="psych_single_export",
+            client_name="Psych Single Export",
+            admin_login="psych_single_export_admin",
+        ),
+    )
+    assert onboard.status_code == 200
+    client_id = onboard.json()["client_id"]
+    emp_id = onboard.json()["created_entities"]["employee_id"]
+
+    day = tmp_path / "sessions" / "2026-05-22"
+    day.mkdir(parents=True)
+    session_id = "single-mbti-session"
+    (day / f"{session_id}.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "client_id": client_id,
+                "employee_id": emp_id,
+                "test_id": "mbti",
+                "status": "done",
+                "completed_at": "2026-05-22T12:00:00+00:00",
+                "scores": {"typology_code": "INTJ"},
+                "responses": [],
+                "report": {"text_telegram": "MBTI ok"},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    preview = client.get(
+        f"/api/psychological-testing/employees/{emp_id}/export-preview",
+        params={"client_id": client_id},
+    )
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["export_ui_mode"] == "single_test"
+    assert body["primary_test"]["test_id"] == "mbti"
+    assert body["primary_test"]["typology_code"] == "INTJ"
+
+    enabled = {
+        s["section_id"]: s["enabled"]
+        for s in body["manifest"]["sections"]
+        if isinstance(s, dict)
+    }
+    assert enabled["cover"] is True
+    assert enabled["mbti"] is True
+    assert enabled["general_summary"] is False
+    assert enabled["career_recommendations"] is False
+
+
 def test_export_rbac_requires_account_when_enabled(
     client,
     monkeypatch: pytest.MonkeyPatch,

@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from psychological_testing.adapters.telegram_keyboards import (
     build_callback_data,
     build_menu_callback_data,
+    build_step_menu_callback_data,
     keyboard_for_item,
     parse_callback_data,
     parse_menu_callback,
+    parse_menu_step_action,
     welcome_menu_keyboard,
 )
 from psychological_testing.adapters.telegram_outbound import (
@@ -34,6 +37,21 @@ def _clean_store_and_fake() -> None:
     yield
     reset_session_store()
     clear_fake_telegram_outbound()
+
+
+@pytest.fixture(autouse=True)
+def _pd_consent_for_dev_employee() -> None:
+    """Phase 3 adapter uses PSYCH_TESTING_DEV_* — принимаем ПДн, чтобы не ломать старые тесты."""
+    from app.db import SessionLocal
+    from app.services.employee_consent import record_pd_consent_yes
+    from tests.conftest import ensure_employee_consent_schema
+
+    ensure_employee_consent_schema()
+    client_id = (os.getenv("PSYCH_TESTING_DEV_CLIENT_ID") or "dev-client").strip()
+    employee_id = (os.getenv("PSYCH_TESTING_DEV_EMPLOYEE_ID") or "dev-employee").strip()
+    with SessionLocal() as db:
+        record_pd_consent_yes(db, client_id, employee_id)
+        db.commit()
 
 
 @pytest.fixture
@@ -76,6 +94,34 @@ class TestCallbackKeyboard:
         assert parse_menu_callback(cb) == "mbti_dialog"
         assert parse_callback_data(cb) is None
 
+    def test_step_menu_callback_roundtrip(self) -> None:
+        cb = build_step_menu_callback_data("soft_skills_2")
+        assert parse_menu_callback(cb) == "step:soft_skills_2"
+        assert parse_menu_step_action("step:soft_skills_2") == ("soft_skills_2", False)
+        dialog_cb = build_step_menu_callback_data("mbti_1", dialog=True)
+        assert parse_menu_step_action(parse_menu_callback(dialog_cb) or "") == (
+            "mbti_1",
+            True,
+        )
+
+    def test_welcome_menu_assignment_steps(self) -> None:
+        kb = welcome_menu_keyboard(
+            allowed_steps=[
+                {"step_key": "soft_skills_1", "test_id": "soft_skills", "label_ru": "Soft Skills (1)"},
+                {"step_key": "soft_skills_2", "test_id": "soft_skills", "label_ru": "Soft Skills (2)"},
+            ]
+        )
+        callbacks = [
+            btn["callback_data"]
+            for row in kb["inline_keyboard"]
+            for btn in row
+        ]
+        assert "pt:menu:step:soft_skills_1" in callbacks
+        assert "pt:menu:step:soft_skills_2" in callbacks
+        labels = [btn["text"] for row in kb["inline_keyboard"] for btn in row]
+        assert "Soft Skills (1)" in labels
+        assert "Soft Skills (2)" in labels
+
     def test_welcome_menu_has_test_buttons(self) -> None:
         kb = welcome_menu_keyboard()
         labels = [
@@ -85,8 +131,14 @@ class TestCallbackKeyboard:
         ]
         assert "MBTI" in labels
         assert "PAEI" in labels
-        assert "Отменить текущий тест" in labels
-        assert "Справка" in labels
+        assert "Отменить текущий тест" not in labels
+        assert "Справка" not in labels
+
+    def test_welcome_menu_single_assignment_proiti(self) -> None:
+        kb = welcome_menu_keyboard(allowed_test_ids=frozenset({"paei"}))
+        labels = [btn["text"] for row in kb["inline_keyboard"] for btn in row]
+        assert labels == ["Пройти"]
+        assert kb["inline_keyboard"][0][0]["callback_data"] == "pt:menu:paei"
 
     def test_mbti_keyboard_two_buttons(self) -> None:
         engine = SessionEngine.start(
@@ -125,12 +177,42 @@ class TestTelegramAdapterMock:
         assert engine.session.test_id == "mbti"
         assert len(fake_outbound.messages) >= 2
 
-    def test_menu_help_shows_welcome(
+    def test_menu_step_button_sets_active_step_key(
+        self,
+        adapter: PsychTestingTelegramAdapter,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            adapter,
+            "_assignment_gate",
+            lambda *_a, **_k: (True, None, SimpleNamespace(id="asgn-phase3-mbti")),
+        )
+        monkeypatch.setattr(
+            adapter,
+            "_assignment_menu_context",
+            lambda _chat_id: {
+                "allowed_steps": [
+                    {"step_key": "mbti_1", "test_id": "mbti", "label_ru": "MBTI"},
+                ],
+                "all_steps": [
+                    {"step_key": "mbti_1", "test_id": "mbti", "label_ru": "MBTI"},
+                ],
+            },
+        )
+        adapter.handle_callback("1001", "q1", build_step_menu_callback_data("mbti_1"))
+        binding = adapter._store.get_binding("1001")
+        assert binding is not None
+        assert binding.active_step_key == "mbti_1"
+        assert binding.active_test_id == "mbti"
+        assert binding.active_assignment_id == "asgn-phase3-mbti"
+
+    def test_menu_help_shows_text_not_menu(
         self, adapter: PsychTestingTelegramAdapter, fake_outbound: FakeTelegramOutbound
     ) -> None:
         adapter.handle_callback("1001", "q1", build_menu_callback_data("help"))
         assert len(fake_outbound.messages) == 1
-        assert fake_outbound.messages[0]["reply_markup"] is not None
+        assert fake_outbound.messages[0]["reply_markup"] is None
+        assert "Психологическое тестирование" in fake_outbound.messages[0]["text"]
 
     def test_start_while_active_session_blocked(
         self, adapter: PsychTestingTelegramAdapter, fake_outbound: FakeTelegramOutbound
