@@ -37,6 +37,15 @@ curl http://localhost:8000/wizard
 
 Ожидаемый результат smoke_check: все проверки `OK`.
 
+Psych testing (если включён в `.env`):
+
+```bash
+python scripts/smoke_psych_pilot.py --url http://localhost:8000 --status-only
+# на сервере с app.db: python scripts/smoke_psych_pilot.py
+```
+
+См. [PSYCH_PROD_DEPLOY.md](PSYCH_PROD_DEPLOY.md).
+
 ## Доступные эндпоинты
 
 | URL | Описание |

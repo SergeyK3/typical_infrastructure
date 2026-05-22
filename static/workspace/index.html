@@ -5,19 +5,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Рабочее пространство — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css?v=workspace-toast-20260520">
+  <link rel="stylesheet" href="/static/shared/layout.css?v=ui-theme-20260522">
+  <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <style>
     :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
     .panel { display: none; }
     .panel.active { display: block; }
     .panel h2 { font-size: 1.1rem; margin: 0 0 1rem 0; }
     .card-actions { display: flex; gap: 0.5rem; }
-    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); }
+    .btn-danger { background: var(--danger-subtle); color: var(--error); }
     label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
     input, select { width: 100%; max-width: 280px; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
     input:focus, select:focus { outline: none; border-color: var(--accent); }
     input.error { border-color: var(--error); }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
     .modal.show { display: flex; }
     .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
@@ -54,18 +55,18 @@
     .hidden { display: none !important; }
     .header-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .org-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .assign-item:hover { background: rgba(124, 58, 237, 0.15); border-color: var(--accent); }
+    .assign-item:hover { background: var(--accent-subtle-hover); border-color: var(--accent); }
     .empty-state { padding: 2rem; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; }
     .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; }
     .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
     .module-placeholder { max-width: 48rem; text-align: left; }
     .module-placeholder.is-muted { opacity: 0.72; }
     .panel.hr-module-muted > h2 { color: var(--text-muted); opacity: 0.72; font-weight: 500; }
-    .module-entry { max-width: 58rem; text-align: left; border-style: solid; border-color: rgba(124,58,237,0.35); background: rgba(124,58,237,0.08); }
+    .module-entry { max-width: 58rem; text-align: left; border-style: solid; border-color: var(--accent-outline); background: var(--accent-subtle); }
     .module-entry h3 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--accent); }
     .module-entry-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
     .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
-    .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
+    .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: var(--accent-muted); color: var(--accent); white-space: nowrap; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
     .cr-table th, .cr-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .cr-table th { color: var(--text-muted); font-weight: 500; }
@@ -106,11 +107,11 @@
     .workspace-sidebar .sidebar-expand-full {
       display: block; width: 100%; padding: 0.4rem 0.65rem; margin: 0;
       font-size: 0.72rem; text-align: left;
-      background: rgba(124, 58, 237, 0.12);
+      background: var(--accent-subtle);
       border: none; border-bottom: 1px solid var(--border);
       color: var(--accent); cursor: pointer; flex-shrink: 0;
     }
-    .workspace-sidebar .sidebar-expand-full:hover { background: rgba(124, 58, 237, 0.22); }
+    .workspace-sidebar .sidebar-expand-full:hover { background: var(--accent-subtle-hover); }
     .workspace-sidebar .sidebar-expand-full[hidden] { display: none !important; }
     .workspace-sidebar.sidebar-focus-org .sidebar-top { display: none !important; }
     .workspace-sidebar.sidebar-focus-apps .sidebar-top,
@@ -121,7 +122,7 @@
     }
     .workspace-sidebar.sidebar-focus-apps { border-top: 1px solid var(--border); }
     .workspace-sidebar #sidebarApps { cursor: pointer; }
-    .workspace-sidebar.sidebar-focus-apps #sidebarApps { cursor: default; outline: 1px solid rgba(124, 58, 237, 0.35); outline-offset: -2px; border-radius: 6px; }
+    .workspace-sidebar.sidebar-focus-apps #sidebarApps { cursor: default; outline: 1px solid var(--accent-outline); outline-offset: -2px; border-radius: 6px; }
     .workspace-sidebar .sidebar-section { margin: 0.15rem 0; }
     .workspace-sidebar .sidebar-section.active > .sidebar-section-toggle { color: var(--accent); }
     .workspace-sidebar .sidebar-section-toggle {
@@ -140,9 +141,9 @@
     .workspace-sidebar .sidebar-section-body[hidden] { display: none !important; }
     .workspace-sidebar .sidebar-organization {
       margin: 0 0.75rem 0.75rem; padding: 0.6rem 0.7rem; border: 1px solid var(--border);
-      border-radius: 8px; background: rgba(124, 58, 237, 0.1);
+      border-radius: 8px; background: var(--accent-subtle);
     }
-    .workspace-sidebar .sidebar-organization.missing { background: rgba(255,255,255,0.03); }
+    .workspace-sidebar .sidebar-organization.missing { background: var(--surface-faint); }
     .workspace-sidebar .sidebar-organization-eyebrow {
       color: var(--text-muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
     }

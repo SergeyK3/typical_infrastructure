@@ -107,6 +107,22 @@ python scripts/smoke_check.py --url http://<your-host>:8000
 python scripts/smoke_check.py --url https://staging.example.com
 ```
 
+### Psychological testing (Phase 4a)
+
+На **prod-сервере** (доступ к `.env`, UNC, `app.db`):
+
+```powershell
+.\scripts\probe_psych_prod.ps1
+```
+
+Удалённо (только конфиг + RBAC denial):
+
+```bash
+python scripts/smoke_psych_pilot.py --url https://<host> --status-only
+```
+
+Полный чеклист: [PSYCH_PROD_DEPLOY.md](PSYCH_PROD_DEPLOY.md).
+
 ---
 
 ## 6. Ограничения MVP

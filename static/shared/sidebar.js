@@ -560,6 +560,7 @@
     }
 
     applyWorkspaceSidebarFocus(ctx.focusMode, { persist: false });
+    if (window.UiTheme) window.UiTheme.mountToggle(root);
     return ctx;
   }
 

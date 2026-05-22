@@ -31,7 +31,7 @@
 ☑ pt_test_sessions + pt_telegram_bindings (resume после рестарта worker)
 ☑ RBAC hooks: export / assign / view (env-флаги)
 ☑ напоминания о дедлайне (Telegram, фон в worker)
-☐ UNC + сервисный аккаунт на prod (инфра) — см. [17_GDRIVE_STORAGE.md](17_GDRIVE_STORAGE.md) §11, `scripts/verify_psych_gdrive.py`
+☐ UNC + сервисный аккаунт на prod (инфра) — runbook [PSYCH_PROD_DEPLOY.md](../../runbook/PSYCH_PROD_DEPLOY.md), `scripts/verify_psych_gdrive.py`, `scripts/probe_psych_prod.ps1`
 ☑ RBAC pilot: env-флаги + workspace `/rbac-context`
 ☑ manager view_team (same org_unit; assign/export — HR admin only)
 ```

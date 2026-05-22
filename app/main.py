@@ -1,6 +1,7 @@
 r"""D:\MyActivity\MyInfoBusiness\MyPythonApps\10 Typical_infrastructure\app\main.py"""
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -121,6 +122,19 @@ def root():
 def health_readiness() -> dict:
     """Readiness probe: service is ready to accept requests."""
     return {"status": "ready", "service": settings.app_name}
+
+
+@app.get("/api/ui-config", tags=["ui"])
+def ui_config() -> dict:
+    """Client UI defaults (theme switch, etc.)."""
+    default_theme = os.getenv("UI_DEFAULT_THEME", "dark").strip().lower()
+    if default_theme not in ("dark", "light"):
+        default_theme = "dark"
+    switch_raw = os.getenv("UI_THEME_SWITCH", "1").strip().lower()
+    return {
+        "default_theme": default_theme,
+        "theme_switch": switch_raw not in ("0", "false", "no", "off"),
+    }
 
 
 @app.get("/wizard")
