@@ -16,7 +16,7 @@ templates:
         requires_ai: true
       - section_id: mbti
         enabled: true
-        charts: [decision_tree, axis_bars]
+        charts: [axis_bars]
       - section_id: soft_skills
         enabled: true
         charts: [radar]
@@ -55,7 +55,7 @@ sections:
     label_ru: "MBTI — тип личности"
     test_id: mbti
     order: 10
-    charts_available: [decision_tree, axis_bars, type_matrix]
+    charts_available: [axis_bars, type_matrix]
     ai_slots: [interpretation]
     static_source: interpretation.profile
 
@@ -96,7 +96,7 @@ sections:
     ai_slots: [career_recommendations]
 
   appendix_qa:
-    label_ru: "Приложение: детализация вопросов и ответов"
+    label_ru: "Детализация"
     test_id: null
     order: 90
     appendix: true

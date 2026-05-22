@@ -123,7 +123,11 @@ def _static_context(session: dict[str, Any]) -> str:
     if isinstance(interp, dict):
         profile = interp.get("profile")
         if isinstance(profile, dict):
-            name = profile.get("name_ru") or profile.get("code")
+            name = (
+                profile.get("archetype_ru")
+                or profile.get("name_ru")
+                or profile.get("code")
+            )
             if name:
                 return f"Статический профиль: {name}"
         code = interp.get("typology_code")

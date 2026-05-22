@@ -4,20 +4,22 @@ HR export API helpers: manifest preview, PDF generation, cache (Phase E).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from psychological_testing.integration.manifest_store import (
     _slug_name,
-    exports_root,
-    manifest_cache_key,
+    local_pdf_ref,
     pdf_cache_mode,
     resolve_pdf_ref,
+    save_export_bundle,
     save_manifest,
     save_pdf_cache,
 )
 from psychological_testing.integration.report_storage import (
     gdrive_enabled,
     gdrive_upload_manifest_enabled,
+    is_gdrive_ref,
     sync_pdf_ref_to_sessions,
     upload_manifest_file,
     upload_pdf_to_drive,
@@ -108,6 +110,7 @@ def build_export_manifest(
     session_refs: list[dict[str, str]] | None = None,
     sections: list[dict[str, Any]] | None = None,
     program_id: str | None = "standard_hr_v1",
+    client_name: str | None = None,
 ) -> dict[str, Any]:
     """Build manifest with latest sessions unless ``session_refs`` provided."""
     reg = load_section_registry()
@@ -129,6 +132,8 @@ def build_export_manifest(
         manifest["program_id"] = program_id
     if sections is not None:
         manifest["sections"] = sections
+    if client_name and str(client_name).strip():
+        manifest["client_name"] = str(client_name).strip()
     return manifest
 
 
@@ -165,12 +170,62 @@ def export_preview(
     }
 
 
+def _drive_pdf_filename(
+    manifest: dict[str, Any],
+    *,
+    employee_display_name: str | None = None,
+    fallback_name: str | None = None,
+) -> str:
+    client_id = str(manifest.get("client_id") or "unknown")
+    slug = _slug_name(employee_display_name or str(manifest.get("employee_id") or "emp"))
+    manifest_id = str(manifest.get("manifest_id") or "")[:8]
+    if manifest_id:
+        return f"{slug}_{manifest_id}.pdf"
+    if fallback_name:
+        return fallback_name
+    return f"{slug}_{client_id[:8]}.pdf"
+
+
+def _maybe_upload_pdf_to_drive(
+    pdf_bytes: bytes,
+    manifest: dict[str, Any],
+    pdf_ref: str | None,
+    *,
+    employee_display_name: str | None = None,
+    filename: str | None = None,
+) -> str | None:
+    """Upload to Drive when enabled (always re-upload fresh ``pdf_bytes``)."""
+    if not gdrive_enabled():
+        return pdf_ref
+    try:
+        from psychological_testing.integration.manifest_store import _ensure_manifest_client_name
+
+        _ensure_manifest_client_name(manifest)
+        client_id = str(manifest.get("client_id") or "unknown")
+        client_name = manifest.get("client_name")
+        drive_name = filename or _drive_pdf_filename(
+            manifest, employee_display_name=employee_display_name
+        )
+        drive_ref = upload_pdf_to_drive(
+            pdf_bytes,
+            filename=drive_name,
+            client_id=client_id,
+            client_name=str(client_name).strip() if client_name else None,
+        )
+        sync_pdf_ref_to_sessions(manifest, drive_ref)
+        return drive_ref
+    except Exception as exc:
+        _log_gdrive_upload_warning("pdf", exc)
+        return pdf_ref
+
+
 def export_employee_pdf(
     manifest: dict[str, Any],
     *,
     employee_display_name: str | None = None,
     regenerate_ai: bool = False,
     use_pdf_cache: bool = True,
+    force_regenerate: bool = False,
     persist_manifest: bool = True,
 ) -> dict[str, Any]:
     """
@@ -185,54 +240,48 @@ def export_employee_pdf(
 
     cache_hit = False
     pdf_ref: str | None = None
-    if use_pdf_cache and pdf_cache_mode() in ("hash", "on", "1", "true") and not regenerate_ai:
-        key = manifest_cache_key(manifest)
-        client_id = str(manifest.get("client_id") or "")
-        slug = _slug_name(employee_display_name or str(manifest.get("employee_id") or "emp"))
-        candidate = exports_root() / client_id / f"{slug}_{key}.pdf"
-        if candidate.is_file():
-            pdf_ref_cached = f"data/report_exports/{client_id}/{candidate.name}"
-            return {
-                "pdf_bytes": candidate.read_bytes(),
-                "manifest": manifest,
-                "pdf_ref": pdf_ref_cached,
-                "manifest_path": None,
-                "cache_hit": True,
-            }
-
-    pdf_bytes = build_pdf_bytes(manifest, regenerate_ai=regenerate_ai)
-    manifest_path = None
+    pdf_local_ref: str | None = None
+    manifest_path: str | None = None
     manifest_drive_ref: str | None = None
+
+    # Always render PDF — hash cache is write-only (reading stale bytes caused old layout in exports).
+    pdf_bytes = build_pdf_bytes(manifest, regenerate_ai=regenerate_ai)
+    bundle_pdf_path: Path | None = None
     if persist_manifest:
-        saved = save_manifest(manifest, employee_display_name=employee_display_name)
-        manifest_path = str(saved)
+        saved_manifest, bundle_pdf_path, local_ref = save_export_bundle(
+            manifest,
+            pdf_bytes,
+            employee_display_name=employee_display_name,
+        )
+        manifest_path = str(saved_manifest)
+        pdf_local_ref = local_ref
+        pdf_ref = local_ref
         if gdrive_enabled() and gdrive_upload_manifest_enabled():
             try:
                 client_id = str(manifest.get("client_id") or "unknown")
-                manifest_drive_ref = upload_manifest_file(saved, client_id=client_id)
+                manifest_drive_ref = upload_manifest_file(saved_manifest, client_id=client_id)
             except Exception as exc:
                 _log_gdrive_upload_warning("manifest", exc)
 
-    pdf_ref = save_pdf_cache(manifest, pdf_bytes, employee_display_name=employee_display_name)
-    if gdrive_enabled():
-        try:
-            client_id = str(manifest.get("client_id") or "unknown")
-            slug = _slug_name(
-                employee_display_name or str(manifest.get("employee_id") or "emp")
-            )
-            manifest_id = str(manifest.get("manifest_id") or "")[:8]
-            filename = f"{slug}_{manifest_id or 'report'}.pdf"
-            pdf_ref = upload_pdf_to_drive(
-                pdf_bytes, filename=filename, client_id=client_id
-            )
-            sync_pdf_ref_to_sessions(manifest, pdf_ref)
-        except Exception as exc:
-            _log_gdrive_upload_warning("pdf", exc)
+    if use_pdf_cache and not force_regenerate and pdf_cache_mode() in ("hash", "on", "1", "true"):
+        hash_ref = save_pdf_cache(manifest, pdf_bytes, employee_display_name=employee_display_name)
+    else:
+        hash_ref = None
+
+    drive_name = bundle_pdf_path.name if bundle_pdf_path is not None else None
+    pdf_ref = _maybe_upload_pdf_to_drive(
+        pdf_bytes,
+        manifest,
+        pdf_ref or hash_ref,
+        employee_display_name=employee_display_name,
+        filename=drive_name,
+    ) or pdf_local_ref or hash_ref
 
     return {
         "pdf_bytes": pdf_bytes,
         "manifest": manifest,
         "pdf_ref": pdf_ref,
+        "pdf_local_ref": pdf_local_ref,
         "manifest_path": manifest_path,
         "manifest_drive_ref": manifest_drive_ref,
         "cache_hit": cache_hit,
@@ -243,7 +292,10 @@ def _log_gdrive_upload_warning(kind: str, exc: Exception) -> None:
     import logging
 
     logging.getLogger(__name__).warning(
-        "psych_testing: Drive %s upload failed (local cache kept): %s", kind, exc
+        "psych_testing: Drive %s upload failed (local cache kept): %s: %s",
+        kind,
+        type(exc).__name__,
+        exc,
     )
 
 

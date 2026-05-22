@@ -5,13 +5,14 @@ from __future__ import annotations
 from math import pi
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 
 from psychological_testing.shared_engine.charts.common import (
+    LIKERT_SCALE_MAX,
     PRINT_COLORS,
     PSYCH_COLORS,
     figure_to_png_bytes,
-    normalize_chart_values,
 )
 
 
@@ -93,6 +94,69 @@ def disc_combined_png(labels: list[str], values: list[float], *, title: str = ""
     return figure_to_png_bytes(fig, dpi=150)
 
 
+def _likert_radar_axes(
+    ax,
+    *,
+    n: int,
+    labels: list[str],
+    title: str,
+    label_fontsize: int,
+) -> tuple[list[float], list[float]]:
+    angles = [i / float(n) * 2 * pi for i in range(n)]
+    angles_closed = angles + angles[:1]
+    ax.set_theta_offset(pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, fontsize=label_fontsize, color=PRINT_COLORS["primary"])
+    scale_ticks = [float(i) for i in range(1, int(LIKERT_SCALE_MAX) + 1)]
+    ax.set_ylim(0, LIKERT_SCALE_MAX)
+    if hasattr(ax, "set_rlim"):
+        ax.set_rlim(0, LIKERT_SCALE_MAX)
+    ax.set_rgrids(
+        scale_ticks,
+        labels=[str(int(v)) for v in scale_ticks],
+        angle=22.5,
+        fontsize=7,
+        color=PRINT_COLORS["secondary"],
+    )
+    # Matplotlib polar may auto-scale to 10; pin radial ticks to Likert 1–5.
+    ax.yaxis.set_major_locator(mticker.FixedLocator(scale_ticks))
+    ax.set_yticklabels(
+        [str(int(v)) for v in scale_ticks],
+        fontsize=7,
+        color=PRINT_COLORS["secondary"],
+    )
+    ax.grid(True, color=PRINT_COLORS["light"], linewidth=0.6, alpha=0.8)
+    if title:
+        plt.title(title, pad=20, fontsize=10, fontweight="bold", color=PRINT_COLORS["primary"])
+    return angles_closed, angles
+
+
+def _likert_radar_png(
+    labels: list[str],
+    values: list[float],
+    *,
+    title: str,
+    color: str,
+    figsize: tuple[float, float],
+    label_fontsize: int,
+) -> bytes:
+    n = len(labels)
+    fig = plt.figure(figsize=figsize, facecolor=PRINT_COLORS["background"])
+    ax = plt.subplot(111, polar=True)
+    angles_closed, _angles = _likert_radar_axes(
+        ax,
+        n=n,
+        labels=labels,
+        title=title,
+        label_fontsize=label_fontsize,
+    )
+    vals = list(values) + values[:1]
+    ax.plot(angles_closed, vals, color=color, linewidth=2.5, marker="o", markersize=5)
+    ax.fill(angles_closed, vals, color=color, alpha=0.15)
+    return figure_to_png_bytes(fig, dpi=200)
+
+
 def hexaco_radar_png(labels: list[str], values: list[float], *, title: str = "") -> bytes:
     mapping = {
         "H": "H - Честность",
@@ -103,51 +167,23 @@ def hexaco_radar_png(labels: list[str], values: list[float], *, title: str = "")
         "O": "O - Открытость",
     }
     extended_labels = [mapping.get(label, label) for label in labels]
-    norm_values, max_norm, method_used = normalize_chart_values(values, "adaptive")
-    actual_max = max_norm * 1.1
-    if method_used not in ("без_нормализации", "исходные") and title:
-        title = f"{title} (норм: {method_used})"
-
-    n = len(extended_labels)
-    angles = [i / float(n) * 2 * pi for i in range(n)]
-    angles += angles[:1]
-    vals = list(norm_values) + norm_values[:1]
-
-    fig = plt.figure(figsize=(3, 3), facecolor=PRINT_COLORS["background"])
-    ax = plt.subplot(111, polar=True)
-    ax.set_theta_offset(pi / 2)
-    ax.set_theta_direction(-1)
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(extended_labels, fontsize=8, color=PRINT_COLORS["primary"])
-    ax.set_ylim(0, actual_max)
-    ax.grid(True, color=PRINT_COLORS["light"], linewidth=0.6, alpha=0.8)
     color = PSYCH_COLORS["HEXACO"].get("H", PRINT_COLORS["accent"])
-    ax.plot(angles, vals, color=color, linewidth=2.5, marker="o", markersize=5)
-    ax.fill(angles, vals, color=color, alpha=0.15)
-    if title:
-        plt.title(title, pad=20, fontsize=10, fontweight="bold", color=PRINT_COLORS["primary"])
-    return figure_to_png_bytes(fig, dpi=200)
+    return _likert_radar_png(
+        extended_labels,
+        values,
+        title=title or "HEXACO — шкала 1–5",
+        color=color,
+        figsize=(3, 3),
+        label_fontsize=8,
+    )
 
 
 def soft_skills_radar_png(labels: list[str], values: list[float], *, title: str = "") -> bytes:
-    norm_values, max_norm, _method = normalize_chart_values(values, "none")
-    actual_max = max(max_norm * 1.1, 5.0)
-    n = len(labels)
-    angles = [i / float(n) * 2 * pi for i in range(n)]
-    angles += angles[:1]
-    vals = list(norm_values) + norm_values[:1]
-
-    fig = plt.figure(figsize=(3.2, 3.2), facecolor=PRINT_COLORS["background"])
-    ax = plt.subplot(111, polar=True)
-    ax.set_theta_offset(pi / 2)
-    ax.set_theta_direction(-1)
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, fontsize=7, color=PRINT_COLORS["primary"])
-    ax.set_ylim(0, actual_max)
-    ax.grid(True, color=PRINT_COLORS["light"], linewidth=0.6, alpha=0.8)
-    color = PRINT_COLORS["accent"]
-    ax.plot(angles, vals, color=color, linewidth=2.5, marker="o", markersize=5)
-    ax.fill(angles, vals, color=color, alpha=0.15)
-    if title:
-        plt.title(title, pad=20, fontsize=10, fontweight="bold", color=PRINT_COLORS["primary"])
-    return figure_to_png_bytes(fig, dpi=200)
+    return _likert_radar_png(
+        labels,
+        values,
+        title=title or "Soft Skills — шкала 1–5",
+        color=PRINT_COLORS["accent"],
+        figsize=(3.2, 3.2),
+        label_fontsize=7,
+    )

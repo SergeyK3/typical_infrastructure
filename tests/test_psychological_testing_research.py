@@ -96,7 +96,9 @@ class TestMbtiInterpretations:
         assert len(types) == 16
         for code, profile in types.items():
             assert profile["code"] == code
-            assert profile.get("tagline")
+            assert profile.get("archetype_ru")
+            assert profile.get("alt_names_ru")
+            assert profile.get("summary_ru")
             assert len(profile.get("strengths", [])) >= 2
             assert len(profile.get("growth_areas", [])) >= 2
 

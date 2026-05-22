@@ -21,7 +21,10 @@ from psychological_testing.domain.entities import (
     TestSession,
 )
 from psychological_testing.research.mbti.scripts.akma_dialog_engine import AkmaDialogEngine
-from psychological_testing.shared_engine.interpretation_engine import InterpretationResult
+from psychological_testing.shared_engine.interpretation_engine import (
+    InterpretationResult,
+    profile_to_dict,
+)
 from psychological_testing.shared_engine.session_state_machine import SessionEngine
 
 from psychological_testing.shared_engine.report_contract import (
@@ -94,14 +97,7 @@ def _serialize_interpretation(interp: Any) -> dict[str, Any] | None:
     if isinstance(interp, InterpretationResult):
         profile = None
         if interp.profile is not None:
-            profile = {
-                "code": interp.profile.code,
-                "name_ru": interp.profile.name_ru,
-                "tagline": interp.profile.tagline,
-                "strengths": list(interp.profile.strengths),
-                "growth_areas": list(interp.profile.growth_areas),
-                "axes": dict(interp.profile.axes),
-            }
+            profile = profile_to_dict(interp.profile)
         return {
             "typology_code": interp.typology_code,
             "profile": profile,

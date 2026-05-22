@@ -15,6 +15,7 @@ from skill_assessment.infrastructure.db_models import AssessmentSessionRow
 from skill_assessment.integration.hr_core import employee_greeting_label, get_employee
 from skill_assessment.schemas.api import DocsSurveyTelegramOut
 from skill_assessment.services import examination_service as examination_svc
+from skill_assessment.services.pd_consent_document import pd_consent_link_line
 from skill_assessment.services.telegram_docs_survey_consent import build_pd_consent_inline_keyboard
 
 _log = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ def send_docs_survey_assignment_notice(db: Session, session_id: str) -> DocsSurv
         f"Должность (для сверки с регламентом при проверке): {position_line}.\n\n"
         "Для продолжения работы необходимо ознакомиться с текстом Согласия на обработку персональных данных "
         "и подтвердить согласие на обработку данных при использовании сервиса."
+        + pd_consent_link_line()
     )
 
     try:

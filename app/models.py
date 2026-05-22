@@ -364,6 +364,7 @@ class PtTestAssignment(Base, TimestampMixin):
     program_id: Mapped[str] = mapped_column(String(64), nullable=False, default="standard_hr_v1")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="scheduled")
     completed_tests_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    released_tests_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

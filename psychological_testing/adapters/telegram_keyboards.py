@@ -15,6 +15,64 @@ from psychological_testing.shared_engine.question_selector import SelectableItem
 SessionItem = SelectableItem | ForcedChoiceItem | DimensionBankItem | LikertBankItem
 
 CALLBACK_PREFIX = "pt"
+MENU_CALLBACK_PREFIX = f"{CALLBACK_PREFIX}:menu:"
+
+
+def build_menu_callback_data(action: str) -> str:
+    """``pt:menu:{action}`` — главное меню (старт теста, отмена, справка)."""
+    data = f"{MENU_CALLBACK_PREFIX}{action}"
+    if len(data.encode("utf-8")) > 64:
+        raise ValueError(f"callback_data too long: {data!r}")
+    return data
+
+
+def parse_menu_callback(data: str) -> str | None:
+    if not data.startswith(MENU_CALLBACK_PREFIX):
+        return None
+    action = data[len(MENU_CALLBACK_PREFIX) :].strip()
+    return action or None
+
+
+def welcome_menu_keyboard(allowed_test_ids: frozenset[str] | None = None) -> dict[str, Any]:
+    """Кнопки главного меню. ``allowed_test_ids=None`` — все тесты (режим без назначения HR)."""
+    rows: list[list[tuple[str, str]]] = []
+    allowed = allowed_test_ids
+
+    def _show(test_id: str) -> bool:
+        return allowed is None or test_id in allowed
+
+    test_rows: list[list[tuple[str, str]]] = []
+    if _show("mbti"):
+        test_rows.append(
+            [
+                ("MBTI", build_menu_callback_data("mbti")),
+                ("MBTI, диалог с Акма", build_menu_callback_data("mbti_dialog")),
+            ]
+        )
+    pair_row: list[tuple[str, str]] = []
+    for test_id, label in (
+        ("paei", "PAEI"),
+        ("soft_skills", "Soft Skills"),
+        ("disc", "DISC"),
+        ("hexaco", "HEXACO"),
+    ):
+        if not _show(test_id):
+            continue
+        pair_row.append((label, build_menu_callback_data(test_id)))
+        if len(pair_row) == 2:
+            test_rows.append(pair_row)
+            pair_row = []
+    if pair_row:
+        test_rows.append(pair_row)
+
+    rows.extend(test_rows)
+    rows.append(
+        [
+            ("Отменить текущий тест", build_menu_callback_data("cancel")),
+            ("Справка", build_menu_callback_data("help")),
+        ]
+    )
+    return inline_keyboard(rows)
 
 
 def build_callback_data(session_id: str, item_id: str, value: str) -> str:
@@ -49,16 +107,11 @@ def _likert_keyboard(
 ) -> dict[str, Any]:
     min_v = int(definition.response_scale.get("min", 1))
     max_v = int(definition.response_scale.get("max", 5))
-    values = list(range(min_v, max_v + 1))
-    row_top = [
+    row = [
         (str(n), build_callback_data(session_id, item_id, str(n)))
-        for n in values[:3]
+        for n in range(min_v, max_v + 1)
     ]
-    row_bottom = [
-        (str(n), build_callback_data(session_id, item_id, str(n)))
-        for n in values[3:]
-    ]
-    return inline_keyboard([row_top, row_bottom])
+    return inline_keyboard([row])
 
 
 def keyboard_for_item(

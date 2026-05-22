@@ -111,6 +111,22 @@ def migrate_employees_telegram_id() -> None:
         conn.commit()
 
 
+def migrate_pt_assignment_released_tests() -> None:
+    """HR-дозированная выдача: какие тесты открыты для сотрудника."""
+    if not _table_exists("pt_test_assignments"):
+        return
+    if _column_exists("pt_test_assignments", "released_tests_json"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE pt_test_assignments "
+                "ADD COLUMN released_tests_json TEXT NOT NULL DEFAULT '[]'"
+            )
+        )
+        conn.commit()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -119,3 +135,4 @@ def run_migrations() -> None:
     migrate_kpi_templates_position_code()
     migrate_positions_is_detached()
     migrate_employees_telegram_id()
+    migrate_pt_assignment_released_tests()

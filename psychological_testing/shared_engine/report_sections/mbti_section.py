@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from reportlab.platypus import Spacer
@@ -11,6 +12,7 @@ from psychological_testing.shared_engine.charts import render_chart_bytes
 from psychological_testing.shared_engine.pdf_composer import PdfComposer
 from psychological_testing.shared_engine.report_contract import SectionSpec, get_ai_section_text
 from psychological_testing.shared_engine.report_sections.constants import TEST_SECTION_INTROS
+from psychological_testing.shared_engine.interpretation_engine import profile_from_session_dict
 from psychological_testing.shared_engine.report_sections.scores_block import mini_bank_footnote
 
 _log = logging.getLogger(__name__)
@@ -43,27 +45,70 @@ def _axis_lines(session: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _static_profile_block(session: dict[str, Any]) -> list[str]:
+@dataclass(frozen=True)
+class _MbtiProfileBlock:
+    code: str
+    archetype_ru: str
+    alt_names_ru: list[str]
+    summary_ru: str
+    strengths: list[str]
+    growth_areas: list[str]
+
+
+def _mbti_profile_block(session: dict[str, Any]) -> _MbtiProfileBlock | None:
     interp = session.get("interpretation") or {}
     if not isinstance(interp, dict):
-        return []
-    profile = interp.get("profile")
-    if not isinstance(profile, dict):
-        code = interp.get("typology_code") or (session.get("scores") or {}).get("typology_code")
-        return [f"Тип личности: {code}"] if code else []
+        return None
+    profile_raw = interp.get("profile")
+    if not isinstance(profile_raw, dict):
+        code = str(
+            interp.get("typology_code")
+            or (session.get("scores") or {}).get("typology_code")
+            or ""
+        ).strip()
+        if not code:
+            return None
+        return _MbtiProfileBlock(
+            code=code,
+            archetype_ru="",
+            alt_names_ru=[],
+            summary_ru="",
+            strengths=[],
+            growth_areas=[],
+        )
 
-    lines = [
-        f"Тип личности: {profile.get('code')} — {profile.get('name_ru', '')}",
-        str(profile.get("tagline") or ""),
-        "",
-        "Сильные стороны:",
-    ]
-    for s in profile.get("strengths") or []:
-        lines.append(f"  • {s}")
-    lines.extend(["", "Зоны роста:"])
-    for g in profile.get("growth_areas") or []:
-        lines.append(f"  • {g}")
-    return lines
+    profile = profile_from_session_dict(profile_raw)
+    return _MbtiProfileBlock(
+        code=profile.code,
+        archetype_ru=profile.archetype_ru,
+        alt_names_ru=list(profile.alt_names_ru),
+        summary_ru=profile.summary_ru,
+        strengths=list(profile.strengths),
+        growth_areas=list(profile.growth_areas),
+    )
+
+
+def _render_profile_block(composer: PdfComposer, profile: _MbtiProfileBlock) -> list[Any]:
+    elements: list[Any] = []
+    if profile.code:
+        elements.append(composer.paragraph_bold(f"Тип личности: {profile.code}"))
+    if profile.archetype_ru:
+        elements.append(composer.paragraph(f"— {profile.archetype_ru}"))
+    if profile.alt_names_ru:
+        elements.append(
+            composer.paragraph(
+                f"— Альтернативные названия: {', '.join(profile.alt_names_ru)}"
+            )
+        )
+    if profile.summary_ru:
+        elements.append(composer.paragraph(profile.summary_ru))
+    if profile.strengths:
+        elements.append(composer.paragraph("Сильные стороны:"))
+        elements.extend(composer.bullets(profile.strengths))
+    if profile.growth_areas:
+        elements.append(composer.paragraph("Зоны роста:"))
+        elements.extend(composer.bullets(profile.growth_areas))
+    return elements
 
 
 def render_mbti_section(
@@ -82,9 +127,9 @@ def render_mbti_section(
     elements.append(composer.paragraph(TEST_SECTION_INTROS["mbti"]))
     elements.append(Spacer(1, 4))
 
-    profile_lines = _static_profile_block(session)
-    if profile_lines:
-        elements.append(composer.paragraph("\n".join(profile_lines)))
+    profile = _mbti_profile_block(session)
+    if profile:
+        elements.extend(_render_profile_block(composer, profile))
 
     axis_lines = _axis_lines(session)
     if axis_lines:

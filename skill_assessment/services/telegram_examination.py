@@ -26,10 +26,13 @@ from skill_assessment.schemas.examination_api import (
     ExaminationIntroDoneBody,
 )
 from skill_assessment.services import examination_service as ex
+from skill_assessment.services.pd_consent_document import pd_consent_link_line
 
 CONSENT_PROMPT = (
     "Согласие на обработку персональных данных и результатов проверки (опрос по внутренним регламентам).\n"
-    "Продолжая, вы подтверждаете ознакомление с политикой организации.\n\n"
+    "Продолжая, вы подтверждаете ознакомление с политикой организации."
+    + pd_consent_link_line()
+    + "\n\n"
     "Ответьте одним сообщением (текстом или голосом):\n"
     "• «да» или «согласен» — принять\n"
     "• «нет» или «отказ» — отказаться (потребуется помощь HR)"

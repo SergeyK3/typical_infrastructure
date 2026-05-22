@@ -82,19 +82,51 @@ def is_step_unlocked(step: ProgramStep, done: set[str]) -> bool:
     return all(req in done for req in step.unlock_after)
 
 
-def allowed_test_ids(program: TestProgram, done: set[str]) -> list[str]:
-    """Tests the employee may start now (parallel steps all listed)."""
+def allowed_test_ids(
+    program: TestProgram,
+    done: set[str],
+    *,
+    released: set[str] | None = None,
+) -> list[str]:
+    """Tests the employee may start now (parallel steps all listed).
+
+    ``released=None`` — без HR-гейтинга (legacy / свободный режим).
+    ``released=set(...)`` — только тесты, явно открытые HR.
+    """
     out: list[str] = []
     for step in program.steps:
         if step.test_id in done:
+            continue
+        if not is_step_unlocked(step, done):
+            continue
+        if released is not None and step.test_id not in released:
+            continue
+        out.append(step.test_id)
+    return out
+
+
+def pending_hr_release_test_ids(
+    program: TestProgram,
+    done: set[str],
+    released: set[str],
+) -> list[str]:
+    """Тесты, для которых выполнены prerequisites, но HR ещё не открыл доступ."""
+    out: list[str] = []
+    for step in program.steps:
+        if step.test_id in done or step.test_id in released:
             continue
         if is_step_unlocked(step, done):
             out.append(step.test_id)
     return out
 
 
-def next_recommended_test(program: TestProgram, done: set[str]) -> str | None:
-    allowed = allowed_test_ids(program, done)
+def next_recommended_test(
+    program: TestProgram,
+    done: set[str],
+    *,
+    released: set[str] | None = None,
+) -> str | None:
+    allowed = allowed_test_ids(program, done, released=released)
     if not allowed:
         return None
     for step in program.steps:
@@ -103,15 +135,30 @@ def next_recommended_test(program: TestProgram, done: set[str]) -> str | None:
     return allowed[0]
 
 
-def program_progress(program: TestProgram, done: set[str]) -> dict[str, object]:
+def program_progress(
+    program: TestProgram,
+    done: set[str],
+    *,
+    released: set[str] | None = None,
+) -> dict[str, object]:
     total = len(program.steps)
     completed_count = sum(1 for s in program.steps if s.test_id in done)
+    rel = released if released is not None else None
+    allowed = allowed_test_ids(program, done, released=rel)
+    pending = (
+        pending_hr_release_test_ids(program, done, released)
+        if released is not None
+        else []
+    )
     return {
         "program_id": program.program_id,
         "title_ru": program.title_ru,
         "total_steps": total,
         "completed_steps": completed_count,
         "is_complete": completed_count >= total,
-        "allowed_test_ids": allowed_test_ids(program, done),
-        "next_test_id": next_recommended_test(program, done),
+        "allowed_test_ids": allowed,
+        "next_test_id": next_recommended_test(program, done, released=rel),
+        "released_test_ids": sorted(released) if released is not None else None,
+        "pending_hr_release_test_ids": pending,
+        "needs_hr_release": bool(pending),
     }

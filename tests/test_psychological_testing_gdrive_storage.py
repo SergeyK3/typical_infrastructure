@@ -10,7 +10,9 @@ import pytest
 from psychological_testing.integration.report_storage import (
     artifact_open_url,
     artifact_link_label,
+    client_drive_folder_name,
     download_pdf,
+    drive_export_path_parts,
     export_artifact_metadata,
     gdrive_enabled,
     is_gdrive_ref,
@@ -46,8 +48,46 @@ def test_gdrive_ref_parse() -> None:
     assert not is_gdrive_ref("data/report_exports/x.pdf")
 
 
+def test_drive_export_path_parts_day_then_client() -> None:
+    assert drive_export_path_parts(
+        "org-1",
+        "2026-05-21",
+        client_name="ТОО Второе",
+    ) == [
+        "2026-05-21",
+        "TOO_Vtoroe",
+    ]
+
+
+def test_client_drive_folder_name_from_hr_title() -> None:
+    assert client_drive_folder_name(
+        "75688147cef140a18403f71b4cd5def1",
+        client_name="ТОО Один",
+    ) == "TOO_Odin"
+    with patch(
+        "psychological_testing.integration.report_storage._resolve_client_display_name",
+        return_value="ТОО Второе",
+    ):
+        assert client_drive_folder_name("75688147cef140a18403f71b4cd5def1") == "TOO_Vtoroe"
+
+
+def test_client_drive_folder_name_fallback_to_client_id() -> None:
+    with patch(
+        "psychological_testing.integration.report_storage._resolve_client_display_name",
+        return_value="75688147cef140a18403f71b4cd5def1",
+    ):
+        assert (
+            client_drive_folder_name("75688147cef140a18403f71b4cd5def1")
+            == "75688147cef140a18403f71b4cd5def1"
+        )
+
+
 def test_gdrive_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PSYCH_TESTING_GDRIVE", raising=False)
+    monkeypatch.setattr(
+        "psychological_testing.integration.report_storage._load_gdrive_env",
+        lambda: None,
+    )
     assert gdrive_enabled() is False
 
 
@@ -58,15 +98,21 @@ def test_upload_pdf_returns_gdrive_ref(monkeypatch: pytest.MonkeyPatch) -> None:
         patch(
             "psychological_testing.integration.report_storage._drive_target_folder",
             return_value="folder-1",
-        ),
+        ) as target_folder,
         patch(
             "psychological_testing.integration.google_drive_client.upload_bytes",
             return_value={"file_id": "file-99", "web_view_link": "https://example/view"},
         ),
     ):
-        ref = upload_pdf_to_drive(b"%PDF-1.4", filename="t.pdf", client_id="org-1")
+        ref = upload_pdf_to_drive(
+            b"%PDF-1.4",
+            filename="t.pdf",
+            client_id="org-1",
+            day="2026-05-21",
+        )
 
     assert ref == make_gdrive_ref("file-99")
+    target_folder.assert_called_once_with("org-1", "2026-05-21", client_name=None)
 
 
 def test_download_pdf_from_gdrive_ref() -> None:

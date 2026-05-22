@@ -23,6 +23,7 @@ from psychological_testing.domain.test_programs import (
     get_program,
     list_programs,
     next_recommended_test,
+    pending_hr_release_test_ids,
     program_progress,
 )
 
@@ -76,8 +77,41 @@ def load_completed_tests(raw: str | None) -> list[str]:
     return []
 
 
+def load_released_tests(raw: str | None) -> set[str]:
+    return completed_set(load_completed_tests(raw))
+
+
+def _dump_released(test_ids: set[str]) -> str:
+    return json.dumps(sorted(test_ids), ensure_ascii=False)
+
+
+def _initial_released_test_ids(program_id: str) -> set[str]:
+    prog = get_program(program_id)
+    if not prog.steps:
+        return set()
+    return {prog.steps[0].test_id}
+
+
+def _backfill_released_tests(row: PtTestAssignment) -> set[str]:
+    """Legacy rows: сохранить прежнее авто-разблокирование."""
+    done = completed_set(load_completed_tests(row.completed_tests_json))
+    prog = get_program(row.program_id)
+    released = set(allowed_test_ids(prog, done, released=None))
+    released.update(done)
+    return released
+
+
 def _dump_completed(test_ids: list[str]) -> str:
     return json.dumps(sorted(set(test_ids)), ensure_ascii=False)
+
+
+def _ensure_row_released_tests(db: Session, row: PtTestAssignment) -> bool:
+    released = load_released_tests(row.released_tests_json)
+    if released:
+        return False
+    row.released_tests_json = _dump_released(_backfill_released_tests(row))
+    db.add(row)
+    return True
 
 
 def assignment_to_dict(
@@ -87,8 +121,9 @@ def assignment_to_dict(
     employee_telegram_id: str | None = None,
 ) -> dict:
     done = completed_set(load_completed_tests(row.completed_tests_json))
+    released = load_released_tests(row.released_tests_json)
     prog = get_program(row.program_id)
-    progress = program_progress(prog, done)
+    progress = program_progress(prog, done, released=released)
     return {
         "id": row.id,
         "client_id": row.client_id,
@@ -99,6 +134,7 @@ def assignment_to_dict(
         "program_title_ru": prog.title_ru,
         "status": row.status,
         "completed_tests": sorted(done),
+        "released_tests": sorted(released),
         "due_at": row.due_at.isoformat() if row.due_at else None,
         "due_date": row.due_at.date().isoformat() if row.due_at else None,
         "notified_at": row.notified_at.isoformat() if row.notified_at else None,
@@ -151,6 +187,7 @@ def create_assignment(
         program_id=program_id,
         status="scheduled",
         completed_tests_json="[]",
+        released_tests_json=_dump_released(_initial_released_test_ids(program_id)),
         due_at=due_at,
     )
     db.add(row)
@@ -177,6 +214,8 @@ def list_assignments(
     touched = False
     for row in rows:
         if _ensure_row_due_at(db, row):
+            touched = True
+        if _ensure_row_released_tests(db, row):
             touched = True
         emp = db.get(Employee, row.employee_id)
         name = None
@@ -205,6 +244,12 @@ def check_may_start_test(
     assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
     if assignment is None:
         return True, None, None
+    released = load_released_tests(assignment.released_tests_json)
+    if not released:
+        released = _backfill_released_tests(assignment)
+        assignment.released_tests_json = _dump_released(released)
+        db.add(assignment)
+        db.commit()
     prog = get_program(assignment.program_id)
     if test_id not in prog.all_test_ids():
         return (
@@ -214,19 +259,28 @@ def check_may_start_test(
         )
     done = completed_set(load_completed_tests(assignment.completed_tests_json))
     if test_id in done:
-        nxt = next_recommended_test(prog, done)
-        hint = f" Следующий шаг: /start {nxt}." if nxt else " Программа завершена."
-        return False, f"Тест «{test_id}» уже пройден по назначению HR.{hint}", assignment
-    allowed = allowed_test_ids(prog, done)
+        allowed = allowed_test_ids(prog, done, released=released)
+        if allowed:
+            opts = ", ".join(f"/start {t}" for t in allowed)
+            return False, f"Тест «{test_id}» уже пройден по назначению HR. Доступно: {opts}.", assignment
+        return False, "Тест «{test_id}» уже пройден. Ожидайте следующий шаг от HR.".format(test_id=test_id), assignment
+    allowed = allowed_test_ids(prog, done, released=released)
     if test_id not in allowed:
+        pending = pending_hr_release_test_ids(prog, done, released)
+        if test_id in pending:
+            return (
+                False,
+                "Этот тест откроет отдел кадров после обратной связи по предыдущему этапу.",
+                assignment,
+            )
         if allowed:
             opts = ", ".join(f"/start {t}" for t in allowed)
             return (
                 False,
-                f"Сначала завершите предыдущие шаги программы HR. Сейчас доступно: {opts}.",
+                f"Сначала завершите доступные шаги программы HR. Сейчас доступно: {opts}.",
                 assignment,
             )
-        return False, "Ожидайте следующего шага программы HR или обратитесь к HR.", assignment
+        return False, "Ожидайте сообщения от отдела кадров о следующем тесте.", assignment
     return True, None, assignment
 
 
@@ -267,15 +321,25 @@ def record_test_completed(
 def build_notify_message(assignment: PtTestAssignment, employee: Employee) -> str:
     prog = get_program(assignment.program_id)
     done = completed_set(load_completed_tests(assignment.completed_tests_json))
-    nxt = next_recommended_test(prog, done) or "mbti"
+    released = load_released_tests(assignment.released_tests_json)
+    if not released:
+        released = _backfill_released_tests(assignment)
+    allowed = allowed_test_ids(prog, done, released=released)
+    nxt = allowed[0] if allowed else next_recommended_test(prog, done, released=released)
     name = employee.first_name or employee.last_name or "коллега"
     due = ""
     if assignment.due_at:
         due = f"\nДедлайн: {assignment.due_at.strftime('%d.%m.%Y')}."
+    if nxt:
+        step = prog.step_for(nxt)
+        label = (step.label_ru if step else None) or nxt.upper()
+        test_line = f"Доступный тест: {label} — нажмите кнопку в меню или /start {nxt}."
+    else:
+        test_line = "Сейчас нет открытых тестов — HR сообщит, когда будет следующий этап."
     return (
         f"Здравствуйте, {name}!\n\n"
         f"Вам назначено психологическое тестирование ({prog.title_ru}).\n"
-        f"Первый доступный шаг: {nxt.upper()} — отправьте /start {nxt} когда будете готовы."
+        f"{test_line}"
         f"{due}\n\n"
         "Отмена текущей сессии: /cancel"
     )
@@ -363,6 +427,118 @@ def notify_assignment(db: Session, assignment_id: str) -> dict:
         row,
         employee_name=" ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name])),
     )
+
+
+def build_release_notify_message(
+    assignment: PtTestAssignment,
+    employee: Employee,
+    *,
+    released_test_ids: list[str],
+) -> str:
+    prog = get_program(assignment.program_id)
+    name = employee.first_name or employee.last_name or "коллега"
+    labels = []
+    for tid in released_test_ids:
+        step = prog.step_for(tid)
+        labels.append((step.label_ru if step else None) or tid.upper())
+    tests_text = ", ".join(labels)
+    return (
+        f"Здравствуйте, {name}!\n\n"
+        f"Отдел кадров открыл для вас следующий этап: {tests_text}.\n"
+        "Откройте меню (/start) и выберите тест кнопкой."
+    )
+
+
+def release_assignment_tests(
+    db: Session,
+    assignment_id: str,
+    *,
+    test_ids: list[str] | None = None,
+    notify: bool = False,
+) -> dict:
+    row = db.get(PtTestAssignment, assignment_id)
+    if not row:
+        raise ValueError("assignment_not_found")
+    if row.status in TERMINAL_STATUSES:
+        raise ValueError("assignment_terminal")
+    prog = get_program(row.program_id)
+    done = completed_set(load_completed_tests(row.completed_tests_json))
+    released = load_released_tests(row.released_tests_json)
+    if not released:
+        released = _backfill_released_tests(row)
+    pending = pending_hr_release_test_ids(prog, done, released)
+    if test_ids is None:
+        if not pending:
+            raise ValueError("nothing_to_release")
+        # По умолчанию — следующий рекомендованный шаг (один).
+        nxt = next_recommended_test(prog, done, released=released)
+        if nxt and nxt in pending:
+            to_release = [nxt]
+        else:
+            to_release = [pending[0]]
+    else:
+        to_release = [str(t).strip() for t in test_ids if str(t).strip()]
+    invalid = [t for t in to_release if t not in pending and t not in released]
+    if invalid:
+        raise ValueError(f"tests_not_pending_release:{','.join(invalid)}")
+    newly = [t for t in to_release if t not in released]
+    if not newly:
+        raise ValueError("nothing_to_release")
+    released.update(newly)
+    row.released_tests_json = _dump_released(released)
+    if row.status == "scheduled":
+        row.status = "notified"
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    emp = db.get(Employee, row.employee_id)
+    if notify and emp:
+        chat_id = normalize_telegram_chat_id(str(emp.telegram_id or ""))
+        if chat_id:
+            from psychological_testing.adapters.telegram_keyboards import welcome_menu_keyboard
+
+            allowed = allowed_test_ids(prog, done, released=released)
+            text = build_release_notify_message(row, emp, released_test_ids=newly)
+            outbound = get_telegram_outbound()
+            result = outbound.send_message(
+                token=_telegram_bot_token(),
+                chat_id=chat_id,
+                text=text,
+                reply_markup=welcome_menu_keyboard(frozenset(allowed)),
+            )
+            if not result.ok:
+                raise ValueError("telegram_send_failed")
+    name = None
+    if emp:
+        name = " ".join(filter(None, [emp.last_name, emp.first_name, emp.middle_name]))
+    return assignment_to_dict(row, employee_name=name)
+
+
+def assignment_menu_context(
+    db: Session,
+    *,
+    client_id: str,
+    employee_id: str,
+) -> dict[str, object] | None:
+    """Контекст меню Telegram: None = свободный режим без назначения."""
+    assignment = get_active_assignment(db, client_id=client_id, employee_id=employee_id)
+    if assignment is None:
+        return None
+    released = load_released_tests(assignment.released_tests_json)
+    if not released:
+        released = _backfill_released_tests(assignment)
+    prog = get_program(assignment.program_id)
+    done = completed_set(load_completed_tests(assignment.completed_tests_json))
+    allowed = allowed_test_ids(prog, done, released=released)
+    pending = pending_hr_release_test_ids(prog, done, released)
+    return {
+        "assignment_id": assignment.id,
+        "program_title_ru": prog.title_ru,
+        "allowed_test_ids": allowed,
+        "pending_hr_release_test_ids": pending,
+        "needs_hr_release": bool(pending),
+        "is_complete": program_progress(prog, done, released=released)["is_complete"],
+    }
 
 
 def programs_payload() -> list[dict]:

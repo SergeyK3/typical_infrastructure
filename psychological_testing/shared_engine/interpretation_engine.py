@@ -20,6 +20,9 @@ AXIS_LABELS_RU: dict[str, dict[str, str]] = {
 @dataclass(frozen=True)
 class TypeProfile:
     code: str
+    archetype_ru: str
+    alt_names_ru: list[str]
+    summary_ru: str
     name_ru: str
     tagline: str
     strengths: list[str]
@@ -37,14 +40,43 @@ class InterpretationResult:
 
 
 def _profile_from_dict(code: str, raw: dict[str, Any]) -> TypeProfile:
+    archetype_ru = str(raw.get("archetype_ru") or raw.get("name_ru") or "")
+    alt_names_ru = [str(x) for x in raw.get("alt_names_ru") or []]
+    summary_ru = str(raw.get("summary_ru") or raw.get("tagline") or "")
+    name_ru = str(raw.get("name_ru") or archetype_ru)
+    tagline = str(raw.get("tagline") or summary_ru)
     return TypeProfile(
         code=str(raw.get("code", code)),
-        name_ru=str(raw.get("name_ru", "")),
-        tagline=str(raw.get("tagline", "")),
+        archetype_ru=archetype_ru,
+        alt_names_ru=alt_names_ru,
+        summary_ru=summary_ru,
+        name_ru=name_ru,
+        tagline=tagline,
         strengths=[str(s) for s in raw.get("strengths", [])],
         growth_areas=[str(g) for g in raw.get("growth_areas", [])],
         axes={str(k): str(v) for k, v in (raw.get("axes") or {}).items()},
     )
+
+
+def profile_to_dict(profile: TypeProfile) -> dict[str, Any]:
+    """Canonical profile block for session JSON and API consumers."""
+    return {
+        "code": profile.code,
+        "archetype_ru": profile.archetype_ru,
+        "alt_names_ru": list(profile.alt_names_ru),
+        "summary_ru": profile.summary_ru,
+        "name_ru": profile.name_ru,
+        "tagline": profile.tagline,
+        "strengths": list(profile.strengths),
+        "growth_areas": list(profile.growth_areas),
+        "axes": dict(profile.axes),
+    }
+
+
+def profile_from_session_dict(raw: dict[str, Any]) -> TypeProfile:
+    """Rebuild ``TypeProfile`` from persisted session JSON (backward compatible)."""
+    code = str(raw.get("code") or "")
+    return _profile_from_dict(code, raw)
 
 
 def load_type_profiles(path: str) -> dict[str, TypeProfile]:
@@ -86,11 +118,14 @@ def build_report_text(
     lines = [
         "=== ИТОГОВЫЙ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ ===",
         "",
-        f"Ваш тип личности: {profile.code} — {profile.name_ru}",
-        f"{profile.tagline}",
-        "",
-        "ДЕТАЛИ ПРОФИЛЯ:",
+        f"Ваш тип личности: {profile.code}",
+        f"— {profile.archetype_ru}",
     ]
+    if profile.alt_names_ru:
+        lines.append(f"— Альтернативные названия: {', '.join(profile.alt_names_ru)}")
+    if profile.summary_ru:
+        lines.append(profile.summary_ru)
+    lines.extend(["", "ДЕТАЛИ ПРОФИЛЯ:"])
     for axis in ("E/I", "S/N", "T/F", "J/P"):
         if axis in axis_details:
             lines.append(_format_axis_line(axis, axis_details[axis]))

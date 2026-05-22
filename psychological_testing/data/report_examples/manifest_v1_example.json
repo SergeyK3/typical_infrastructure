@@ -18,7 +18,7 @@
     "sections": [
       { "section_id": "cover", "enabled": true },
       { "section_id": "general_summary", "enabled": true, "requires_ai": true },
-      { "section_id": "mbti", "enabled": true, "charts": ["decision_tree", "axis_bars"] },
+      { "section_id": "mbti", "enabled": true, "charts": ["axis_bars"] },
       { "section_id": "disc", "enabled": true, "charts": ["combined"] },
       { "section_id": "paei", "enabled": false },
       { "section_id": "soft_skills", "enabled": false },

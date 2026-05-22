@@ -36,6 +36,21 @@
     .checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; }
     .checkbox-group label { display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer; }
     .checkbox-group input[type=checkbox] { width: auto; max-width: none; }
+    #psychExportSections label {
+      display: flex; align-items: flex-start; gap: 0.35rem;
+      margin: 0.2rem 0; font-size: 0.9rem; cursor: pointer;
+    }
+    #psychExportSections label input[type=checkbox] {
+      width: auto; max-width: none; margin: 0.15rem 0 0 0; flex: 0 0 auto;
+    }
+    #psychExportSections .psych-export-section-label { flex: 1 1 auto; min-width: 0; line-height: 1.35; }
+    #modalPsychExport .psych-export-options label {
+      display: flex; align-items: flex-start; gap: 0.35rem;
+      width: auto; max-width: none; margin: 0.35rem 0 0 0; cursor: pointer;
+    }
+    #modalPsychExport .psych-export-options input[type=checkbox] {
+      width: auto; max-width: none; margin: 0.15rem 0 0 0; flex: 0 0 auto;
+    }
     .hidden { display: none !important; }
     .header-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .org-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -531,15 +546,25 @@
       <div id="psychExportSections" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;background:var(--bg);"></div>
       <p class="meta" style="margin:0.75rem 0 0.25rem;">Доступные сессии (latest per test):</p>
       <ul id="psychExportSessions" class="meta" style="margin:0 0 0.75rem 1rem;padding:0;list-style:disc;"></ul>
-      <label class="meta" style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.75rem;">
+      <div class="psych-export-options">
+      <label class="meta">
         <input type="checkbox" id="psychExportRegenerateAi">
         Перегенерировать AI-тексты (игнорировать кэш)
       </label>
-      <p class="meta hidden" id="psychExportResultLinkWrap" style="margin:0 0 0.5rem;">
-        <a href="#" id="psychExportResultLink" target="_blank" rel="noopener noreferrer">Открыть отчёт</a>
-      </p>
+      <label class="meta">
+        <input type="checkbox" id="psychExportForceRegenerate" checked>
+        Пересобрать PDF заново (игнорировать кэш файла)
+      </label>
+      </div>
+      <div id="psychExportSuccess" class="hidden" style="margin:0 0 0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);">
+        <p class="meta" style="margin:0 0 0.35rem;color:var(--success, #2e7d32);font-weight:600;">PDF сформирован</p>
+        <p class="meta" id="psychExportSuccessHint" style="margin:0 0 0.35rem;">Файл должен появиться в папке «Загрузки» браузера.</p>
+        <p class="meta hidden" id="psychExportServerPath" style="margin:0;"></p>
+        <a href="#" id="psychExportResultLink" class="btn btn-secondary hidden" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:0.35rem;text-decoration:none;">Открыть кэш на сервере</a>
+      </div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-primary" id="btnPsychExportRun">Скачать PDF</button>
+        <button type="button" class="btn btn-primary" id="btnPsychExportRun">Сформировать PDF</button>
+        <button type="button" class="btn btn-primary hidden" id="btnPsychExportDownload">Скачать файл PDF</button>
         <button type="button" class="btn btn-secondary" id="btnPsychExportClose">Закрыть</button>
       </div>
     </div>
@@ -849,6 +874,20 @@
       return text ? JSON.parse(text) : null;
     }
 
+    function parseContentDispositionFilename(header) {
+      if (!header) return null;
+      const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+      if (star && star[1]) {
+        try {
+          return decodeURIComponent(star[1].trim());
+        } catch (_) {
+          /* ignore */
+        }
+      }
+      const plain = /filename="([^"]+)"/i.exec(header);
+      return plain && plain[1] ? plain[1] : null;
+    }
+
     async function fetchApiBlob(path, opts = {}) {
       const r = await fetch(API + path, opts);
       if (!r.ok) {
@@ -884,16 +923,58 @@
       if (!wrap || !link) return;
       const url = psychArtifactOpenUrl(pdfRef, storageKind);
       if (!url) {
-        wrap.classList.add('hidden');
+        if (wrapId === 'psychExportSuccess') {
+          link.classList.add('hidden');
+        } else {
+          wrap.classList.add('hidden');
+        }
         link.removeAttribute('href');
         return;
       }
       link.href = url;
       link.textContent = psychArtifactLinkLabel(storageKind);
-      wrap.classList.remove('hidden');
+      if (wrapId === 'psychExportSuccess') {
+        link.classList.remove('hidden');
+        wrap.classList.remove('hidden');
+      } else {
+        wrap.classList.remove('hidden');
+      }
     }
 
-    let psychExportState = { employeeId: null, preview: null };
+    function triggerBlobDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'psych_report.pdf';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return url;
+    }
+
+    function resetPsychExportModalState() {
+      psychExportState.downloadUrl = null;
+      psychExportState.downloadName = null;
+      psychExportState.downloadBlob = null;
+      const success = document.getElementById('psychExportSuccess');
+      const runBtn = document.getElementById('btnPsychExportRun');
+      const dlBtn = document.getElementById('btnPsychExportDownload');
+      if (success) success.classList.add('hidden');
+      if (runBtn) {
+        runBtn.classList.remove('hidden');
+        runBtn.disabled = false;
+        runBtn.textContent = 'Сформировать PDF';
+      }
+      if (dlBtn) dlBtn.classList.add('hidden');
+      const cacheLink = document.getElementById('psychExportResultLink');
+      if (cacheLink) cacheLink.classList.add('hidden');
+      const serverPath = document.getElementById('psychExportServerPath');
+      if (serverPath) serverPath.classList.add('hidden');
+    }
+
+    let psychExportState = { employeeId: null, preview: null, downloadUrl: null, downloadName: null, downloadBlob: null };
 
     function openPsychExportModal(employeeId, employeeName) {
       const modal = document.getElementById('modalPsychExport');
@@ -906,14 +987,14 @@
         showWorkspaceToast('Выберите организацию и сотрудника.', 'error');
         return;
       }
-      psychExportState = { employeeId, preview: null };
-      const resultWrap = document.getElementById('psychExportResultLinkWrap');
-      if (resultWrap) resultWrap.classList.add('hidden');
+      psychExportState = { employeeId, preview: null, downloadUrl: null, downloadName: null, downloadBlob: null };
+      resetPsychExportModalState();
       title.textContent = 'Экспорт PDF: ' + (employeeName || employeeId);
       meta.textContent = 'Загрузка настроек…';
       sectionsEl.innerHTML = '';
       sessionsEl.innerHTML = '';
       if (warnEl) warnEl.textContent = '';
+      if (warnEl) warnEl.style.color = 'var(--warn, #b8860b)';
       modal.classList.add('show');
       fetchApi('/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-preview?client_id=' + encodeURIComponent(clientId))
         .then((data) => {
@@ -923,13 +1004,19 @@
             warnEl.textContent = data.validation.warnings.join(' ');
           }
           const sections = (data.manifest && data.manifest.sections) || [];
-          sectionsEl.innerHTML = sections.map((s) => (
-            '<label style="display:block;margin:0.2rem 0;font-size:0.9rem;">' +
-              '<input type="checkbox" class="psych-export-section-cb" data-section-id="' + escapeHtml(s.section_id) + '" ' + (s.enabled ? 'checked' : '') + '> ' +
-              escapeHtml(s.section_id) +
+          const labels = Object.fromEntries(
+            ((data.sections_catalog) || []).map((s) => [s.section_id, s.label_ru || s.section_id])
+          );
+          sectionsEl.innerHTML = sections.map((s) => {
+            const label = labels[s.section_id] || s.section_id;
+            return (
+            '<label title="' + escapeHtml(s.section_id) + '">' +
+              '<input type="checkbox" class="psych-export-section-cb" data-section-id="' + escapeHtml(s.section_id) + '" ' + (s.enabled ? 'checked' : '') + '>' +
+              '<span class="psych-export-section-label">' + escapeHtml(label) +
               (s.requires_ai ? ' <span class="meta">(AI)</span>' : '') +
-            '</label>'
-          )).join('');
+              '</span></label>'
+            );
+          }).join('');
           const avail = data.available_sessions || [];
           sessionsEl.innerHTML = avail.length
             ? avail.map((a) => '<li><code>' + escapeHtml(a.test_id) + '</code> — ' + escapeHtml(a.session_id || '') + (a.typology_code ? ' (' + escapeHtml(a.typology_code) + ')' : '') + '</li>').join('')
@@ -940,6 +1027,15 @@
         });
     }
 
+    function psychExportGuessFilename() {
+      const title = document.getElementById('modalPsychExportTitle');
+      const raw = (title && title.textContent.startsWith('Экспорт PDF: '))
+        ? title.textContent.slice('Экспорт PDF: '.length).trim()
+        : '';
+      if (!raw) return 'psych_report.pdf';
+      return raw.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_') + '.pdf';
+    }
+
     async function runPsychExportPdf() {
       const employeeId = psychExportState.employeeId;
       if (!employeeId || !clientId) return;
@@ -948,43 +1044,148 @@
         sections.push({ section_id: cb.dataset.sectionId, enabled: cb.checked });
       });
       const regenerateAi = !!(document.getElementById('psychExportRegenerateAi') && document.getElementById('psychExportRegenerateAi').checked);
+      const forceRegenerate = !!(document.getElementById('psychExportForceRegenerate') && document.getElementById('psychExportForceRegenerate').checked);
       const body = {
         client_id: clientId,
         template_id: 'legacy_team_assessment_v1',
         sections,
         regenerate_ai: regenerateAi,
-        response_mode: 'stream',
+        force_regenerate: forceRegenerate,
+        response_mode: 'json',
       };
       try {
         showWorkspaceToast('Формирование PDF…', 'info');
-        const { blob, headers } = await fetchApiBlob(
+        const runBtn = document.getElementById('btnPsychExportRun');
+        if (runBtn) {
+          runBtn.disabled = true;
+          runBtn.textContent = 'Формирование…';
+        }
+        const exportMeta = await fetchApi(
           '/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-pdf',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
         );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'psych_report.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        const pdfRef = headers.get('X-Psych-Pdf-Ref');
-        const storageKind = headers.get('X-Psych-Storage-Kind');
-        const openUrl = headers.get('X-Psych-Pdf-Open-Url');
+        const pdfRef = exportMeta && exportMeta.pdf_ref ? String(exportMeta.pdf_ref) : '';
+        const pdfLocalRef = exportMeta && exportMeta.pdf_local_ref ? String(exportMeta.pdf_local_ref) : '';
+        const storageKind = exportMeta && exportMeta.storage_kind ? String(exportMeta.storage_kind) : '';
+        const openUrl = exportMeta && exportMeta.pdf_open_url ? String(exportMeta.pdf_open_url) : '';
+        const rendererVersion = exportMeta && exportMeta.pdf_renderer_version ? String(exportMeta.pdf_renderer_version) : '';
+        const filename = (exportMeta && exportMeta.download_filename)
+          ? String(exportMeta.download_filename)
+          : psychExportGuessFilename();
+        let blob = null;
+        let headers = new Headers();
+
+        // Always download fresh bytes from this server (local bundle preferred over Drive ref).
+        const downloadRef = pdfLocalRef || pdfRef;
+        const downloadPath = downloadRef
+          ? '/psychological-testing/export-pdf/file?' + new URLSearchParams({ pdf_ref: downloadRef, client_id: clientId })
+          : (openUrl
+            ? (openUrl.startsWith('http') ? openUrl : openUrl.replace(/^\/api/, ''))
+            : '');
+        if (!downloadPath) {
+          throw new Error('PDF сформирован, но ссылка для скачивания недоступна');
+        }
+        if (downloadPath.startsWith('http')) {
+          const r = await fetch(downloadPath);
+          if (!r.ok) {
+            const errText = await r.text();
+            throw new Error(parseApiErrorText(errText) || ('HTTP ' + r.status));
+          }
+          blob = await r.blob();
+          headers = r.headers;
+        } else {
+          ({ blob, headers } = await fetchApiBlob(downloadPath));
+        }
+        const contentType = (headers.get('Content-Type') || '').toLowerCase();
+        if (!contentType.includes('pdf') && blob.size < 2048) {
+          const errText = await blob.text();
+          throw new Error(parseApiErrorText(errText) || 'Сервер вернул не PDF');
+        }
+        psychExportState.downloadBlob = blob;
+        psychExportState.downloadName = filename;
+        psychExportState.downloadUrl = triggerBlobDownload(blob, filename);
+        psychExportState.rendererVersion = rendererVersion;
+
+        const success = document.getElementById('psychExportSuccess');
+        const hint = document.getElementById('psychExportSuccessHint');
+        const serverPath = document.getElementById('psychExportServerPath');
+        const dlBtn = document.getElementById('btnPsychExportDownload');
+        if (success) success.classList.remove('hidden');
+        if (hint) {
+          const cacheHit = exportMeta && exportMeta.cache_hit;
+          const cacheNote = cacheHit ? ' (из кэша — для свежей вёрстки включите «Пересобрать PDF заново»)' : '';
+          const versionNote = rendererVersion ? (' · PDF renderer ' + rendererVersion) : '';
+          if (blob) {
+            const kb = Math.max(1, Math.round(blob.size / 1024));
+            hint.textContent = 'Файл «' + filename + '» (' + kb + ' КБ)' + cacheNote + versionNote + '. Проверьте папку «Загрузки» (Downloads). Если загрузка не началась — нажмите фиолетовую кнопку «Скачать файл PDF» справа внизу.';
+          } else if (storageKind === 'gdrive' && openUrl) {
+            hint.textContent = 'PDF сохранён в Google Drive. Откройте ссылку ниже.' + versionNote;
+          } else {
+            hint.textContent = 'PDF сформирован. Используйте кнопку «Скачать файл PDF» или ссылку ниже.' + versionNote;
+          }
+        }
+        if (serverPath) {
+          const manifestPath = exportMeta && exportMeta.manifest_path ? String(exportMeta.manifest_path) : '';
+          const localPdf = exportMeta && exportMeta.pdf_local_ref ? String(exportMeta.pdf_local_ref) : '';
+          if (manifestPath || localPdf) {
+            const parts = [];
+            if (localPdf) parts.push('PDF: ' + localPdf);
+            if (manifestPath) parts.push('manifest: ' + manifestPath);
+            serverPath.textContent = 'Копия на сервере: ' + parts.join(' · ');
+            serverPath.classList.remove('hidden');
+          } else if (pdfRef && storageKind === 'local') {
+            serverPath.textContent = 'Копия на сервере: ' + pdfRef;
+            serverPath.classList.remove('hidden');
+          } else {
+            serverPath.classList.add('hidden');
+          }
+        }
         if (pdfRef || openUrl) {
           showPsychArtifactLink(
-            'psychExportResultLinkWrap',
+            'psychExportSuccess',
             'psychExportResultLink',
             pdfRef || openUrl,
             storageKind
           );
         }
-        let toast = 'PDF сформирован.';
-        if (storageKind === 'gdrive' && openUrl) toast += ' Файл в Google Drive.';
+
+        if (runBtn) {
+          runBtn.classList.add('hidden');
+          runBtn.disabled = false;
+        }
+        if (dlBtn) dlBtn.classList.remove('hidden');
+        if (success && success.scrollIntoView) success.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+        let toast = 'PDF готов. Скачайте файл кнопкой внизу или проверьте папку «Загрузки».';
+        if (storageKind === 'gdrive' && openUrl) toast += ' Копия также в Google Drive.';
         showWorkspaceToast(toast, 'success');
-        const modal = document.getElementById('modalPsychExport');
-        if (modal) modal.classList.remove('show');
       } catch (e) {
-        showWorkspaceToast(e.message || String(e), 'error');
+        const runBtn = document.getElementById('btnPsychExportRun');
+        if (runBtn) {
+          runBtn.disabled = false;
+          runBtn.textContent = 'Сформировать PDF';
+        }
+        const warnEl = document.getElementById('psychExportWarnings');
+        const msg = e.message || String(e);
+        if (warnEl) {
+          warnEl.style.color = 'var(--err, #c62828)';
+          warnEl.textContent = 'Ошибка формирования PDF: ' + msg;
+        }
+        showWorkspaceToast(msg, 'error');
+      }
+    }
+
+    function downloadPsychExportAgain() {
+      if (psychExportState.downloadBlob) {
+        triggerBlobDownload(psychExportState.downloadBlob, psychExportState.downloadName || 'psych_report.pdf');
+        showWorkspaceToast('Повторная загрузка PDF…', 'info');
+        return;
+      }
+      if (psychExportState.downloadUrl) {
+        const a = document.createElement('a');
+        a.href = psychExportState.downloadUrl;
+        a.download = psychExportState.downloadName || 'psych_report.pdf';
+        a.click();
       }
     }
 
@@ -2014,7 +2215,24 @@
         showWorkspaceToast(notify ? 'Назначение создано, уведомление отправлено в Telegram.' : 'Назначение создано.', 'success');
         loadPsychAssignments();
       } catch (e) {
-        showWorkspaceToast(e.message || String(e), 'error');
+        const msg = e.message || String(e);
+        if (notify && msg.indexOf('active_assignment_exists') >= 0) {
+          try {
+            const list = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId) + '&limit=50');
+            const items = (list && list.items) || [];
+            const row = items.find((a) => a.employee_id === empId && a.status !== 'completed' && a.status !== 'cancelled');
+            if (row && row.id) {
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(row.id) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+              showWorkspaceToast('Назначение уже было — повторно отправлено уведомление в Telegram.', 'success');
+              loadPsychAssignments();
+              return;
+            }
+          } catch (e2) {
+            showWorkspaceToast((e2.message || String(e2)) + ' (после active_assignment_exists)', 'error');
+            return;
+          }
+        }
+        showWorkspaceToast(msg, 'error');
       }
     }
 
@@ -2088,10 +2306,13 @@
     };
     const btnPsychExportRun = document.getElementById('btnPsychExportRun');
     if (btnPsychExportRun) btnPsychExportRun.onclick = () => runPsychExportPdf();
+    const btnPsychExportDownload = document.getElementById('btnPsychExportDownload');
+    if (btnPsychExportDownload) btnPsychExportDownload.onclick = () => downloadPsychExportAgain();
     const btnPsychExportClose = document.getElementById('btnPsychExportClose');
     if (btnPsychExportClose) btnPsychExportClose.onclick = () => {
       const modal = document.getElementById('modalPsychExport');
       if (modal) modal.classList.remove('show');
+      resetPsychExportModalState();
     };
 
     document.getElementById('btnImportExcel').onclick = () => document.getElementById('fileExcel').click();

@@ -11,7 +11,16 @@ from typing import Any
 
 _log = logging.getLogger(__name__)
 
-DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+# ``drive.file`` cannot open HR-shared folders; full drive scope is required for
+# service-account uploads into Shared Drive / folders shared with the SA email.
+DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
+_DRIVE_LIST_KWARGS = {
+    "supportsAllDrives": True,
+    "includeItemsFromAllDrives": True,
+}
+_DRIVE_MUTATE_KWARGS = {
+    "supportsAllDrives": True,
+}
 
 
 def _service_account_info() -> dict[str, Any] | None:
@@ -66,7 +75,13 @@ def _find_child_folder(service: Any, parent_id: str, name: str) -> str | None:
     )
     resp = (
         service.files()
-        .list(q=q, spaces="drive", fields="files(id)", pageSize=1)
+        .list(
+            q=q,
+            spaces="drive",
+            fields="files(id)",
+            pageSize=1,
+            **_DRIVE_LIST_KWARGS,
+        )
         .execute()
     )
     files = resp.get("files") or []
@@ -84,7 +99,7 @@ def _ensure_folder(service: Any, parent_id: str, name: str) -> str:
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [parent_id],
     }
-    created = service.files().create(body=meta, fields="id").execute()
+    created = service.files().create(body=meta, fields="id", **_DRIVE_MUTATE_KWARGS).execute()
     return str(created["id"])
 
 
@@ -113,7 +128,7 @@ def upload_bytes(
     body = {"name": filename, "parents": [parent_folder_id]}
     created = (
         service.files()
-        .create(body=body, media_body=media, fields="id, webViewLink")
+        .create(body=body, media_body=media, fields="id, webViewLink", **_DRIVE_MUTATE_KWARGS)
         .execute()
     )
     file_id = str(created["id"])
@@ -126,7 +141,7 @@ def download_bytes(file_id: str) -> bytes:
     from googleapiclient.http import MediaIoBaseDownload
 
     service = _build_drive_service()
-    request = service.files().get_media(fileId=file_id)
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
     done = False

@@ -6,6 +6,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -64,6 +66,7 @@ class PsychModuleStatusOut(BaseModel):
     available_tests: list[PsychTestInfoOut]
     telegram_commands: list[str] = Field(default_factory=list)
     pdf_cache_mode: str = "off"
+    pdf_renderer_version: str = ""
     gdrive_enabled: bool = False
     gdrive_configured: bool = False
     gdrive_upload_sessions: bool = False
@@ -96,6 +99,10 @@ class PsychExportPdfIn(BaseModel):
     sections: list[PsychSectionOverrideIn] | None = None
     session_refs: list[dict[str, str]] | None = None
     regenerate_ai: bool = False
+    force_regenerate: bool = Field(
+        default=False,
+        description="Игнорировать PDF-кэш и пересобрать отчёт (после обновления шаблона/графиков)",
+    )
     strict: bool = False
     response_mode: str = Field(
         default="stream",
@@ -116,6 +123,9 @@ class PsychExportPdfOut(BaseModel):
     cache_hit: bool = False
     manifest_path: str | None = None
     manifest_drive_ref: str | None = None
+    pdf_local_ref: str | None = None
+    download_filename: str | None = None
+    pdf_renderer_version: str | None = None
 
 
 class PsychAssignmentOut(BaseModel):
@@ -138,6 +148,17 @@ class PsychAssignmentOut(BaseModel):
     is_complete: bool | None = None
     allowed_test_ids: list[str] = Field(default_factory=list)
     next_test_id: str | None = None
+    released_test_ids: list[str] | None = None
+    pending_hr_release_test_ids: list[str] = Field(default_factory=list)
+    needs_hr_release: bool | None = None
+
+
+class PsychAssignmentReleaseIn(BaseModel):
+    test_ids: list[str] | None = Field(
+        default=None,
+        description="Какие тесты открыть; если пусто — следующий рекомендованный шаг",
+    )
+    notify: bool = False
 
 
 def _assert_client(db: Session, client_id: str) -> None:
@@ -318,6 +339,35 @@ def get_export_preview(
     )
 
 
+from psychological_testing.integration.filename_translit import ascii_slug_from_name
+
+
+def _pdf_download_filename(employee_id: str, display_name: str | None) -> str:
+    """ASCII filename safe for HTTP headers and Windows paths."""
+    raw = (display_name or "").strip()
+    if raw:
+        base = ascii_slug_from_name(raw, max_len=60, fallback="")
+        if not base:
+            base = f"psych_report_{employee_id[:8]}"
+    else:
+        base = f"psych_report_{employee_id[:8]}"
+    return base if base.lower().endswith(".pdf") else f"{base}.pdf"
+
+
+def _pdf_content_disposition(employee_id: str, display_name: str | None) -> tuple[str, str]:
+    filename = _pdf_download_filename(employee_id, display_name)
+    header = f'attachment; filename="{filename}"'
+    return filename, header
+
+
+def _latin1_http_header(value: str) -> str:
+    try:
+        value.encode("latin-1")
+        return value
+    except UnicodeEncodeError:
+        return quote(value, safe="/:/?&=#")
+
+
 @router.post("/employees/{employee_id}/export-pdf")
 def post_export_pdf(
     employee_id: str,
@@ -334,6 +384,7 @@ def post_export_pdf(
     )
 
     sections = _sections_from_body(body.sections)
+    client = db.get(Client, body.client_id)
     manifest = build_export_manifest(
         client_id=body.client_id,
         employee_id=employee_id,
@@ -341,6 +392,7 @@ def post_export_pdf(
         created_by=body.account_id,
         session_refs=body.session_refs,
         sections=sections,
+        client_name=(client.name or "").strip() if client else None,
     )
     if body.strict:
         from psychological_testing.shared_engine.report_contract import (
@@ -359,6 +411,7 @@ def post_export_pdf(
             manifest,
             employee_display_name=display_name,
             regenerate_ai=body.regenerate_ai,
+            force_regenerate=body.force_regenerate,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -366,7 +419,10 @@ def post_export_pdf(
     pdf_bytes = result["pdf_bytes"]
     pdf_ref = result.get("pdf_ref")
     artifact = export_artifact_metadata(pdf_ref, client_id=body.client_id)
+    from psychological_testing.shared_engine.pdf_render_version import PDF_RENDERER_VERSION
+
     mode = (body.response_mode or "stream").strip().lower()
+    download_filename = _pdf_download_filename(employee_id, display_name)
     if mode == "json":
         return PsychExportPdfOut(
             manifest_id=str(result["manifest"].get("manifest_id") or ""),
@@ -377,19 +433,21 @@ def post_export_pdf(
             cache_hit=bool(result.get("cache_hit")),
             manifest_path=result.get("manifest_path"),
             manifest_drive_ref=result.get("manifest_drive_ref"),
+            pdf_local_ref=result.get("pdf_local_ref"),
+            download_filename=download_filename,
+            pdf_renderer_version=PDF_RENDERER_VERSION,
         )
 
-    filename = f"psych_report_{employee_id[:8]}.pdf"
-    if display_name:
-        safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in display_name)[:40]
-        filename = f"{safe.strip() or 'report'}.pdf"
+    filename, disposition = _pdf_content_disposition(employee_id, display_name)
     headers: dict[str, str] = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Disposition": disposition,
+        "X-Psych-Pdf-Renderer-Version": PDF_RENDERER_VERSION,
     }
     if pdf_ref:
-        headers["X-Psych-Pdf-Ref"] = pdf_ref
-    if artifact.get("pdf_open_url"):
-        headers["X-Psych-Pdf-Open-Url"] = str(artifact["pdf_open_url"])
+        headers["X-Psych-Pdf-Ref"] = _latin1_http_header(str(pdf_ref))
+    open_url = artifact.get("pdf_open_url")
+    if open_url:
+        headers["X-Psych-Pdf-Open-Url"] = _latin1_http_header(str(open_url))
     if artifact.get("storage_kind"):
         headers["X-Psych-Storage-Kind"] = str(artifact["storage_kind"])
     return Response(
@@ -434,6 +492,25 @@ def notify_psych_assignment(
                 "session_telegram_chat_id": e.session_telegram_chat_id,
             },
         ) from e
+    except ValueError as e:
+        raise _value_error_to_http(e) from e
+    return PsychAssignmentOut.model_validate(data)
+
+
+@router.post("/assignments/{assignment_id}/release", response_model=PsychAssignmentOut)
+def release_psych_assignment_tests(
+    assignment_id: str,
+    body: PsychAssignmentReleaseIn,
+    db: Session = Depends(get_db),
+) -> PsychAssignmentOut:
+    """Открыть следующий тест (или указанные) после обратной связи HR."""
+    try:
+        data = assign_svc.release_assignment_tests(
+            db,
+            assignment_id,
+            test_ids=body.test_ids,
+            notify=body.notify,
+        )
     except ValueError as e:
         raise _value_error_to_http(e) from e
     return PsychAssignmentOut.model_validate(data)

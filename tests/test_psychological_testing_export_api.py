@@ -9,6 +9,17 @@ import pytest
 from tests.conftest import onboarding_payload
 
 
+from app.routers.psychological_testing import _pdf_content_disposition
+
+
+def test_pdf_content_disposition_cyrillic_translit() -> None:
+    name, header = _pdf_content_disposition("emp123456789012345678901234567890", "Ким Сергей Васильевич")
+    assert name == "Kim_Sergey_Vasilevich.pdf"
+    assert "filename*=" not in header
+    assert "Kim_Sergey_Vasilevich.pdf" in header
+    header.encode("latin-1")
+
+
 def test_report_templates_endpoint(client) -> None:
     r = client.get("/api/psychological-testing/report-templates")
     assert r.status_code == 200
@@ -25,6 +36,8 @@ def test_export_preview_and_pdf_stream(
 ) -> None:
     monkeypatch.setenv("PSYCH_TESTING_PERSIST_JSON", "1")
     monkeypatch.setenv("PSYCH_TESTING_SESSIONS_DIR", str(tmp_path / "sessions"))
+    monkeypatch.setenv("PSYCH_TESTING_EXPORTS_DIR", str(tmp_path / "exports"))
+    monkeypatch.setenv("PSYCH_TESTING_GDRIVE", "0")
     monkeypatch.delenv("PSYCH_TESTING_PDF_AI", raising=False)
 
     onboard = client.post(

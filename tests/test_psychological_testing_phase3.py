@@ -9,8 +9,11 @@ import pytest
 
 from psychological_testing.adapters.telegram_keyboards import (
     build_callback_data,
+    build_menu_callback_data,
     keyboard_for_item,
     parse_callback_data,
+    parse_menu_callback,
+    welcome_menu_keyboard,
 )
 from psychological_testing.adapters.telegram_outbound import (
     FakeTelegramOutbound,
@@ -68,6 +71,23 @@ class TestCallbackKeyboard:
         cb = build_callback_data("sid-1", "q1", "A")
         assert parse_callback_data(cb) == ("sid-1", "q1", "A")
 
+    def test_menu_callback_roundtrip(self) -> None:
+        cb = build_menu_callback_data("mbti_dialog")
+        assert parse_menu_callback(cb) == "mbti_dialog"
+        assert parse_callback_data(cb) is None
+
+    def test_welcome_menu_has_test_buttons(self) -> None:
+        kb = welcome_menu_keyboard()
+        labels = [
+            btn["text"]
+            for row in kb["inline_keyboard"]
+            for btn in row
+        ]
+        assert "MBTI" in labels
+        assert "PAEI" in labels
+        assert "Отменить текущий тест" in labels
+        assert "Справка" in labels
+
     def test_mbti_keyboard_two_buttons(self) -> None:
         engine = SessionEngine.start(
             _mbti_one_per_axis(),
@@ -90,8 +110,27 @@ class TestTelegramAdapterMock:
         adapter.handle_text("1001", "/start", is_command=True)
         assert adapter._store.get_engine("1001") is None
         assert len(fake_outbound.messages) == 1
-        assert "Психологическое тестирование" in fake_outbound.messages[0]["text"]
-        assert "MBTI" in fake_outbound.messages[0]["text"]
+        msg = fake_outbound.messages[0]
+        assert "Психологическое тестирование" in msg["text"]
+        assert "Выберите тест" in msg["text"]
+        assert msg["reply_markup"] is not None
+        assert msg["reply_markup"]["inline_keyboard"]
+
+    def test_menu_button_starts_mbti(
+        self, adapter: PsychTestingTelegramAdapter, fake_outbound: FakeTelegramOutbound
+    ) -> None:
+        adapter.handle_callback("1001", "q1", build_menu_callback_data("mbti"))
+        engine = adapter._store.get_engine("1001")
+        assert engine is not None
+        assert engine.session.test_id == "mbti"
+        assert len(fake_outbound.messages) >= 2
+
+    def test_menu_help_shows_welcome(
+        self, adapter: PsychTestingTelegramAdapter, fake_outbound: FakeTelegramOutbound
+    ) -> None:
+        adapter.handle_callback("1001", "q1", build_menu_callback_data("help"))
+        assert len(fake_outbound.messages) == 1
+        assert fake_outbound.messages[0]["reply_markup"] is not None
 
     def test_start_while_active_session_blocked(
         self, adapter: PsychTestingTelegramAdapter, fake_outbound: FakeTelegramOutbound
@@ -285,7 +324,7 @@ class TestTelegramAdapterE2EFull:
             adapter.handle_text("2004", text)
         assert engine.session.status == SessionStatus.DONE
 
-    def test_soft_skills_keyboard_two_rows(self) -> None:
+    def test_soft_skills_keyboard_one_row(self) -> None:
         soft = PluginRegistry().get("soft_skills")
         engine = SessionEngine.start(soft, client_id="c", employee_id="e")
         item = engine.current_item()
@@ -293,9 +332,8 @@ class TestTelegramAdapterE2EFull:
         kb = keyboard_for_item(soft, engine.session.session_id, item)
         assert kb is not None
         rows = kb["inline_keyboard"]
-        assert len(rows) == 2
-        assert [b["text"] for b in rows[0]] == ["1", "2", "3"]
-        assert [b["text"] for b in rows[1]] == ["4", "5"]
+        assert len(rows) == 1
+        assert [b["text"] for b in rows[0]] == ["1", "2", "3", "4", "5"]
 
     def test_full_disc_via_buttons(self) -> None:
         adapter, outbound = _full_adapter()

@@ -105,7 +105,21 @@ UI и Drive upload **дополняют** друг друга: без prod-на�
    PSYCH_TESTING_PERSIST_JSON=1
    PSYCH_TESTING_PDF_CACHE=hash
    ```
-5. **Проверка:** HR export PDF → файл в Drive `{client_id}/{date}/` → в session JSON `report.pdf_ref`: `gdrive:...` → в Workspace ссылка «Открыть в Google Drive».
+5. **Проверка:** HR export PDF → файл в Drive `{date}/{client_name}/` (например `2026-05-21/TOO_Vtoroe/`) → в session JSON `report.pdf_ref`: `gdrive:...` → в Workspace ссылка «Открыть в Google Drive».
+
+**Структура на Shared Drive** (корень = `PSYCH_TESTING_GDRIVE_FOLDER_ID`, например общий диск `PsychTest Rep2026`):
+
+```
+PsychTest Rep2026/
+  2026-05-21/
+    TOO_Vtoroe/          ← clients.name, транслит (ТОО Второе)
+    TOO_Odin/            ← ТОО Один
+    TOO_Beta/            ← ТОО_Бета
+      Kim_Sergey_Vasilevich_….pdf
+      {manifest_id}_manifest.json
+```
+
+Имя папки берётся из **`clients.name`** в HR (как на экране «Клиенты (организации)»); при отсутствии — `clients.code`, затем `client_id`. Локальный кэш использует те же транслит-имена: `{client_name_slug}/{date}/` под `data/report_exports/` (старые папки по `client_id` по-прежнему находятся при чтении кэша).
 
 ---
 

@@ -119,11 +119,28 @@ class TestMbtiInterpretation:
         result = evaluate(mbti_definition, answers)
         assert result.typology_code == "INTJ"
         assert result.profile is not None
+        assert result.profile.archetype_ru == "Стратег"
+        assert "Архитектор" in result.profile.alt_names_ru
         assert "INTJ" in result.report_text
         assert "Стратег" in result.report_text
+        assert "Альтернативные названия" in result.report_text
         assert "Сильные стороны" in result.report_text
         assert "Зоны роста" in result.report_text
         assert "не является единственным критерием" in result.report_text
+
+    def test_profile_to_dict_for_session_json(self, mbti_definition) -> None:
+        from psychological_testing.shared_engine.interpretation_engine import profile_to_dict
+
+        answers = [("E/I", "I"), ("S/N", "N"), ("T/F", "F"), ("J/P", "J")] * 2
+        result = evaluate(mbti_definition, answers)
+        assert result.profile is not None
+        payload = profile_to_dict(result.profile)
+        assert payload["code"] == "INFJ"
+        assert payload["archetype_ru"] == "Наставник"
+        assert payload["alt_names_ru"] == ["Провидец", "Советник"]
+        assert payload["summary_ru"]
+        assert payload["strengths"]
+        assert payload["growth_areas"]
 
     def test_all_16_types_in_interpretation_file(self, mbti_definition) -> None:
         profiles = load_type_profiles(mbti_definition.interpretation)  # type: ignore[arg-type]

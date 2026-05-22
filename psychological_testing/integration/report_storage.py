@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from psychological_testing.integration import google_drive_client as gdrive
+from psychological_testing.integration.filename_translit import ascii_slug_from_name
 
 _log = logging.getLogger(__name__)
 
@@ -24,7 +25,14 @@ GDRIVE_REF_PREFIX = "gdrive:"
 DEFAULT_API_PREFIX = "/api/psychological-testing"
 
 
+def _load_gdrive_env() -> None:
+    from psychological_testing.env import load_plugin_env
+
+    load_plugin_env(override=False)
+
+
 def gdrive_enabled() -> bool:
+    _load_gdrive_env()
     return os.getenv("PSYCH_TESTING_GDRIVE", "").strip().lower() in (
         "1",
         "true",
@@ -121,23 +129,94 @@ def artifact_link_label(storage_kind: str | None) -> str:
     return "Открыть отчёт"
 
 
-def storage_status_label() -> str:
+def storage_status_label(
+    *,
+    gdrive_enabled_flag: bool | None = None,
+    gdrive_configured_flag: bool | None = None,
+) -> str:
     """Human-readable line for workspace /status."""
-    st = storage_status()
-    if st["gdrive_configured"]:
+    if gdrive_configured_flag is None or gdrive_enabled_flag is None:
+        st = storage_status(include_label=False)
+        gdrive_enabled_flag = bool(st["gdrive_enabled"])
+        gdrive_configured_flag = bool(st["gdrive_configured"])
+    if gdrive_configured_flag:
         return "Google Drive (настроено)"
-    if st["gdrive_enabled"]:
-        return "Google Drive (включено, не настроено — проверьте SA и PSYCH_TESTING_GDRIVE_FOLDER_ID)"
+    if gdrive_enabled_flag:
+        return (
+            "Google Drive (включено, не настроено — "
+            "проверьте SA и PSYCH_TESTING_GDRIVE_FOLDER_ID)"
+        )
     return "локально (data/report_exports/)"
 
 
-def _drive_target_folder(client_id: str, day: str | None = None) -> str:
+def _resolve_client_display_name(client_id: str) -> str:
+    """Organization title from HR ``clients.name`` (fallback: ``code``, then ``client_id``)."""
+    cid = str(client_id or "").strip()
+    if not cid:
+        return "unknown"
+    try:
+        from app.db import SessionLocal
+        from app.models import Client
+
+        db = SessionLocal()
+        try:
+            client = db.get(Client, cid)
+            if client is not None:
+                name = str(client.name or "").strip()
+                if name:
+                    return name
+                code = str(client.code or "").strip()
+                if code:
+                    return code
+        finally:
+            db.close()
+    except Exception as exc:
+        _log.warning(
+            "psych_testing: client name lookup failed for %s: %s",
+            cid,
+            exc,
+        )
+    return cid
+
+
+def client_folder_slug(*, client_id: str, client_name: str | None = None) -> str:
+    """Folder slug from ``client_name`` or HR lookup: ``ТОО Один`` → ``TOO_Odin``."""
+    explicit = str(client_name or "").strip()
+    label = explicit or _resolve_client_display_name(client_id)
+    slug = ascii_slug_from_name(label, max_len=80, fallback="")
+    if slug:
+        return slug
+    return str(client_id or "unknown")
+
+
+def client_drive_folder_name(client_id: str, client_name: str | None = None) -> str:
+    return client_folder_slug(client_id=client_id, client_name=client_name)
+
+
+def drive_export_path_parts(
+    client_id: str,
+    day: str | None = None,
+    *,
+    client_name: str | None = None,
+) -> list[str]:
+    """Shared Drive layout under configured root: ``{YYYY-MM-DD}/{client_name}/``."""
+    resolved_day = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return [resolved_day, client_folder_slug(client_id=client_id, client_name=client_name)]
+
+
+def _drive_target_folder(
+    client_id: str,
+    day: str | None = None,
+    *,
+    client_name: str | None = None,
+) -> str:
     service = gdrive._build_drive_service()
     root = gdrive.root_folder_id()
-    parts = [client_id]
-    if day:
-        parts.append(day)
-    return gdrive.ensure_path_folder(service, root, parts)
+    return gdrive.ensure_path_folder(
+        service,
+        root,
+        drive_export_path_parts(client_id, day, client_name=client_name),
+    )
 
 
 def upload_pdf_to_drive(
@@ -146,10 +225,11 @@ def upload_pdf_to_drive(
     filename: str,
     client_id: str,
     day: str | None = None,
+    client_name: str | None = None,
 ) -> str:
     """Upload PDF; return ``gdrive:{file_id}`` ref."""
     day = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    folder_id = _drive_target_folder(client_id, day)
+    folder_id = _drive_target_folder(client_id, day, client_name=client_name)
     result = gdrive.upload_bytes(
         pdf_bytes,
         filename=filename,
@@ -165,13 +245,14 @@ def upload_json_to_drive(
     filename: str,
     client_id: str,
     day: str | None = None,
+    client_name: str | None = None,
 ) -> str:
     if isinstance(payload, dict):
         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     else:
         data = payload
     day = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    folder_id = _drive_target_folder(client_id, day)
+    folder_id = _drive_target_folder(client_id, day, client_name=client_name)
     result = gdrive.upload_bytes(
         data,
         filename=filename,
@@ -193,10 +274,16 @@ def upload_manifest_file(manifest_path: Path, *, client_id: str) -> str | None:
     if not isinstance(manifest, dict):
         manifest = wrapper
     manifest_id = str((manifest or {}).get("manifest_id") or manifest_path.stem)
+    client_name = (manifest or {}).get("client_name")
+    day = manifest_path.parent.name
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        day = None
     return upload_json_to_drive(
         wrapper if isinstance(wrapper, dict) else {"manifest": manifest},
         filename=f"{manifest_id[:8]}_manifest.json",
         client_id=client_id,
+        day=day,
+        client_name=str(client_name).strip() if client_name else None,
     )
 
 
@@ -264,22 +351,28 @@ def export_artifact_metadata(
     }
 
 
-def storage_status() -> dict[str, Any]:
+def storage_status(*, include_label: bool = True) -> dict[str, Any]:
     """Flags for module status / workspace."""
     enabled = gdrive_enabled()
     creds = bool(
         os.getenv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON", "").strip()
         or os.getenv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_INLINE", "").strip()
     )
-    return {
+    configured = enabled and creds and bool(
+        os.getenv("PSYCH_TESTING_GDRIVE_FOLDER_ID", "").strip()
+    )
+    result: dict[str, Any] = {
         "gdrive_enabled": enabled,
-        "gdrive_configured": enabled and creds and bool(
-            os.getenv("PSYCH_TESTING_GDRIVE_FOLDER_ID", "").strip()
-        ),
+        "gdrive_configured": configured,
         "gdrive_upload_sessions": gdrive_upload_sessions_enabled(),
         "gdrive_upload_manifest": gdrive_upload_manifest_enabled() if enabled else False,
-        "storage_label": storage_status_label(),
     }
+    if include_label:
+        result["storage_label"] = storage_status_label(
+            gdrive_enabled_flag=enabled,
+            gdrive_configured_flag=configured,
+        )
+    return result
 
 
 __all__ = [
@@ -287,7 +380,10 @@ __all__ = [
     "GDRIVE_REF_PREFIX",
     "artifact_link_label",
     "artifact_open_url",
+    "client_drive_folder_name",
+    "client_folder_slug",
     "download_pdf",
+    "drive_export_path_parts",
     "export_artifact_metadata",
     "gdrive_enabled",
     "gdrive_upload_manifest_enabled",

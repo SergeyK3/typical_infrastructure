@@ -2,10 +2,14 @@
 """
 Long polling для Bot API (удобно в разработке без HTTPS webhook).
 
-Включение: TELEGRAM_ENABLE_POLLING=1 и TELEGRAM_BOT_TOKEN в .env (корень пакета skill_assessment).
-Сообщения: сначала согласие на ПДн для опроса по документам (Part1), если ожидается ответ;
-далее сценарий экзамена по регламентам (чат узнаётся по привязке POST …/bindings, по TELEGRAM_DEV_* в .env
-или автоматически по тому же chat_id, что в сессии опроса по документам).
+Включение: TELEGRAM_ENABLE_POLLING=1 и TELEGRAM_BOT_TOKEN в .env (корень репозитория).
+Один токен — один процесс ``python -m skill_assessment.telegram_worker``:
+
+- ``psychological_testing/`` — психологическое тестирование (назначение HR, /start mbti, callback ``pt:``)
+- ``skill_assessment/`` — опрос по регламентам, Part1 ПДн (``dsp|``), Part2
+
+Отдельный ``python -m psychological_testing.telegram_worker`` не нужен, если крутится этот воркер
+(иначе Telegram 409 — два getUpdates на один токен).
 """
 
 from __future__ import annotations
@@ -78,6 +82,52 @@ def _run_docs_survey_pd_consent_turn(
         db.close()
 
 
+_psych_adapter_singleton = None
+
+
+def _get_psych_telegram_adapter(token: str):
+    global _psych_adapter_singleton
+    if _psych_adapter_singleton is None:
+        from psychological_testing.integration.telegram_adapter import PsychTestingTelegramAdapter
+
+        _psych_adapter_singleton = PsychTestingTelegramAdapter(token=token)
+    return _psych_adapter_singleton
+
+
+def _run_psych_telegram_turn(
+    token: str,
+    chat_id: int,
+    text: str | None,
+    is_start_command: bool,
+    *,
+    voice_bytes: bytes | None = None,
+    callback_data: str | None = None,
+    callback_query_id: str | None = None,
+) -> bool:
+    """Обработка в psychological_testing. True — событие обработано."""
+    from app.db import SessionLocal
+    from app.services.telegram_unified_router import TelegramRoute, decide_telegram_route
+
+    db = SessionLocal()
+    try:
+        route = decide_telegram_route(db, str(chat_id), callback_data=callback_data)
+    finally:
+        db.close()
+    if route != TelegramRoute.PSYCH_TESTING:
+        return False
+
+    adapter = _get_psych_telegram_adapter(token)
+    cid = str(chat_id)
+    if callback_data and callback_query_id:
+        adapter.handle_callback(cid, callback_query_id, callback_data)
+        return True
+    if voice_bytes:
+        adapter.handle_voice(cid, voice_bytes)
+        return True
+    adapter.handle_text(cid, text or "", is_command=is_start_command)
+    return True
+
+
 def _run_dialog_dispatch_turn(
     chat_id: int, text: str | None, is_start_command: bool
 ) -> list[str]:
@@ -115,10 +165,14 @@ def _check_text_after_stt_allowed(text: str) -> str | None:
         db.close()
 
 
-async def _download_and_transcribe_telegram_voice(
+async def _download_telegram_file_bytes(client: httpx.AsyncClient, token: str, file_id: str) -> bytes:
+    raw, _ = await _download_telegram_voice_payload(client, token, file_id)
+    return raw
+
+
+async def _download_telegram_voice_payload(
     client: httpx.AsyncClient, token: str, file_id: str
-) -> str:
-    """Скачивает voice/audio из Telegram и возвращает транскрипт (STT)."""
+) -> tuple[bytes, str]:
     r = await client.get(f"{_api_base(token)}/getFile", params={"file_id": file_id})
     data = r.json()
     if not data.get("ok"):
@@ -129,8 +183,14 @@ async def _download_and_transcribe_telegram_voice(
     url = f"https://api.telegram.org/file/bot{token}/{fp}"
     r2 = await client.get(url)
     r2.raise_for_status()
-    raw = r2.content
-    fname = Path(fp).name or "voice.oga"
+    return r2.content, Path(fp).name or "voice.oga"
+
+
+async def _download_and_transcribe_telegram_voice(
+    client: httpx.AsyncClient, token: str, file_id: str
+) -> str:
+    """Скачивает voice/audio из Telegram и возвращает транскрипт (STT)."""
+    raw, fname = await _download_telegram_voice_payload(client, token, file_id)
     return await asyncio.to_thread(
         stt_svc.transcribe_audio_bytes,
         raw,
@@ -242,6 +302,17 @@ async def _dispatch_callback_query(client: httpx.AsyncClient, token: str, cq: di
     cid = cid_int
     chat_id = str(cid_int)
 
+    if await asyncio.to_thread(
+        _run_psych_telegram_turn,
+        token,
+        int(cid),
+        None,
+        False,
+        callback_data=data,
+        callback_query_id=str(qid),
+    ):
+        return
+
     if data.startswith("dsr|"):
         try:
             result = await asyncio.to_thread(_run_readiness_callback_turn, chat_id, data, str(qid))
@@ -342,7 +413,9 @@ async def run_long_polling(token: str) -> None:
         await _delete_webhook(client, token)
         wh = await client.get(f"{_api_base(token)}/getWebhookInfo")
         _log.info("telegram getWebhookInfo after delete: %s", wh.json())
-        _log.info("skill_assessment.telegram: long polling started (examination scenario)")
+        _log.info(
+            "skill_assessment.telegram: long polling (unified: psych_testing + skill_assessment)"
+        )
 
         while True:
             try:
@@ -377,10 +450,41 @@ async def run_long_polling(token: str) -> None:
                     chat_id, text, voice_file_id = _extract_incoming_message(upd)
                     if chat_id is None:
                         continue
+                    parts = text.strip().split() if text else []
+                    first_cmd = parts[0] if parts else ""
+                    is_start = first_cmd == "/start" or first_cmd.startswith("/start@")
+                    _log.debug("telegram: chat_id=%s is_start=%s text=%r", chat_id, is_start, text)
+                    voice_bytes: bytes | None = None
                     if voice_file_id:
                         try:
-                            transcribed = await _download_and_transcribe_telegram_voice(
+                            voice_bytes = await _download_telegram_file_bytes(client, token, voice_file_id)
+                        except Exception:
+                            _log.exception("telegram: voice download failed")
+                            await _send_message(
+                                client,
+                                token,
+                                chat_id,
+                                "Не удалось загрузить голосовое. Повторите запись или ответьте текстом.",
+                            )
+                            continue
+                        if await asyncio.to_thread(
+                            _run_psych_telegram_turn,
+                            token,
+                            chat_id,
+                            text,
+                            is_start,
+                            voice_bytes=voice_bytes,
+                        ):
+                            continue
+                        try:
+                            _, fname = await _download_telegram_voice_payload(
                                 client, token, voice_file_id
+                            )
+                            transcribed = await asyncio.to_thread(
+                                stt_svc.transcribe_audio_bytes,
+                                voice_bytes,
+                                filename=fname,
+                                content_type=None,
                             )
                             transcribed = (transcribed or "").strip()
                             if not transcribed:
@@ -428,10 +532,15 @@ async def run_long_polling(token: str) -> None:
                                 "Не удалось распознать голос. Повторите запись или отправьте ответ текстом.",
                             )
                             continue
-                    parts = text.strip().split() if text else []
-                    first_cmd = parts[0] if parts else ""
-                    is_start = first_cmd == "/start" or first_cmd.startswith("/start@")
-                    _log.debug("telegram: chat_id=%s is_start=%s text=%r", chat_id, is_start, text)
+                    if await asyncio.to_thread(
+                        _run_psych_telegram_turn,
+                        token,
+                        chat_id,
+                        text,
+                        is_start,
+                        voice_bytes=voice_bytes,
+                    ):
+                        continue
                     gate_parts = await asyncio.to_thread(_run_exam_gate_turn, chat_id, text, is_start)
                     if gate_parts:
                         for txt, markup in gate_parts:

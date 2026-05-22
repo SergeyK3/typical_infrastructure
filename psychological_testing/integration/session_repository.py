@@ -163,11 +163,14 @@ def module_status() -> dict[str, Any]:
     test_ids = registry.list_test_ids()
     persist_on = persist_json_enabled()
     session_count = len(_iter_session_files()) if persist_on else 0
+    from psychological_testing.shared_engine.pdf_render_version import PDF_RENDERER_VERSION
+
     return {
         "persist_json_enabled": persist_on,
         "sessions_dir": str(sessions_dir()),
         "session_count": session_count,
         "pdf_cache_mode": pdf_cache_mode(),
+        "pdf_renderer_version": PDF_RENDERER_VERSION,
         **storage_status(),
         "available_tests": [
             {

@@ -1,7 +1,13 @@
 """
-Отдельный процесс: Telegram long polling для psychological_testing.
+Отдельный процесс: Telegram long polling только для psychological_testing.
 
-Запуск (токен в корневом ``10 Typical_infrastructure/.env``)::
+В проде обычно достаточно одного воркера на ``TELEGRAM_BOT_TOKEN``::
+
+    python -m skill_assessment.telegram_worker
+
+(маршрутизация psych + skill_assessment — ``app.services.telegram_unified_router``).
+
+Изолированная отладка psych::
 
     TELEGRAM_BOT_TOKEN=...
     PSYCH_TESTING_ENABLE_POLLING=1

@@ -16,6 +16,8 @@ from dataclasses import replace
 from psychological_testing.adapters.telegram_keyboards import (
     keyboard_for_item,
     parse_callback_data,
+    parse_menu_callback,
+    welcome_menu_keyboard,
 )
 from psychological_testing.adapters.telegram_outbound import (
     FakeTelegramOutbound,
@@ -36,6 +38,7 @@ from psychological_testing.integration.hr_core import (
     employee_display_label,
     resolve_employee_by_telegram,
 )
+from psychological_testing.integration.telegram_completion import build_completion_footer
 from psychological_testing.integration.session_persistence import (
     build_session_result_document,
     persist_session_result,
@@ -62,25 +65,29 @@ _MBTI_START_ALIASES = frozenset(
 )
 
 
-def _welcome_text() -> str:
+def _welcome_text(*, has_assignment: bool = False, allowed_count: int = 0) -> str:
     voice_note = "" if _voice_enabled() else f"\n{_VOICE_DEV_NOTE}"
-    mbti_hint = (
-        "• /start mbti — MBTI\n"
-        "• /start mbti_dialog — MBTI, диалог с Акма\n"
-    )
-    return (
-        "Психологическое тестирование (HR OS).\n\n"
-        "Команды:\n"
-        f"{mbti_hint}"
-        "• /start paei — PAEI\n"
-        "• /start soft_skills — Soft Skills\n"
-        "• /start disc — DISC\n"
-        "• /start hexaco — HEXACO\n"
-        "• /cancel — отменить текущий тест\n"
-        "• /help — эта справка\n\n"
-        "/start без названия теста — показать это меню.\n"
-        f"Structured-тесты: кнопка или текст.{voice_note}"
-    )
+    if has_assignment and allowed_count == 0:
+        body = (
+            "Психологическое тестирование (HR OS).\n\n"
+            "Сейчас нет открытых тестов. Отдел кадров сообщит, когда будет следующий этап.\n"
+            "Команды /start, /cancel и /help тоже работают."
+        )
+    elif has_assignment:
+        body = (
+            "Психологическое тестирование (HR OS).\n\n"
+            "Доступные тесты по назначению HR — выберите кнопкой ниже.\n"
+            "Команды /start, /cancel и /help тоже работают.\n"
+            "Structured-тесты: кнопка или текст."
+        )
+    else:
+        body = (
+            "Психологическое тестирование (HR OS).\n\n"
+            "Выберите тест или действие кнопкой ниже.\n"
+            "Команды /start, /cancel и /help тоже работают.\n"
+            "Structured-тесты: кнопка или текст."
+        )
+    return f"{body}{voice_note}"
 
 _VOICE_MOCK_HINT = f"{_VOICE_DEV_NOTE}\nИспользуйте кнопки или текст."
 
@@ -302,6 +309,56 @@ class PsychTestingTelegramAdapter:
             _log.debug("assignment gate skipped", exc_info=True)
             return True, None, None
 
+    def _assignment_menu_context(self, chat_id: str) -> dict[str, object] | None:
+        client_id, employee_id, _ = self._resolve_participant(chat_id)
+        try:
+            from app.db import SessionLocal
+            from app.services.psych_test_assignments import assignment_menu_context
+
+            db = SessionLocal()
+            try:
+                return assignment_menu_context(
+                    db, client_id=client_id, employee_id=employee_id
+                )
+            finally:
+                db.close()
+        except Exception:
+            _log.debug("assignment menu context skipped", exc_info=True)
+            return None
+
+    def _send_welcome(self, chat_id: str) -> None:
+        ctx = self._assignment_menu_context(chat_id)
+        if ctx is None:
+            self._send(
+                chat_id,
+                _welcome_text(has_assignment=False),
+                welcome_menu_keyboard(None),
+            )
+            return
+        allowed = list(ctx.get("allowed_test_ids") or [])
+        self._send(
+            chat_id,
+            _welcome_text(has_assignment=True, allowed_count=len(allowed)),
+            welcome_menu_keyboard(frozenset(allowed)),
+        )
+
+    def _handle_menu_action(self, chat_id: str, action: str) -> None:
+        if action == "cancel":
+            self.cancel_session(chat_id)
+            return
+        if action == "help":
+            self._send_welcome(chat_id)
+            return
+        test_id, delivery_mode = resolve_mbti_start_arg(action)
+        if test_id not in _SUPPORTED_TESTS:
+            self._send_welcome(chat_id)
+            return
+        self.start_test(
+            chat_id,
+            test_id,
+            delivery_mode=delivery_mode if test_id == "mbti" else None,
+        )
+
     def _send(
         self,
         chat_id: str,
@@ -517,24 +574,36 @@ class PsychTestingTelegramAdapter:
             report = transition.report_text
             if transition.user_ack:
                 report = f"{transition.user_ack}\n\n{report}"
+
+            menu_ctx = None
             if updated is not None:
                 try:
-                    from psychological_testing.domain.test_programs import (
-                        completed_set,
-                        get_program,
-                        next_recommended_test,
-                    )
-                    from app.services.psych_test_assignments import load_completed_tests
+                    from app.services.psych_test_assignments import assignment_menu_context
 
-                    prog = get_program(updated.program_id)
-                    done = completed_set(load_completed_tests(updated.completed_tests_json))
-                    nxt = next_recommended_test(prog, done)
-                    if nxt:
-                        report += f"\n\n—\nСледующий шаг программы HR: /start {nxt}"
-                    elif updated.status == "completed":
-                        report += "\n\n—\nПрограмма психологического тестирования завершена."
+                    db = SessionLocal()
+                    try:
+                        menu_ctx = assignment_menu_context(
+                            db,
+                            client_id=client_id,
+                            employee_id=employee_id,
+                        )
+                    finally:
+                        db.close()
                 except Exception:
-                    _log.debug("next step hint failed", exc_info=True)
+                    _log.debug("completion menu context failed", exc_info=True)
+
+            mbti_dialog = bool(
+                binding and binding.active_test_id == "mbti" and binding.mbti_delivery_mode == "dialog"
+            )
+            report += "\n\n" + build_completion_footer(
+                engine,
+                has_hr_assignment=updated is not None,
+                allowed_next_test_ids=(
+                    list(menu_ctx.get("allowed_test_ids") or []) if menu_ctx else None
+                ),
+                program_complete=bool(menu_ctx and menu_ctx.get("is_complete")),
+                mbti_dialog=mbti_dialog,
+            )
             self._send(chat_id, report)
             return
 
@@ -585,7 +654,7 @@ class PsychTestingTelegramAdapter:
             cmd = parts[0].split("@")[0]
             if cmd in ("/start", "/test"):
                 if len(parts) < 2:
-                    self._send(chat_id, _welcome_text())
+                    self._send_welcome(chat_id)
                     return
                 arg = parts[1].split("@", 1)[0]
                 test_id, delivery_mode = resolve_mbti_start_arg(arg)
@@ -602,12 +671,12 @@ class PsychTestingTelegramAdapter:
                 self.cancel_session(chat_id)
                 return
             if cmd == "/help":
-                self._send(chat_id, _welcome_text())
+                self._send_welcome(chat_id)
                 return
 
         engine = self._store.get_engine(chat_id)
         if engine is None:
-            self._send(chat_id, _welcome_text())
+            self._send_welcome(chat_id)
             return
 
         if _is_dialog_engine(engine) and not dialog_accepts_text():
@@ -622,6 +691,11 @@ class PsychTestingTelegramAdapter:
 
     def handle_callback(self, chat_id: str, query_id: str, callback_data: str) -> None:
         self._answer_callback(query_id)
+
+        menu_action = parse_menu_callback(callback_data)
+        if menu_action is not None:
+            self._handle_menu_action(chat_id, menu_action)
+            return
 
         engine = self._store.get_engine(chat_id)
         if engine is None:

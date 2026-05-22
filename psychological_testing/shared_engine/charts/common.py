@@ -20,6 +20,8 @@ PRINT_COLORS = {
     "background": "#FFFFFF",
 }
 
+LIKERT_SCALE_MAX = 5.0
+
 PSYCH_COLORS: dict[str, Any] = {
     "PAEI": {
         "P": "#2E4A66",

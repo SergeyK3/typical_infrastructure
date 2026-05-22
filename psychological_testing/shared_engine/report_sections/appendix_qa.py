@@ -16,6 +16,15 @@ from psychological_testing.shared_engine.report_contract import SectionSpec
 
 _APPENDIX_TEST_ORDER = ("paei", "soft_skills", "hexaco", "disc", "mbti")
 
+# Ширина столбца «Ответ» (мм): короткие баллы/буквы vs развёрнутый PAEI.
+_APPENDIX_ANSWER_COL_MM: dict[str, float] = {
+    "soft_skills": 14,
+    "hexaco": 14,
+    "disc": 14,
+    "mbti": 14,
+    "paei": 34,
+}
+
 
 def _responses_list(session: dict[str, Any]) -> list[dict[str, Any]]:
     raw = session.get("responses") or []
@@ -69,7 +78,12 @@ def render_appendix_qa(
             answer = format_answer_display(test_id, resp, item)
             rows.append((str(idx), question, answer))
 
-        elements.extend(composer.qa_table(rows))
+        elements.extend(
+            composer.qa_table(
+                rows,
+                answer_col_mm=_APPENDIX_ANSWER_COL_MM.get(test_id, 14),
+            )
+        )
         elements.append(Spacer(1, 10))
 
     if not any_content:

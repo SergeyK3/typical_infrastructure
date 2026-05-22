@@ -84,8 +84,11 @@ def test_build_pdf_full_template_with_appendix(
             "typology_code": "ISTJ",
             "profile": {
                 "code": "ISTJ",
-                "name_ru": "Логистик",
-                "tagline": "Организатор",
+                "archetype_ru": "Инспектор",
+                "alt_names_ru": ["Хранитель порядка", "Реалист"],
+                "summary_ru": "Ответственный, дисциплинированный, любит правила",
+                "name_ru": "Инспектор",
+                "tagline": "Ответственный, дисциплинированный, любит правила",
                 "strengths": ["Системность"],
                 "growth_areas": ["Гибкость"],
             },
