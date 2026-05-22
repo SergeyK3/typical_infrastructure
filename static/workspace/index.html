@@ -988,16 +988,56 @@
       downloadName: null,
       downloadBlob: null,
     };
-    let psychRbacContext = { enforced: false, accountId: '' };
+    let psychRbacContext = {
+      enforced: false,
+      accountId: '',
+      canAssign: true,
+      canExport: true,
+      canView: true,
+      scope: 'all_org',
+    };
+
+    function applyPsychRbacUi() {
+      const assignBlock = document.querySelector('#panel-psych-testing .org-actions');
+      const assignHint = document.querySelector('#panel-psych-testing .org-actions + p.meta');
+      const sessionExportBtn = document.getElementById('btnPsychSessionExportPdf');
+      if (assignBlock) {
+        assignBlock.style.display = psychRbacContext.canAssign ? '' : 'none';
+      }
+      if (sessionExportBtn) {
+        sessionExportBtn.classList.toggle('hidden', !psychRbacContext.canExport);
+      }
+      if (assignHint && !psychRbacContext.canAssign && psychRbacContext.scope === 'team') {
+        assignHint.textContent = 'Режим руководителя: видны только сотрудники вашего подразделения. Назначение и экспорт PDF — только HR.';
+      }
+    }
 
     async function loadPsychRbacContext() {
-      psychRbacContext = { enforced: false, accountId: '' };
-      if (!clientId) return;
+      psychRbacContext = {
+        enforced: false,
+        accountId: '',
+        canAssign: true,
+        canExport: true,
+        canView: true,
+        scope: 'all_org',
+      };
+      if (!clientId) {
+        applyPsychRbacUi();
+        return;
+      }
       try {
         const ctx = await fetchApi('/psychological-testing/rbac-context?client_id=' + encodeURIComponent(clientId));
         const enforced = !!(ctx.rbac_assign_enforced || ctx.rbac_view_enforced || ctx.rbac_export_enforced);
-        psychRbacContext = { enforced, accountId: ctx.hr_admin_account_id || '' };
+        psychRbacContext = {
+          enforced,
+          accountId: ctx.workspace_account_id || ctx.hr_admin_account_id || '',
+          canAssign: ctx.can_assign !== false,
+          canExport: ctx.can_export !== false,
+          canView: ctx.can_view !== false,
+          scope: ctx.scope || 'all_org',
+        };
       } catch (_) { /* RBAC off */ }
+      applyPsychRbacUi();
     }
 
     function psychAccountQuery(params) {
@@ -2325,19 +2365,25 @@
             : a.status === 'superseded' ? 'заменено новым'
             : a.status === 'cancelled' ? 'отменено'
             : (a.status || '');
-          const dueDisabled = terminal ? ' disabled' : '';
-          const notifyDisabled = terminal ? ' disabled' : '';
+          const dueDisabled = terminal || !psychRbacContext.canAssign ? ' disabled' : '';
+          const notifyDisabled = terminal || !psychRbacContext.canAssign ? ' disabled' : '';
           const sessionBtn = a.session_id
             ? ' <button type="button" class="btn btn-secondary btn-sm btn-psych-session" data-session-id="' + escapeHtml(a.session_id) + '">JSON</button>'
+            : '';
+          const dueCell = psychRbacContext.canAssign
+            ? '<td><input type="date" class="psych-due-input" data-assignment-id="' + escapeHtml(a.id) + '" value="' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at)) + '"' + dueDisabled + ' title="Дедлайн" style="padding:0.25rem 0.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;min-width:9.5rem;"></td>'
+            : '<td class="meta">' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at) || '—') + '</td>';
+          const notifyBtn = psychRbacContext.canAssign
+            ? '<button type="button" class="btn btn-secondary btn-sm btn-psych-notify" data-assignment-id="' + escapeHtml(a.id) + '" data-employee-id="' + escapeHtml(a.employee_id || '') + '"' + notifyDisabled + (isActive ? ' title="Активное назначение"' : '') + '>Уведомить</button>'
             : '';
           return (
             '<tr>' +
               '<td class="td-ellipsis">' + escapeHtml(a.employee_display_name || '—') + '<br><span class="meta">' + escapeHtml(statusRu) + '</span></td>' +
               '<td><code title="Из карточки сотрудника">' + escapeHtml(a.employee_telegram_id || '—') + '</code></td>' +
               '<td class="td-ellipsis" title="' + escapeHtml(a.test_id || '') + '">' + escapeHtml(testLabel) + '</td>' +
-              '<td><input type="date" class="psych-due-input" data-assignment-id="' + escapeHtml(a.id) + '" value="' + escapeHtml(psychDueIsoToInput(a.due_date || a.due_at)) + '"' + dueDisabled + ' title="Дедлайн" style="padding:0.25rem 0.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;min-width:9.5rem;"></td>' +
+              dueCell +
               '<td class="meta">' + escapeHtml(a.completed_at ? formatPsychDate(a.completed_at) : '—') + '</td>' +
-              '<td class="row-actions"><button type="button" class="btn btn-secondary btn-sm btn-psych-notify" data-assignment-id="' + escapeHtml(a.id) + '" data-employee-id="' + escapeHtml(a.employee_id || '') + '"' + notifyDisabled + (isActive ? ' title="Активное назначение"' : '') + '>Уведомить</button>' + sessionBtn + '</td>' +
+              '<td class="row-actions">' + notifyBtn + sessionBtn + '</td>' +
             '</tr>'
           );
         }).join('');
@@ -2466,7 +2512,7 @@
             '<td class="td-ellipsis">' + escapeHtml(s.report_preview || '') + '</td>' +
             '<td style="white-space:nowrap;">' +
               '<button type="button" class="btn btn-secondary btn-sm btn-psych-detail" data-session-id="' + escapeHtml(s.session_id) + '">JSON</button> ' +
-              (s.employee_id ? '<button type="button" class="btn btn-primary btn-sm btn-psych-pdf" data-employee-id="' + escapeHtml(s.employee_id) + '" data-employee-name="' + escapeHtml(s.employee_display_name || '') + '">PDF</button>' : '') +
+              (psychRbacContext.canExport && s.employee_id ? '<button type="button" class="btn btn-primary btn-sm btn-psych-pdf" data-employee-id="' + escapeHtml(s.employee_id) + '" data-employee-name="' + escapeHtml(s.employee_display_name || '') + '">PDF</button>' : '') +
             '</td>' +
           '</tr>'
         )).join('');

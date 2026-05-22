@@ -201,12 +201,17 @@ def list_assignments(
     *,
     client_id: str,
     employee_id: str | None = None,
+    employee_ids: frozenset[str] | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
     stmt = select(PtTestAssignment).where(PtTestAssignment.client_id == client_id)
     if employee_id:
         stmt = stmt.where(PtTestAssignment.employee_id == employee_id)
+    if employee_ids is not None:
+        if not employee_ids:
+            return [], 0
+        stmt = stmt.where(PtTestAssignment.employee_id.in_(sorted(employee_ids)))
     total = len(db.scalars(stmt).all())
     rows = (
         db.scalars(

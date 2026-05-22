@@ -49,6 +49,8 @@ def test_psych_rbac_context_resolves_admin(client, monkeypatch):
     data2 = r2.json()
     assert data2["rbac_assign_enforced"] is True
     assert data2["hr_admin_account_id"] == account_id
+    assert data2["can_assign"] is True
+    assert data2["scope"] == "all_org"
 
 
 def test_psych_sessions_unknown_client_404(client):

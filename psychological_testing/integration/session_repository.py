@@ -127,12 +127,17 @@ def _summary_from_document(doc: dict[str, Any]) -> dict[str, Any]:
 def list_session_summaries(
     *,
     client_id: str | None = None,
+    employee_ids: frozenset[str] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     """Return session summary dicts and total count (newest first)."""
     rows: list[dict[str, Any]] = []
     for doc in _all_completed_documents(client_id=client_id):
+        if employee_ids is not None:
+            eid = str(doc.get("employee_id") or "")
+            if eid not in employee_ids:
+                continue
         summary = _summary_from_document(doc)
         if summary.get("session_id"):
             rows.append(summary)

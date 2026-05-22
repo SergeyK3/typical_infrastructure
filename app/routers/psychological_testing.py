@@ -20,10 +20,10 @@ from app.services import psych_test_assignments as assign_svc
 from app.services.psych_rbac import (
     assert_can_export_pdf,
     assert_can_manage_assignments,
+    assert_can_view_employee_psych_data,
     assert_can_view_psych_data,
-    rbac_any_enforced,
-    rbac_status,
-    resolve_hr_admin_account_id,
+    build_rbac_context,
+    visible_employee_ids_for_view,
 )
 from psychological_testing.integration.manifest_store import resolve_pdf_ref
 from psychological_testing.integration.report_storage import export_artifact_metadata
@@ -90,6 +90,13 @@ class PsychRbacContextOut(BaseModel):
     rbac_view_enforced: bool = False
     rbac_export_enforced: bool = False
     hr_admin_account_id: str | None = None
+    workspace_account_id: str | None = None
+    scope: str = "all_org"
+    is_hr_admin: bool = False
+    is_manager: bool = False
+    can_view: bool = True
+    can_assign: bool = True
+    can_export: bool = True
 
 
 class PsychAssignmentCreateIn(BaseModel):
@@ -227,14 +234,7 @@ def get_psych_rbac_context(
     db: Session = Depends(get_db),
 ) -> PsychRbacContextOut:
     _assert_client(db, client_id)
-    flags = rbac_status()
-    account_id = (
-        resolve_hr_admin_account_id(db, client_id) if rbac_any_enforced() else None
-    )
-    return PsychRbacContextOut(
-        **flags,
-        hr_admin_account_id=account_id,
-    )
+    return PsychRbacContextOut.model_validate(build_rbac_context(db, client_id=client_id))
 
 
 @router.get("/sessions", response_model=ListEnvelope[PsychSessionSummaryOut])
@@ -245,10 +245,19 @@ def list_psych_sessions(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[PsychSessionSummaryOut]:
+    visible: frozenset[str] | None = None
     if client_id:
         _assert_client(db, client_id)
         assert_can_view_psych_data(db, account_id=account_id, client_id=client_id)
-    items, total = list_session_summaries(client_id=client_id, limit=limit, offset=offset)
+        visible = visible_employee_ids_for_view(
+            db, account_id=account_id, client_id=client_id
+        )
+    items, total = list_session_summaries(
+        client_id=client_id,
+        employee_ids=visible,
+        limit=limit,
+        offset=offset,
+    )
     return ListEnvelope[PsychSessionSummaryOut](
         items=[PsychSessionSummaryOut.model_validate(x) for x in items],
         total=total,
@@ -270,7 +279,16 @@ def get_psych_session(
     cid = str(doc.get("client_id") or client_id or "")
     if cid:
         _assert_client(db, cid)
-        assert_can_view_psych_data(db, account_id=account_id, client_id=cid)
+        emp_id = str(doc.get("employee_id") or "").strip()
+        if emp_id:
+            assert_can_view_employee_psych_data(
+                db,
+                account_id=account_id,
+                client_id=cid,
+                employee_id=emp_id,
+            )
+        else:
+            assert_can_view_psych_data(db, account_id=account_id, client_id=cid)
     return doc
 
 
@@ -285,10 +303,22 @@ def list_psych_assignments(
 ) -> ListEnvelope[PsychAssignmentOut]:
     _assert_client(db, client_id)
     assert_can_view_psych_data(db, account_id=account_id, client_id=client_id)
+    visible = visible_employee_ids_for_view(
+        db, account_id=account_id, client_id=client_id
+    )
+    if employee_id and visible is not None and str(employee_id) not in visible:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "view_scope_denied",
+                "message": "Нет доступа к назначениям этого сотрудника",
+            },
+        )
     items, total = assign_svc.list_assignments(
         db,
         client_id=client_id,
         employee_id=employee_id,
+        employee_ids=visible,
         limit=limit,
         offset=offset,
     )
