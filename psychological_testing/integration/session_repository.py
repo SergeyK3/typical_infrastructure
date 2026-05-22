@@ -245,6 +245,8 @@ def module_status() -> dict[str, Any]:
     session_count = len(_all_completed_documents()) if (persist_on or db_on) else 0
     from psychological_testing.shared_engine.pdf_render_version import PDF_RENDERER_VERSION
 
+    from app.services.psych_rbac import rbac_status
+
     return {
         "persist_json_enabled": persist_on,
         "persist_db_enabled": db_on,
@@ -252,6 +254,7 @@ def module_status() -> dict[str, Any]:
         "session_count": session_count,
         "pdf_cache_mode": pdf_cache_mode(),
         "pdf_renderer_version": PDF_RENDERER_VERSION,
+        **rbac_status(),
         **storage_status(),
         "available_tests": [
             {

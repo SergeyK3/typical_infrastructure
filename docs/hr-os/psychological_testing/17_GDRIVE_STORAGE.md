@@ -134,3 +134,33 @@ PsychTest Rep2026/
 ## 10. Expose headers (CORS)
 
 Если Workspace на другом origin, для чтения `X-Psych-*` из `fetch` может понадобиться `expose_headers` в FastAPI/CORS — при same-origin (типичный деплой) не требуется.
+
+---
+
+## 11. Windows prod (UNC + service account)
+
+На Windows-сервере JSON ключ часто лежит на сетевой шаре, а не в каталоге приложения:
+
+```env
+PSYCH_TESTING_GDRIVE=1
+PSYCH_TESTING_GDRIVE_FOLDER_ID=<Shared Drive root id>
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=\\fileserver\hr-secrets\psych-testing-sa.json
+PSYCH_TESTING_PERSIST_JSON=1
+PSYCH_TESTING_PERSIST_DB=1
+PSYCH_TESTING_PDF_CACHE=hash
+```
+
+Проверки:
+
+1. Учётная запись **службы IIS / worker / uvicorn** должна иметь **Read** на UNC-путь к JSON.
+2. Папка Drive расшарена на email SA (`...@....iam.gserviceaccount.com`) с ролью **Editor** (или Content manager на Shared Drive).
+3. Локальная проверка конфигурации (без upload):
+
+   ```bash
+   python scripts/verify_psych_gdrive.py
+   python scripts/verify_psych_gdrive.py --probe
+   ```
+
+4. Smoke после деплоя: HR export PDF → файл в `{date}/{client_name}/` на Drive → `report.pdf_ref`: `gdrive:...` в session JSON.
+
+Inline JSON (`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_INLINE`) — альтернатива UNC для Docker/K8s secrets.

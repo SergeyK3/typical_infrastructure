@@ -33,6 +33,37 @@ def view_rbac_enforced() -> bool:
     return _env_enabled("PSYCH_TESTING_RBAC_VIEW")
 
 
+def rbac_any_enforced() -> bool:
+    return export_rbac_enforced() or assign_rbac_enforced() or view_rbac_enforced()
+
+
+def rbac_status() -> dict[str, bool]:
+    return {
+        "rbac_assign_enforced": assign_rbac_enforced(),
+        "rbac_view_enforced": view_rbac_enforced(),
+        "rbac_export_enforced": export_rbac_enforced(),
+    }
+
+
+def resolve_hr_admin_account_id(db: Session, client_id: str) -> str | None:
+    """First active HR-admin account for org (pilot workspace actor)."""
+    row = db.execute(
+        select(Account.id)
+        .join(Employee, Account.employee_id == Employee.id)
+        .join(AccountRole, AccountRole.account_id == Account.id)
+        .join(Role, Role.id == AccountRole.role_id)
+        .where(
+            Employee.client_id == client_id,
+            Account.status == "active",
+            Role.code.in_(HR_ADMIN_ROLE_CODES),
+            Role.is_active == True,  # noqa: E712
+        )
+        .order_by(Account.created_at.asc())
+        .limit(1)
+    ).first()
+    return str(row[0]) if row else None
+
+
 def _account_role_codes(db: Session, account_id: str) -> set[str]:
     rows = db.execute(
         select(Role.code)

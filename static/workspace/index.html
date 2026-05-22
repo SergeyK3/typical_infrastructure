@@ -370,7 +370,7 @@
       <h2>Психологические тестирования</h2>
       <div class="empty-state module-entry" style="margin-bottom: 1rem;">
         <h3>Telegram-бот</h3>
-        <p class="empty-message">Сотрудник проходит тест в Telegram; результаты сохраняются в JSON при <code>PSYCH_TESTING_PERSIST_JSON=1</code>.</p>
+        <p class="empty-message">Сотрудник проходит тест в Telegram; результаты сохраняются в JSON и SQLite (env <code>PSYCH_TESTING_PERSIST_JSON</code>, <code>PSYCH_TESTING_PERSIST_DB</code>).</p>
         <p class="empty-hint" id="psychTestingCommands">Загрузка доступных команд…</p>
         <p class="meta" id="psychTestingStatus" style="margin-top:0.5rem;"></p>
         <div class="module-entry-actions">
@@ -911,6 +911,9 @@
       if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
       if (!clientId) return null;
       const q = new URLSearchParams({ pdf_ref: ref, client_id: clientId });
+      if (psychRbacContext.enforced && psychRbacContext.accountId) {
+        q.set('account_id', psychRbacContext.accountId);
+      }
       return API + '/psychological-testing/export-pdf/file?' + q.toString();
     }
 
@@ -985,6 +988,31 @@
       downloadName: null,
       downloadBlob: null,
     };
+    let psychRbacContext = { enforced: false, accountId: '' };
+
+    async function loadPsychRbacContext() {
+      psychRbacContext = { enforced: false, accountId: '' };
+      if (!clientId) return;
+      try {
+        const ctx = await fetchApi('/psychological-testing/rbac-context?client_id=' + encodeURIComponent(clientId));
+        const enforced = !!(ctx.rbac_assign_enforced || ctx.rbac_view_enforced || ctx.rbac_export_enforced);
+        psychRbacContext = { enforced, accountId: ctx.hr_admin_account_id || '' };
+      } catch (_) { /* RBAC off */ }
+    }
+
+    function psychAccountQuery(params) {
+      const p = new URLSearchParams(params || {});
+      if (psychRbacContext.enforced && psychRbacContext.accountId) {
+        p.set('account_id', psychRbacContext.accountId);
+      }
+      const s = p.toString();
+      return s ? ('?' + s) : '';
+    }
+
+    function psychWithAccount(body) {
+      if (!psychRbacContext.enforced || !psychRbacContext.accountId) return body;
+      return Object.assign({}, body, { account_id: psychRbacContext.accountId });
+    }
 
     function setPsychExportAdvancedVisible(visible) {
       const block = document.getElementById('psychExportAdvanced');
@@ -1116,7 +1144,7 @@
       if (warnEl) warnEl.textContent = '';
       if (warnEl) warnEl.style.color = 'var(--warn, #b8860b)';
       modal.classList.add('show');
-      fetchApi('/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-preview?client_id=' + encodeURIComponent(clientId))
+      fetchApi('/psychological-testing/employees/' + encodeURIComponent(employeeId) + '/export-preview' + psychAccountQuery({ client_id: clientId }))
         .then((data) => {
           psychExportState.preview = data;
           renderPsychExportPreview(data);
@@ -1148,14 +1176,14 @@
       }
       const regenerateAi = !!(document.getElementById('psychExportRegenerateAi') && document.getElementById('psychExportRegenerateAi').checked);
       const forceRegenerate = !!(document.getElementById('psychExportForceRegenerate') && document.getElementById('psychExportForceRegenerate').checked);
-      const body = {
+      const body = psychWithAccount({
         client_id: clientId,
         template_id: 'legacy_team_assessment_v1',
         sections,
         regenerate_ai: regenerateAi,
         force_regenerate: forceRegenerate,
         response_mode: 'json',
-      };
+      });
       try {
         showWorkspaceToast('Формирование PDF…', 'info');
         const runBtn = document.getElementById('btnPsychExportRun');
@@ -1181,7 +1209,7 @@
         // Always download fresh bytes from this server (local bundle preferred over Drive ref).
         const downloadRef = pdfLocalRef || pdfRef;
         const downloadPath = downloadRef
-          ? '/psychological-testing/export-pdf/file?' + new URLSearchParams({ pdf_ref: downloadRef, client_id: clientId })
+          ? '/psychological-testing/export-pdf/file' + psychAccountQuery({ pdf_ref: downloadRef, client_id: clientId })
           : (openUrl
             ? (openUrl.startsWith('http') ? openUrl : openUrl.replace(/^\/api/, ''))
             : '');
@@ -2186,7 +2214,7 @@
       title.textContent = 'Сессия ' + sessionId;
       body.textContent = 'Загрузка…';
       modal.classList.add('show');
-      fetchApi('/psychological-testing/sessions/' + encodeURIComponent(sessionId))
+      fetchApi('/psychological-testing/sessions/' + encodeURIComponent(sessionId) + psychAccountQuery({ client_id: clientId }))
         .then((doc) => {
           psychSessionModalDoc = doc;
           const report = doc.report && doc.report.text_telegram ? doc.report.text_telegram : '';
@@ -2210,13 +2238,21 @@
         const cmds = (st.telegram_commands || []).join(', ') || '—';
         cmdEl.textContent = 'Команды в боте: ' + cmds + '. Сотрудник должен быть привязан к организации (Telegram в карточке сотрудника).';
         if (statusEl) {
-          const persist = st.persist_json_enabled ? 'включено' : 'выключено (PSYCH_TESTING_PERSIST_JSON)';
+          const persistJson = st.persist_json_enabled ? 'включено' : 'выключено (PSYCH_TESTING_PERSIST_JSON)';
+          const persistDb = st.persist_db_enabled ? 'включено' : 'выключено (PSYCH_TESTING_PERSIST_DB)';
           const storage = st.storage_label || (st.gdrive_configured ? 'Google Drive' : (st.gdrive_enabled ? 'Google Drive (не настроено)' : 'локально'));
           const cache = st.pdf_cache_mode && st.pdf_cache_mode !== 'off' ? st.pdf_cache_mode : 'выкл';
+          const rbacOn = st.rbac_assign_enforced || st.rbac_view_enforced || st.rbac_export_enforced;
+          const rbacLine = rbacOn
+            ? ('RBAC: assign=' + (st.rbac_assign_enforced ? 'on' : 'off') +
+               ', view=' + (st.rbac_view_enforced ? 'on' : 'off') +
+               ', export=' + (st.rbac_export_enforced ? 'on' : 'off') + '.')
+            : 'RBAC: выкл (env-флаги).';
           statusEl.textContent =
-            'Сохранение JSON: ' + persist + '. Каталог: ' + (st.sessions_dir || '—') +
+            'Сохранение JSON: ' + persistJson + '. SQLite (pt_test_sessions): ' + persistDb +
+            '. Каталог JSON: ' + (st.sessions_dir || '—') +
             '. Сессий: ' + (st.session_count || 0) + '. PDF-кэш: ' + cache +
-            '. Хранилище отчётов: ' + storage + '.';
+            '. Хранилище отчётов: ' + storage + '. ' + rbacLine;
         }
       } catch (e) {
         cmdEl.textContent = 'Не удалось загрузить статус модуля: ' + (e.message || e);
@@ -2271,7 +2307,7 @@
       await fillPsychAssignTestSelect();
       await fillPsychAssignEmployeeSelect();
       try {
-        const data = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId));
+        const data = await fetchApi('/psychological-testing/assignments' + psychAccountQuery({ client_id: clientId }));
         const items = data.items || [];
         if (meta) {
           meta.textContent = 'Назначений: ' + (data.total != null ? data.total : items.length);
@@ -2313,7 +2349,7 @@
               await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(inp.dataset.assignmentId), {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(psychWithAccount(payload)),
               });
               showWorkspaceToast('Дедлайн обновлён.', 'success');
             } catch (e) {
@@ -2332,7 +2368,7 @@
                 const active = items.find((a) => a.employee_id === empId && (a.status === 'scheduled' || a.status === 'notified' || a.status === 'in_progress'));
                 if (active && active.id) notifyId = active.id;
               }
-              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(notifyId) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(notifyId) + '/notify' + psychAccountQuery(), { method: 'POST', headers: { 'Content-Type': 'application/json' } });
               showWorkspaceToast('Уведомление отправлено в Telegram.', 'success');
               loadPsychAssignments();
             } catch (e) {
@@ -2361,13 +2397,13 @@
       }
       ensurePsychAssignDueDefault();
       const dueRaw = document.getElementById('psychAssignDue') && document.getElementById('psychAssignDue').value;
-      const body = {
+      const body = psychWithAccount({
         client_id: clientId,
         employee_id: empId,
         test_id: testId,
         notify: !!notify,
         due_at: (dueRaw || defaultPsychDueInputValue()) + 'T23:59:59',
-      };
+      });
       try {
         await fetchApi('/psychological-testing/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         showWorkspaceToast(notify ? 'Назначение создано, уведомление отправлено в Telegram.' : 'Назначение создано.', 'success');
@@ -2376,11 +2412,11 @@
         const msg = e.message || String(e);
         if (notify && (msg.indexOf('active_assignment_exists') >= 0 || msg.indexOf('активное назначение') >= 0)) {
           try {
-            const list = await fetchApi('/psychological-testing/assignments?client_id=' + encodeURIComponent(clientId) + '&limit=50');
+            const list = await fetchApi('/psychological-testing/assignments' + psychAccountQuery({ client_id: clientId, limit: '50' }));
             const items = (list && list.items) || [];
             const row = items.find((a) => a.employee_id === empId && (a.status === 'scheduled' || a.status === 'notified' || a.status === 'in_progress'));
             if (row && row.id) {
-              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(row.id) + '/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+              await fetchApi('/psychological-testing/assignments/' + encodeURIComponent(row.id) + '/notify' + psychAccountQuery(), { method: 'POST', headers: { 'Content-Type': 'application/json' } });
               showWorkspaceToast('Назначение уже было — повторно отправлено уведомление в Telegram.', 'success');
               loadPsychAssignments();
               return;
@@ -2407,9 +2443,10 @@
         return;
       }
       ensurePsychAssignDueDefault();
+      await loadPsychRbacContext();
       await loadPsychAssignments();
       try {
-        const data = await fetchApi('/psychological-testing/sessions?client_id=' + encodeURIComponent(clientId) + '&limit=200');
+        const data = await fetchApi('/psychological-testing/sessions' + psychAccountQuery({ client_id: clientId, limit: '200' }));
         const items = data.items || [];
         if (meta) {
           meta.textContent = 'Сессий по организации: ' + (data.total != null ? data.total : items.length);

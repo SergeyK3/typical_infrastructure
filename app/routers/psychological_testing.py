@@ -21,6 +21,9 @@ from app.services.psych_rbac import (
     assert_can_export_pdf,
     assert_can_manage_assignments,
     assert_can_view_psych_data,
+    rbac_any_enforced,
+    rbac_status,
+    resolve_hr_admin_account_id,
 )
 from psychological_testing.integration.manifest_store import resolve_pdf_ref
 from psychological_testing.integration.report_storage import export_artifact_metadata
@@ -72,11 +75,21 @@ class PsychModuleStatusOut(BaseModel):
     telegram_commands: list[str] = Field(default_factory=list)
     pdf_cache_mode: str = "off"
     pdf_renderer_version: str = ""
+    rbac_assign_enforced: bool = False
+    rbac_view_enforced: bool = False
+    rbac_export_enforced: bool = False
     gdrive_enabled: bool = False
     gdrive_configured: bool = False
     gdrive_upload_sessions: bool = False
     gdrive_upload_manifest: bool = False
     storage_label: str = ""
+
+
+class PsychRbacContextOut(BaseModel):
+    rbac_assign_enforced: bool = False
+    rbac_view_enforced: bool = False
+    rbac_export_enforced: bool = False
+    hr_admin_account_id: str | None = None
 
 
 class PsychAssignmentCreateIn(BaseModel):
@@ -206,6 +219,22 @@ def _value_error_to_http(exc: ValueError) -> HTTPException:
 @router.get("/status", response_model=PsychModuleStatusOut)
 def get_psych_testing_status() -> PsychModuleStatusOut:
     return PsychModuleStatusOut.model_validate(module_status())
+
+
+@router.get("/rbac-context", response_model=PsychRbacContextOut)
+def get_psych_rbac_context(
+    client_id: str = Query(..., description="Организация"),
+    db: Session = Depends(get_db),
+) -> PsychRbacContextOut:
+    _assert_client(db, client_id)
+    flags = rbac_status()
+    account_id = (
+        resolve_hr_admin_account_id(db, client_id) if rbac_any_enforced() else None
+    )
+    return PsychRbacContextOut(
+        **flags,
+        hr_admin_account_id=account_id,
+    )
 
 
 @router.get("/sessions", response_model=ListEnvelope[PsychSessionSummaryOut])

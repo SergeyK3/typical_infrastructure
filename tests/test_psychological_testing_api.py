@@ -12,8 +12,43 @@ def test_psych_testing_status_lists_plugins(client):
     assert r.status_code == 200
     data = r.json()
     assert data["persist_json_enabled"] in (True, False)
+    assert data["persist_db_enabled"] in (True, False)
+    assert "rbac_assign_enforced" in data
     assert data["available_tests"]
     assert any("/start " in cmd for cmd in data["telegram_commands"])
+
+
+def test_psych_rbac_context_resolves_admin(client, monkeypatch):
+    onboard = client.post(
+        "/api/onboarding-runs",
+        json=onboarding_payload(
+            client_code="psych_rbac_ctx",
+            client_name="Psych RBAC Context",
+            admin_login="psych_rbac_ctx_admin",
+        ),
+    )
+    assert onboard.status_code == 200
+    client_id = onboard.json()["client_id"]
+    account_id = onboard.json()["created_entities"]["account_id"]
+
+    r = client.get(
+        "/api/psychological-testing/rbac-context",
+        params={"client_id": client_id},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["rbac_assign_enforced"] is False
+    assert data["hr_admin_account_id"] is None
+
+    monkeypatch.setenv("PSYCH_TESTING_RBAC_ASSIGN", "1")
+    r2 = client.get(
+        "/api/psychological-testing/rbac-context",
+        params={"client_id": client_id},
+    )
+    assert r2.status_code == 200
+    data2 = r2.json()
+    assert data2["rbac_assign_enforced"] is True
+    assert data2["hr_admin_account_id"] == account_id
 
 
 def test_psych_sessions_unknown_client_404(client):
