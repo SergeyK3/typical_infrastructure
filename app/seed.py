@@ -20,6 +20,7 @@ from app.models import (
     TemplateOrgUnitRow,
 )
 from app.org_structures import DEFAULT_ORG_UNITS
+from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.utils import new_id32
 
 
@@ -229,21 +230,27 @@ def seed_roles(db: Session) -> int:
 
 def seed_kpi_templates(db: Session) -> int:
     """Seed KPI templates: общие метрики + по одному шаблону на типовую должность (position_catalog)."""
-    existing = set(db.scalars(select(KpiTemplate.kpi_code)).all())
+    existing = {
+        (r.template_code, r.kpi_code)
+        for r in db.scalars(select(KpiTemplate)).all()
+    }
     created = 0
     for k in KPI_TEMPLATE_SEEDS:
-        if k["kpi_code"] in existing:
+        key = (DEFAULT_TEMPLATE_CODE, k["kpi_code"])
+        if key in existing:
             continue
-        db.add(KpiTemplate(**k, is_active=True, position_code=None))
+        db.add(KpiTemplate(**k, template_code=DEFAULT_TEMPLATE_CODE, is_active=True, position_code=None))
         created += 1
-        existing.add(k["kpi_code"])
+        existing.add(key)
     for pc in POSITION_CATALOG_SEEDS:
         code = f"KPI_TMPL_{pc['position_code']}"
-        if code in existing:
+        key = (DEFAULT_TEMPLATE_CODE, code)
+        if key in existing:
             continue
         name_ru = pc["position_name_ru"]
         db.add(
             KpiTemplate(
+                template_code=DEFAULT_TEMPLATE_CODE,
                 kpi_code=code,
                 kpi_name=f"Шаблон KPI: {name_ru}",
                 unit="%",
@@ -254,7 +261,7 @@ def seed_kpi_templates(db: Session) -> int:
                 position_code=pc["position_code"],
             )
         )
-        existing.add(code)
+        existing.add(key)
         created += 1
     if created:
         db.commit()
@@ -263,14 +270,19 @@ def seed_kpi_templates(db: Session) -> int:
 
 def seed_regulations(db: Session) -> int:
     """Seed position regulations, regulation KPIs, and regulation instructions."""
-    existing_codes = set(db.scalars(select(PositionRegulation.regulation_code)).all())
+    existing_codes = {
+        (r.template_code, r.regulation_code)
+        for r in db.scalars(select(PositionRegulation)).all()
+    }
     created = 0
     for r in POSITION_REGULATION_SEEDS:
-        if r["regulation_code"] in existing_codes:
+        key = (DEFAULT_TEMPLATE_CODE, r["regulation_code"])
+        if key in existing_codes:
             continue
         db.add(
             PositionRegulation(
                 id=_id("regulation", r["regulation_code"]),
+                template_code=DEFAULT_TEMPLATE_CODE,
                 regulation_code=r["regulation_code"],
                 position_code=r["position_code"],
                 dept_type_code=r["dept_type_code"],
@@ -287,13 +299,17 @@ def seed_regulations(db: Session) -> int:
         created += 1
     if created:
         db.flush()
-    existing_rk = {(rk.regulation_code, rk.kpi_code) for rk in db.scalars(select(RegulationKpi)).all()}
+    existing_rk = {
+        (rk.template_code, rk.regulation_code, rk.kpi_code) for rk in db.scalars(select(RegulationKpi)).all()
+    }
     for rk in REGULATION_KPI_SEEDS:
-        if (rk["regulation_code"], rk["kpi_code"]) in existing_rk:
+        key = (DEFAULT_TEMPLATE_CODE, rk["regulation_code"], rk["kpi_code"])
+        if key in existing_rk:
             continue
         db.add(
             RegulationKpi(
                 id=_id("reg_kpi", f"{rk['regulation_code']}_{rk['kpi_code']}"),
+                template_code=DEFAULT_TEMPLATE_CODE,
                 regulation_code=rk["regulation_code"],
                 kpi_code=rk["kpi_code"],
                 target_value=rk.get("target_value"),
@@ -303,13 +319,18 @@ def seed_regulations(db: Session) -> int:
             )
         )
         created += 1
-    existing_ri = {(ri.regulation_code, ri.instruction_code) for ri in db.scalars(select(RegulationInstruction)).all()}
+    existing_ri = {
+        (ri.template_code, ri.regulation_code, ri.instruction_code)
+        for ri in db.scalars(select(RegulationInstruction)).all()
+    }
     for ri in REGULATION_INSTRUCTION_SEEDS:
-        if (ri["regulation_code"], ri["instruction_code"]) in existing_ri:
+        key = (DEFAULT_TEMPLATE_CODE, ri["regulation_code"], ri["instruction_code"])
+        if key in existing_ri:
             continue
         db.add(
             RegulationInstruction(
                 id=_id("reg_ins", f"{ri['regulation_code']}_{ri['instruction_code']}"),
+                template_code=DEFAULT_TEMPLATE_CODE,
                 regulation_code=ri["regulation_code"],
                 instruction_code=ri["instruction_code"],
                 instruction_name=ri["instruction_name"],
@@ -326,13 +347,17 @@ def seed_regulations(db: Session) -> int:
 
 def seed_position_catalog(db: Session) -> int:
     """Seed position catalog and position-dept-type links."""
-    existing_codes = set(db.scalars(select(PositionCatalog.position_code)).all())
+    existing_codes = {
+        (r.template_code, r.position_code) for r in db.scalars(select(PositionCatalog)).all()
+    }
     created = 0
     for p in POSITION_CATALOG_SEEDS:
-        if p["position_code"] in existing_codes:
+        key = (DEFAULT_TEMPLATE_CODE, p["position_code"])
+        if key in existing_codes:
             continue
         db.add(
             PositionCatalog(
+                template_code=DEFAULT_TEMPLATE_CODE,
                 position_code=p["position_code"],
                 position_name_ru=p["position_name_ru"],
                 function_code=p["function_code"],
@@ -344,11 +369,22 @@ def seed_position_catalog(db: Session) -> int:
         created += 1
     if created:
         db.flush()
-    existing_links = {(r.position_code, r.dept_type_code) for r in db.scalars(select(PositionDeptType)).all()}
+    existing_links = {
+        (r.template_code, r.position_code, r.dept_type_code)
+        for r in db.scalars(select(PositionDeptType)).all()
+    }
     for pos_code, dept_code, is_primary in POSITION_DEPT_TYPE_SEEDS:
-        if (pos_code, dept_code) in existing_links:
+        key = (DEFAULT_TEMPLATE_CODE, pos_code, dept_code)
+        if key in existing_links:
             continue
-        db.add(PositionDeptType(position_code=pos_code, dept_type_code=dept_code, is_primary=is_primary))
+        db.add(
+            PositionDeptType(
+                template_code=DEFAULT_TEMPLATE_CODE,
+                position_code=pos_code,
+                dept_type_code=dept_code,
+                is_primary=is_primary,
+            )
+        )
         created += 1
     if created:
         db.commit()

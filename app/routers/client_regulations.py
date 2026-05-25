@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.template_bundle_clone import resolve_client_template_code
 from app.excel_export import xlsx_file_response
 from app.models import (
     Client,
@@ -300,8 +301,12 @@ def copy_regulation_from_global(
     body: ClientPositionRegulationCopyFromGlobal, db: Session = Depends(get_db)
 ) -> ClientPositionRegulationDetailOut:
     _assert_client(db, body.client_id)
+    tpl_code = resolve_client_template_code(db, body.client_id)
     glob = db.scalar(
-        select(PositionRegulation).where(PositionRegulation.regulation_code == body.global_regulation_code)
+        select(PositionRegulation).where(
+            PositionRegulation.template_code == tpl_code,
+            PositionRegulation.regulation_code == body.global_regulation_code,
+        )
     )
     if not glob:
         raise HTTPException(status_code=404, detail="global_regulation_not_found")
@@ -340,7 +345,10 @@ def copy_regulation_from_global(
     db.add(obj)
     db.flush()
     for k in db.scalars(
-        select(RegulationKpi).where(RegulationKpi.regulation_code == body.global_regulation_code)
+        select(RegulationKpi).where(
+            RegulationKpi.template_code == glob.template_code,
+            RegulationKpi.regulation_code == body.global_regulation_code,
+        )
     ).all():
         db.add(
             ClientRegulationKpi(
@@ -355,7 +363,10 @@ def copy_regulation_from_global(
         )
     for ins in db.scalars(
         select(RegulationInstruction)
-        .where(RegulationInstruction.regulation_code == body.global_regulation_code)
+        .where(
+            RegulationInstruction.template_code == glob.template_code,
+            RegulationInstruction.regulation_code == body.global_regulation_code,
+        )
         .order_by(RegulationInstruction.sort_order)
     ).all():
         db.add(

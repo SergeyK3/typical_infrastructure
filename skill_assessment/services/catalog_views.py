@@ -64,6 +64,7 @@ def kpi_matrix_row_to_dict(row: KpiMatrixRow) -> dict[str, Any]:
 def list_competency_matrix_rows(
     db: Session,
     *,
+    template_code: str | None = "default",
     global_only: bool = False,
     client_id: str | None = None,
     version_statuses: tuple[str, ...] | None = ("active",),
@@ -78,8 +79,10 @@ def list_competency_matrix_rows(
     cid = (client_id or "").strip() or None
     if cid:
         stmt = stmt.where(CompetencyCatalogVersionRow.client_id == cid)
-    elif global_only:
+    else:
         stmt = stmt.where(CompetencyCatalogVersionRow.client_id.is_(None))
+        if template_code:
+            stmt = stmt.where(CompetencyCatalogVersionRow.template_code == template_code)
     if version_statuses is not None:
         stmt = stmt.where(CompetencyCatalogVersionRow.status.in_(version_statuses))
     stmt = stmt.order_by(

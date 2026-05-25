@@ -235,6 +235,7 @@ class CompetencyCatalogVersionRow(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     #: Мультитенантность (nullable = общая матрица по умолчанию).
     client_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    template_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     version_code: Mapped[str] = mapped_column(String(64), nullable=False)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     #: draft | active | archived
@@ -261,10 +262,13 @@ class CompetencySkillDefinitionRow(Base, TimestampMixin):
     """Справочник формулировок навыков (глобальный каталог для матрицы)."""
 
     __tablename__ = "sa_competency_skill_definitions"
-    __table_args__ = (UniqueConstraint("skill_code", name="uq_sa_csd_skill_code"),)
+    __table_args__ = (
+        UniqueConstraint("template_code", "skill_code", name="uq_sa_csd_tpl_skill_code"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     client_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    template_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     #: Короткий устойчивый код (например хеш от названия).
     skill_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     title_ru: Mapped[str] = mapped_column(String(512), nullable=False)

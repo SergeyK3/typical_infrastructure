@@ -524,7 +524,9 @@
         d.classList.toggle('done', i + 1 < currentStep);
       });
       $('btnPrev').classList.toggle('hidden', currentStep === 1);
-      $('btnNext').classList.toggle('hidden', currentStep === TOTAL_STEPS || currentStep === 7);
+      $('btnNext').classList.toggle('hidden', currentStep === TOTAL_STEPS);
+      $('btnNext').textContent = 'Далее';
+      $('btnNext').disabled = currentStep === 7 && runSubmitted;
       if (onboardingMode() === 'apply_existing' && (currentStep === 5 || currentStep === 6)) {
         currentStep = 7;
         goToStep(7);
@@ -535,6 +537,7 @@
         runSubmitted = false;
         $('btnDryRun').disabled = false;
         $('btnRun').disabled = false;
+        $('btnNext').disabled = false;
       }
     }
 
@@ -543,6 +546,7 @@
       runSubmitted = true;
       $('btnDryRun').disabled = true;
       $('btnRun').disabled = true;
+      $('btnNext').disabled = true;
       showErr('errRun', '');
 
       const existingMode = onboardingMode() === 'apply_existing';
@@ -596,6 +600,7 @@
         runSubmitted = false;
         $('btnDryRun').disabled = false;
         $('btnRun').disabled = false;
+        $('btnNext').disabled = false;
         showErr('errRun', userFriendlyError(e.detail));
       }
     }
@@ -654,6 +659,10 @@
 
     $('btnPrev').onclick = () => goToStep(prevStepFrom(currentStep));
     $('btnNext').onclick = async () => {
+      if (currentStep === 7) {
+        submitRun(false);
+        return;
+      }
       if (!validateStep(currentStep)) return;
       saveDraft();
       if (currentStep === 2 && $('templateCode').value) {

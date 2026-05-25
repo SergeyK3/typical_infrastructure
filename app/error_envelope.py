@@ -23,6 +23,13 @@ _ERROR_MESSAGES: dict[str, str] = {
     "employee_not_in_client": "Сотрудник не принадлежит указанному клиенту.",
     "account_not_found": "Аккаунт не найден.",
     "login_already_exists": "Пользователь с таким логином уже существует.",
+    "org_unit_protected": "Системный узел нельзя удалить или изменить.",
+    "clone_source_not_department": "Копировать можно только отделение.",
+    "org_unit_has_children": "Сначала удалите дочерние подразделения или используйте каскадное удаление.",
+    "org_unit_has_employees": "На подразделении или должности есть сотрудники.",
+    "org_unit_code_exists": "Код подразделения уже существует.",
+    "template_org_unit_has_children": "У узла есть дочерние элементы.",
+    "template_org_unit_in_use": "Узел шаблона используется у клиентов.",
     "run_not_found": "Запуск onboarding не найден.",
     "run_not_found_after_create": "Ошибка: run не найден после создания.",
     "wizard_not_found": "Мастер onboarding не найден.",
@@ -34,6 +41,13 @@ _ERROR_MESSAGES: dict[str, str] = {
     ),
     "employee_no_telegram": "У сотрудника не заполнено поле Telegram в карточке.",
     "telegram_bot_token_missing": "Не задан TELEGRAM_BOT_TOKEN в .env.",
+    "template_archived": "Шаблон в архиве; восстановите или удалите его.",
+    "template_code_exists": "Шаблон с таким кодом уже существует.",
+    "bundle_clone_conflict": (
+        "Не удалось сохранить клон: конфликт уникальных кодов в БД "
+        "(часто устаревшее ограничение на skill_code — перезапустите сервер для миграции). "
+        "Либо укажите префикс кодов, либо удалите частично созданный шаблон."
+    ),
 }
 
 

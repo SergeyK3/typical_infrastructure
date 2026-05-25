@@ -20,6 +20,7 @@ from app.models import (
     RegulationInstruction,
     RegulationKpi,
 )
+from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.schemas import (
     ListEnvelope,
     PositionRegulationCreate,
@@ -53,6 +54,7 @@ def _ilike_any_regulation_column(raw: str):
 
 @router.get("", response_model=ListEnvelope[PositionRegulationOut])
 def list_regulations(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     position_code: str | None = Query(None, description="Фильтр по должности"),
     dept_type_code: str | None = Query(None, description="Фильтр по типу подразделения"),
     status: str | None = Query(None, description="Фильтр по статусу"),
@@ -66,7 +68,7 @@ def list_regulations(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[PositionRegulationOut]:
-    filters: list = []
+    filters: list = [PositionRegulation.template_code == template_code]
     if position_code:
         filters.append(PositionRegulation.position_code == position_code)
     if dept_type_code:
@@ -100,9 +102,17 @@ def list_regulations(
 
 # Статические маршруты — до {regulation_code}, иначе "kpi-templates" и "positions" матчатся как regulation_code
 @router.get("/kpi-templates/list", response_model=list[dict])
-def list_kpi_templates(db: Session = Depends(get_db)) -> list[dict]:
+def list_kpi_templates(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> list[dict]:
     """Список KPI-шаблонов для выбора при создании регламента."""
-    rows = db.scalars(select(KpiTemplate).where(KpiTemplate.is_active == True)).all()
+    rows = db.scalars(
+        select(KpiTemplate).where(
+            KpiTemplate.template_code == template_code,
+            KpiTemplate.is_active == True,
+        )
+    ).all()
     out: list[dict] = []
     for r in rows:
         dept = None
@@ -110,11 +120,12 @@ def list_kpi_templates(db: Session = Depends(get_db)) -> list[dict]:
         if r.position_code:
             dept = db.scalar(
                 select(PositionDeptType.dept_type_code).where(
+                    PositionDeptType.template_code == template_code,
                     PositionDeptType.position_code == r.position_code,
                     PositionDeptType.is_primary == True,
                 ).limit(1)
             )
-            pc = db.get(PositionCatalog, r.position_code)
+            pc = db.get(PositionCatalog, (template_code, r.position_code))
             if pc:
                 pos_name = pc.position_name_ru
         out.append(
@@ -133,15 +144,21 @@ def list_kpi_templates(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.get("/positions/list", response_model=list[dict])
-def list_positions_for_regulation(db: Session = Depends(get_db)) -> list[dict]:
+def list_positions_for_regulation(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> list[dict]:
     """Список должностей из справочника для выбора при создании регламента."""
     rows = db.scalars(
-        select(PositionCatalog).where(PositionCatalog.is_active == True).order_by(PositionCatalog.position_code)
+        select(PositionCatalog)
+        .where(PositionCatalog.template_code == template_code, PositionCatalog.is_active == True)
+        .order_by(PositionCatalog.position_code)
     ).all()
     out: list[dict] = []
     for r in rows:
         dept = db.scalar(
             select(PositionDeptType.dept_type_code).where(
+                PositionDeptType.template_code == template_code,
                 PositionDeptType.position_code == r.position_code,
                 PositionDeptType.is_primary == True,
             ).limit(1)
@@ -264,12 +281,16 @@ def get_regulation(regulation_code: str, db: Session = Depends(get_db)) -> Posit
 @router.post("", response_model=PositionRegulationOut, status_code=201)
 def create_regulation(body: PositionRegulationCreate, db: Session = Depends(get_db)) -> PositionRegulationOut:
     existing = db.scalar(
-        select(PositionRegulation).where(PositionRegulation.regulation_code == body.regulation_code)
+        select(PositionRegulation).where(
+            PositionRegulation.template_code == body.template_code,
+            PositionRegulation.regulation_code == body.regulation_code,
+        )
     )
     if existing:
         raise HTTPException(status_code=409, detail="regulation_code_already_exists")
     obj = PositionRegulation(
         id=body.id or _id("regulation", body.regulation_code),
+        template_code=body.template_code,
         regulation_code=body.regulation_code,
         position_code=body.position_code,
         dept_type_code=body.dept_type_code,

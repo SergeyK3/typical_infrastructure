@@ -4,10 +4,12 @@ from __future__ import annotations
 
 
 def test_copy_global_regulation_to_client(client):
-    r = client.post("/api/onboarding-runs", json=_onboarding_body("cc_reg", "cc_reg@t.test"))
-    assert r.status_code in (200, 201), r.text
-    run = r.json()
-    cid = run["client_id"]
+    r = client.post(
+        "/api/clients",
+        json={"code": "cc_reg", "name": "cc_reg", "status": "active"},
+    )
+    assert r.status_code == 200, r.text
+    cid = r.json()["id"]
     assert cid
 
     r2 = client.post(

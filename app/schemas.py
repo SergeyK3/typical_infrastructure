@@ -84,6 +84,29 @@ class OrgUnitNode(OrgUnitOut):
     children: list["OrgUnitNode"] = []
 
 
+class OrgUnitCloneIn(BaseModel):
+    name_suffix: str = Field(default="Копия", max_length=64)
+    new_code: str | None = Field(default=None, max_length=64)
+    target_parent_id: str | None = None
+
+
+class OrgUnitCloneOut(BaseModel):
+    org_unit: OrgUnitOut
+    positions_created: int
+    sections_skipped: int
+
+
+class OrgUnitReorderItem(BaseModel):
+    id: str
+    parent_id: str | None = None
+    sort_order: int = 0
+
+
+class OrgUnitBulkCloneIn(BaseModel):
+    unit_ids: list[str] = Field(min_length=1)
+    name_suffix: str = Field(default="Копия", max_length=64)
+
+
 class PositionBase(BaseModel):
     client_id: str
     org_unit_id: str
@@ -123,6 +146,7 @@ class PositionOut(PositionBase):
 
 
 class PositionCatalogBase(BaseModel):
+    template_code: str = "default"
     position_code: str
     position_name_ru: str
     position_name_en: str | None = None
@@ -140,6 +164,7 @@ class PositionCatalogOut(PositionCatalogBase):
 
 
 class PositionDeptTypeOut(BaseModel):
+    template_code: str = "default"
     position_code: str
     dept_type_code: str
     is_primary: bool = True
@@ -191,6 +216,17 @@ class TemplateOrgUnitPatch(BaseModel):
     parent_code: str | None = Field(default=None, max_length=64)
     unit_type: str | None = Field(default=None, min_length=1, max_length=32)
     sort_order: int | None = None
+
+
+class TemplateOrgUnitNode(TemplateOrgUnitOut):
+    children: list["TemplateOrgUnitNode"] = []
+    position_count: int = 0
+
+
+class TemplateOrgUnitCloneOut(BaseModel):
+    row: TemplateOrgUnitOut
+    position_links_created: int
+    sections_skipped: int
 
 
 class EmployeeBase(BaseModel):
@@ -314,8 +350,67 @@ class EnterpriseTemplateOut(BaseModel):
     version: str
     description: str | None
     is_active: bool
+    status: str = "active"
+    author: str | None = None
+    comment: str | None = None
+    archived_at: datetime | None = None
+    cloned_from_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class EnterpriseTemplateCreate(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=128)
+    version: str = Field(default="1", max_length=16)
+    description: str | None = Field(default=None, max_length=512)
+    comment: str | None = Field(default=None, max_length=512)
+    author: str | None = Field(default=None, max_length=128)
+
+
+class EnterpriseTemplateSaveFromClient(BaseModel):
+    client_id: str
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=128)
+    version: str = Field(default="1", max_length=16)
+    description: str | None = Field(default=None, max_length=512)
+    comment: str | None = Field(default=None, max_length=512)
+    author: str | None = Field(default=None, max_length=128)
+
+
+class EnterpriseTemplatePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    version: str | None = Field(default=None, min_length=1, max_length=16)
+    description: str | None = Field(default=None, max_length=512)
+    comment: str | None = Field(default=None, max_length=512)
+    author: str | None = Field(default=None, max_length=128)
+
+
+class EnterpriseTemplateCloneIn(BaseModel):
+    new_code: str | None = Field(default=None, min_length=1, max_length=64)
+    new_name: str | None = Field(default=None, min_length=1, max_length=128)
+    code_prefix: str | None = Field(default=None, max_length=32)
+    copy_positions: bool = True
+    copy_kpi: bool = True
+    copy_regulations: bool = True
+    copy_skills: bool = True
+
+
+class EnterpriseTemplateCloneCounts(BaseModel):
+    org_units: int = 0
+    positions: int = 0
+    position_links: int = 0
+    kpi: int = 0
+    regulations: int = 0
+    regulation_kpis: int = 0
+    regulation_instructions: int = 0
+    skill_definitions: int = 0
+    competency_matrix_rows: int = 0
+
+
+class EnterpriseTemplateCloneOut(BaseModel):
+    template: EnterpriseTemplateOut
+    counts: EnterpriseTemplateCloneCounts
 
 
 class OnboardingClientIn(BaseModel):
@@ -416,6 +511,7 @@ class OnboardingRunWithStepsOut(BaseModel):
 
 class KpiTemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+    template_code: str = "default"
     kpi_code: str
     kpi_name: str
     unit: str = "%"
@@ -431,6 +527,7 @@ class KpiTemplateOut(BaseModel):
 
 
 class KpiTemplateCreate(BaseModel):
+    template_code: str = Field(default="default", min_length=1, max_length=64)
     kpi_code: str = Field(min_length=1, max_length=64)
     kpi_name: str = Field(min_length=1, max_length=256)
     unit: str = Field(default="%", max_length=32)
@@ -474,6 +571,7 @@ class RegulationInstructionOut(BaseModel):
 
 
 class PositionRegulationBase(BaseModel):
+    template_code: str = "default"
     regulation_code: str
     position_code: str
     dept_type_code: str

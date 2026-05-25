@@ -7,6 +7,7 @@
   <title>Типовые должности — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
@@ -56,10 +57,12 @@
       </div>
       <div class="content">
         <div class="toolbar">
+          <label>Шаблон <select id="tplSelect"><option value="default">default</option></select></label>
           <button type="button" class="btn btn-secondary" id="btnLoad">Обновить</button>
           <a class="btn btn-secondary" href="/api/position-catalog/export/excel" id="btnExportXlsx" style="text-decoration:none;display:inline-block;">Скачать Excel</a>
           <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить</button>
         </div>
+        <p id="globalEditTemplateHint" class="meta"></p>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
@@ -126,6 +129,18 @@
       return j;
     }
     let items = [];
+    let templateCode = window.GlobalTemplateContext.getGlobalEditTemplateCode('default');
+
+    async function loadTemplatesList() {
+      try {
+        templateCode = await window.GlobalTemplateContext.bindTemplateSelect($('tplSelect'), {
+          onChange: (code) => { templateCode = code; load(); },
+        });
+        await load();
+      } catch (_) {}
+    }
+
+    function tplQ() { return 'template_code=' + encodeURIComponent(templateCode); }
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
@@ -133,7 +148,7 @@
     async function load() {
       $('listErr').classList.add('hidden');
       try {
-        const data = await api('GET', '/position-catalog?limit=500&offset=0');
+        const data = await api('GET', '/position-catalog?limit=500&offset=0&' + tplQ());
         items = data.items || [];
         $('listMeta').textContent = 'Записей: ' + (data.total ?? items.length);
         const tb = $('tbody');
@@ -212,11 +227,11 @@
       };
       try {
         if (editCode) {
-          await api('PATCH', '/position-catalog/' + encodeURIComponent(editCode), body);
+          await api('PATCH', '/position-catalog/' + encodeURIComponent(editCode) + '?' + tplQ(), body);
         } else {
           const code = $('fCode').value.trim();
           if (!code) throw new Error('Укажите код должности');
-          await api('POST', '/position-catalog', Object.assign({ position_code: code }, body));
+          await api('POST', '/position-catalog', Object.assign({ template_code: templateCode, position_code: code }, body));
         }
         closeModal();
         await load();
@@ -230,7 +245,7 @@
       if (!confirm('Удалить строку из глобального каталога?')) return;
       $('listErr').classList.add('hidden');
       try {
-        await api('DELETE', '/position-catalog/' + encodeURIComponent(code));
+        await api('DELETE', '/position-catalog/' + encodeURIComponent(code) + '?' + tplQ());
         await load();
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -238,7 +253,11 @@
       }
     }
 
-    load();
+    $('btnExportXlsx').onclick = () => {
+      window.location.href = '/api/position-catalog/export/excel?' + tplQ();
+    };
+
+    loadTemplatesList();
   </script>
 </body>
 </html>

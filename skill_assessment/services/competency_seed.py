@@ -81,6 +81,7 @@ def ensure_competency_matrix_seed(db: Session) -> None:
         v = CompetencyCatalogVersionRow(
             id=version_id,
             client_id=None,
+            template_code="default",
             version_code=VERSION_CODE,
             title=VERSION_TITLE,
             status="active",
@@ -108,6 +109,7 @@ def ensure_competency_matrix_seed(db: Session) -> None:
                 CompetencySkillDefinitionRow(
                     id=sid,
                     client_id=None,
+                    template_code="default",
                     skill_code=code,
                     title_ru=t,
                     description=None,

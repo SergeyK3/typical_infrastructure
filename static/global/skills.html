@@ -7,6 +7,7 @@
   <title>Типовые навыки — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .toolbar input, .toolbar select { padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
@@ -45,17 +46,21 @@
     <main class="main">
       <div class="main-header">
         <h1>Типовые навыки</h1>
-        <p class="subtitle">Нормализованный справочник ключевых навыков по типовым должностям. Источник: матрица Stage3HR <code>position_skills_normalized</code>.</p>
+        <p class="subtitle">Матрица компетенций по bundle шаблона (<code>sa_competency_*</code>). Источник правды — API каталога навыков; CSV — legacy-экспорт.</p>
       </div>
       <div class="content">
         <div class="toolbar">
+          <label for="filterTemplate" style="font-size:0.9rem;color:var(--text-muted);">Шаблон:</label>
+          <select id="filterTemplate" title="Bundle шаблона"><option value="default">default</option></select>
           <button type="button" class="btn btn-secondary" id="btnReload">Обновить</button>
-          <a class="btn btn-secondary" href="/static/global/position-skills-normalized.csv" id="btnExportCsv" style="text-decoration:none;display:inline-block;">Скачать CSV</a>
+          <a class="btn btn-secondary" href="/api/skill-assessment/catalog/competency-matrix/export/excel?template_code=default" id="btnExportExcel" style="text-decoration:none;display:inline-block;">Скачать Excel</a>
+          <a class="btn btn-secondary" href="/static/global/position-skills-normalized.csv" id="btnExportCsv" style="text-decoration:none;display:inline-block;" title="Legacy CSV">CSV (legacy)</a>
           <input type="search" id="filterText" placeholder="Поиск по должности, коду или навыку">
           <select id="filterPosition">
             <option value="">Все должности</option>
           </select>
         </div>
+        <p id="globalEditTemplateHint" class="meta"></p>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
@@ -64,8 +69,9 @@
               <tr>
                 <th class="num">#</th>
                 <th>Код должности</th>
-                <th>Должность</th>
+                <th>Подразделение</th>
                 <th class="num">Ранг</th>
+                <th>Код навыка</th>
                 <th>Навык</th>
               </tr>
             </thead>
@@ -79,54 +85,30 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let rows = [];
+    let rowNum = 1;
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    function parseCsvLine(line) {
-      const cells = [];
-      let cur = '';
-      let quoted = false;
-      for (let i = 0; i < line.length; i += 1) {
-        const ch = line[i];
-        if (ch === '"') {
-          if (quoted && line[i + 1] === '"') {
-            cur += '"';
-            i += 1;
-          } else {
-            quoted = !quoted;
-          }
-        } else if (ch === ';' && !quoted) {
-          cells.push(cur);
-          cur = '';
-        } else {
-          cur += ch;
-        }
-      }
-      cells.push(cur);
-      return cells;
+    function templateCode() {
+      return $('filterTemplate').value || 'default';
     }
 
-    function parseCsv(text) {
-      const lines = text.trim().split(/\r?\n/);
-      const header = parseCsvLine(lines.shift() || '');
-      return lines.filter(Boolean).map((line) => {
-        const cells = parseCsvLine(line);
-        const row = {};
-        header.forEach((key, idx) => row[key] = cells[idx] || '');
-        row.id = Number(row.id);
-        row.skill_rank = Number(row.skill_rank);
-        return row;
-      });
+    async function initPage() {
+      const GTC = window.GlobalTemplateContext;
+      try {
+        await GTC.bindTemplateSelect($('filterTemplate'), { onChange: () => load() });
+      } catch (_) {}
+      await load();
     }
 
     function fillPositionFilter() {
       const select = $('filterPosition');
       const current = select.value;
-      const options = Array.from(new Map(rows.map((row) => [row.position_code, row.position_name_ru])).entries());
+      const options = Array.from(new Map(rows.map((row) => [row.position_code, row.position_code])).entries());
       select.innerHTML = '<option value="">Все должности</option>' + options
-        .map(([code, title]) => '<option value="' + escapeHtml(code) + '">' + escapeHtml(title + ' · ' + code) + '</option>')
+        .map(([code]) => '<option value="' + escapeHtml(code) + '">' + escapeHtml(code) + '</option>')
         .join('');
       select.value = current;
     }
@@ -137,16 +119,19 @@
       const filtered = rows.filter((row) => {
         if (pos && row.position_code !== pos) return false;
         if (!q) return true;
-        return [row.position_code, row.position_name_ru, row.skill_name].some((value) => String(value).toLowerCase().includes(q));
+        return [row.position_code, row.department_code, row.skill_code, row.skill_title_ru].some(
+          (value) => String(value || '').toLowerCase().includes(q)
+        );
       });
-      $('listMeta').textContent = 'Записей: ' + filtered.length + ' из ' + rows.length;
-      $('tbody').innerHTML = filtered.map((row) => (
+      $('listMeta').textContent = 'Записей: ' + filtered.length + ' из ' + rows.length + ' · шаблон ' + templateCode();
+      $('tbody').innerHTML = filtered.map((row, idx) => (
         '<tr>' +
-          '<td class="num">' + row.id + '</td>' +
+          '<td class="num">' + (idx + 1) + '</td>' +
           '<td><code>' + escapeHtml(row.position_code) + '</code></td>' +
-          '<td>' + escapeHtml(row.position_name_ru) + '</td>' +
+          '<td><code>' + escapeHtml(row.department_code || '') + '</code></td>' +
           '<td class="num">' + row.skill_rank + '</td>' +
-          '<td>' + escapeHtml(row.skill_name) + '</td>' +
+          '<td><code>' + escapeHtml(row.skill_code || '') + '</code></td>' +
+          '<td>' + escapeHtml(row.skill_title_ru || '') + '</td>' +
         '</tr>'
       )).join('');
     }
@@ -154,9 +139,11 @@
     async function load() {
       $('listErr').classList.add('hidden');
       try {
-        const r = await fetch('/static/global/position-skills-normalized.csv', { cache: 'no-store' });
-        if (!r.ok) throw new Error('Не удалось загрузить CSV справочника навыков');
-        rows = parseCsv(await r.text());
+        const tpl = templateCode();
+        $('btnExportExcel').href = '/api/skill-assessment/catalog/competency-matrix/export/excel?template_code=' + encodeURIComponent(tpl);
+        const r = await fetch('/api/skill-assessment/catalog/competency-matrix?template_code=' + encodeURIComponent(tpl), { cache: 'no-store' });
+        if (!r.ok) throw new Error('Не удалось загрузить матрицу навыков (HTTP ' + r.status + ')');
+        rows = await r.json();
         fillPositionFilter();
         render();
       } catch (e) {
@@ -168,7 +155,7 @@
     $('btnReload').onclick = load;
     $('filterText').oninput = render;
     $('filterPosition').onchange = render;
-    load();
+    initPage();
   </script>
 </body>
 </html>

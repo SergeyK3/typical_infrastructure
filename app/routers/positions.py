@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import Client, OrgUnit, Position, PositionCatalog
+from app.template_bundle_clone import resolve_client_template_code
+from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.schemas import ListEnvelope, PositionCreate, PositionFromCatalog, PositionOut, PositionPatch
 from app.utils import new_id32
 
@@ -110,7 +112,8 @@ def create_position_from_catalog(
 ) -> PositionOut:
     """Создать штатную должность по записи глобального справочника position_catalog."""
     _assert_org_unit(db, body.client_id, body.org_unit_id)
-    cat = db.get(PositionCatalog, body.position_catalog_code)
+    tpl_code = resolve_client_template_code(db, body.client_id)
+    cat = db.get(PositionCatalog, (tpl_code, body.position_catalog_code))
     if not cat or not cat.is_active:
         raise HTTPException(status_code=404, detail="position_catalog_not_found")
     code = (body.code or cat.position_code).strip()

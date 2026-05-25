@@ -7,6 +7,7 @@
   <title>Типовые KPI — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -86,10 +87,12 @@
       </div>
       <div class="content">
         <div class="toolbar">
+          <label>Шаблон <select id="tplSelect"><option value="default">default</option></select></label>
           <button type="button" class="btn btn-secondary" id="btnLoad">Обновить</button>
           <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Учитываются фильтры в шапке таблицы">Скачать Excel</button>
           <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить</button>
         </div>
+        <p id="globalEditTemplateHint" class="meta"></p>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
@@ -165,8 +168,27 @@
       return j;
     }
     let items = [];
+    let templateCode = window.GlobalTemplateContext.getGlobalEditTemplateCode('default');
     /** Кэш справочника должностей (с primary_dept_type_code) для фильтра в шапке таблицы */
     let positionsCatalog = [];
+
+    async function loadTemplatesList() {
+      try {
+        templateCode = await window.GlobalTemplateContext.bindTemplateSelect($('tplSelect'), {
+          onChange: (code) => {
+            templateCode = code;
+            loadDeptFilterOptions();
+            loadPositionsCatalog();
+            load();
+          },
+        });
+        await loadDeptFilterOptions();
+        await loadPositionsCatalog();
+        await load();
+      } catch (_) {}
+    }
+
+    function tplParam() { return 'template_code=' + encodeURIComponent(templateCode); }
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -176,7 +198,7 @@
       const sel = $('filterDeptCol');
       const keep = sel.value;
       try {
-        const codes = await api('GET', '/kpi-templates/department-type-codes');
+        const codes = await api('GET', '/kpi-templates/department-type-codes?' + tplParam());
         sel.innerHTML = '<option value="">— все —</option>';
         (codes || []).forEach((c) => {
           const opt = document.createElement('option');
@@ -207,7 +229,7 @@
 
     async function loadPositionsCatalog() {
       try {
-        positionsCatalog = await api('GET', '/regulations/positions/list') || [];
+        positionsCatalog = await api('GET', '/regulations/positions/list?' + tplParam()) || [];
       } catch (_) {
         positionsCatalog = [];
       }
@@ -219,7 +241,7 @@
       const prev = preserve !== undefined ? preserve : sel.value;
       sel.innerHTML = '<option value="">— общий шаблон, не привязан к должности —</option>';
       try {
-        const positions = await api('GET', '/regulations/positions/list');
+        const positions = await api('GET', '/regulations/positions/list?' + tplParam());
         (positions || []).forEach((p) => {
           const opt = document.createElement('option');
           opt.value = p.position_code;
@@ -235,7 +257,7 @@
       try {
         const dept = $('filterDeptCol').value.trim();
         const pos = $('filterPositionCol').value.trim();
-        let qs = 'limit=500&offset=0';
+        let qs = tplParam() + '&limit=500&offset=0';
         if (dept) qs += '&dept_type_code=' + encodeURIComponent(dept);
         if (pos) qs += '&position_code=' + encodeURIComponent(pos);
         const data = await api('GET', '/kpi-templates?' + qs);
@@ -330,11 +352,11 @@
       };
       try {
         if (editCode) {
-          await api('PATCH', '/kpi-templates/' + encodeURIComponent(editCode), body);
+          await api('PATCH', '/kpi-templates/' + encodeURIComponent(editCode) + '?' + tplParam(), body);
         } else {
           const code = $('fCode').value.trim();
           if (!code) throw new Error('Укажите код KPI');
-          await api('POST', '/kpi-templates', Object.assign({ kpi_code: code }, body));
+          await api('POST', '/kpi-templates', Object.assign({ template_code: templateCode, kpi_code: code }, body));
         }
         closeModal();
         await load();
@@ -348,7 +370,7 @@
       if (!confirm('Удалить шаблон KPI?')) return;
       $('listErr').classList.add('hidden');
       try {
-        await api('DELETE', '/kpi-templates/' + encodeURIComponent(code));
+        await api('DELETE', '/kpi-templates/' + encodeURIComponent(code) + '?' + tplParam());
         await load();
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -362,11 +384,7 @@
     };
     $('filterPositionCol').onchange = () => load();
 
-    (async () => {
-      await loadDeptFilterOptions();
-      await loadPositionsCatalog();
-      await load();
-    })();
+    loadTemplatesList();
   </script>
 </body>
 </html>

@@ -12,7 +12,13 @@ from app.excel_export import xlsx_file_response
 from app.models import KpiTemplate, PositionCatalog, PositionDeptType
 from app.schemas import KpiTemplateCreate, KpiTemplateOut, KpiTemplatePatch, ListEnvelope
 
+from app.template_constants import DEFAULT_TEMPLATE_CODE
+
 router = APIRouter(prefix="/kpi-templates", tags=["kpi_templates"])
+
+
+def _get_kpi(db: Session, template_code: str, kpi_code: str) -> KpiTemplate | None:
+    return db.get(KpiTemplate, (template_code, kpi_code))
 
 
 def _search_clause(raw: str):
@@ -31,11 +37,12 @@ def _enrich_template_out(db: Session, row: KpiTemplate) -> KpiTemplateOut:
     if row.position_code:
         dept = db.scalar(
             select(PositionDeptType.dept_type_code).where(
+                PositionDeptType.template_code == row.template_code,
                 PositionDeptType.position_code == row.position_code,
                 PositionDeptType.is_primary == True,
             ).limit(1)
         )
-        pc = db.get(PositionCatalog, row.position_code)
+        pc = db.get(PositionCatalog, (row.template_code, row.position_code))
         if pc:
             name_ru = pc.position_name_ru
     base = KpiTemplateOut.model_validate(row)
@@ -47,18 +54,22 @@ def _enrich_template_out(db: Session, row: KpiTemplate) -> KpiTemplateOut:
     )
 
 
-def _ensure_position_catalog(db: Session, position_code: str | None) -> None:
+def _ensure_position_catalog(db: Session, template_code: str, position_code: str | None) -> None:
     if position_code is None:
         return
-    if not db.get(PositionCatalog, position_code):
+    if not db.get(PositionCatalog, (template_code, position_code)):
         raise HTTPException(status_code=400, detail="position_catalog_not_found")
 
 
 @router.get("/department-type-codes", response_model=list[str])
-def list_department_type_codes_for_kpi_filter(db: Session = Depends(get_db)) -> list[str]:
+def list_department_type_codes_for_kpi_filter(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> list[str]:
     """Коды типов подразделений (отделений) для фильтра списка KPI-шаблонов."""
     rows = db.scalars(
         select(PositionDeptType.dept_type_code)
+        .where(PositionDeptType.template_code == template_code)
         .distinct()
         .order_by(PositionDeptType.dept_type_code.asc())
     ).all()
@@ -67,6 +78,7 @@ def list_department_type_codes_for_kpi_filter(db: Session = Depends(get_db)) -> 
 
 @router.get("", response_model=ListEnvelope[KpiTemplateOut])
 def list_kpi_templates(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     is_active: bool | None = Query(None),
     search: str | None = Query(None, max_length=200),
     dept_type_code: str | None = Query(
@@ -83,8 +95,8 @@ def list_kpi_templates(
     limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[KpiTemplateOut]:
-    q = select(KpiTemplate)
-    count_q = select(func.count()).select_from(KpiTemplate)
+    q = select(KpiTemplate).where(KpiTemplate.template_code == template_code)
+    count_q = select(func.count()).select_from(KpiTemplate).where(KpiTemplate.template_code == template_code)
     if is_active is not None:
         q = q.where(KpiTemplate.is_active == is_active)
         count_q = count_q.where(KpiTemplate.is_active == is_active)
@@ -93,6 +105,7 @@ def list_kpi_templates(
         count_q = count_q.where(_search_clause(s))
     if dept_type_code and (d := dept_type_code.strip()):
         in_dept = select(PositionDeptType.position_code).where(
+            PositionDeptType.template_code == template_code,
             PositionDeptType.dept_type_code == d,
             PositionDeptType.is_primary == True,
         )
@@ -115,19 +128,21 @@ def list_kpi_templates(
 
 @router.get("/export/excel")
 def export_kpi_templates_excel(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     is_active: bool | None = Query(None),
     search: str | None = Query(None, max_length=200),
     dept_type_code: str | None = Query(None, max_length=32),
     position_code: str | None = Query(None, max_length=64),
     db: Session = Depends(get_db),
 ) -> Response:
-    q = select(KpiTemplate)
+    q = select(KpiTemplate).where(KpiTemplate.template_code == template_code)
     if is_active is not None:
         q = q.where(KpiTemplate.is_active == is_active)
     if search and (s := search.strip()):
         q = q.where(_search_clause(s))
     if dept_type_code and (d := dept_type_code.strip()):
         in_dept = select(PositionDeptType.position_code).where(
+            PositionDeptType.template_code == template_code,
             PositionDeptType.dept_type_code == d,
             PositionDeptType.is_primary == True,
         )
@@ -173,8 +188,12 @@ def export_kpi_templates_excel(
 
 
 @router.get("/{kpi_code}", response_model=KpiTemplateOut)
-def get_kpi_template(kpi_code: str, db: Session = Depends(get_db)) -> KpiTemplateOut:
-    obj = db.get(KpiTemplate, kpi_code)
+def get_kpi_template(
+    kpi_code: str,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> KpiTemplateOut:
+    obj = _get_kpi(db, template_code, kpi_code)
     if not obj:
         raise HTTPException(status_code=404, detail="kpi_template_not_found")
     return _enrich_template_out(db, obj)
@@ -184,9 +203,10 @@ def get_kpi_template(kpi_code: str, db: Session = Depends(get_db)) -> KpiTemplat
 def create_kpi_template(
     body: KpiTemplateCreate, db: Session = Depends(get_db)
 ) -> KpiTemplateOut:
-    if db.get(KpiTemplate, body.kpi_code):
+    tpl = body.template_code or DEFAULT_TEMPLATE_CODE
+    if _get_kpi(db, tpl, body.kpi_code):
         raise HTTPException(status_code=409, detail="kpi_code_exists")
-    _ensure_position_catalog(db, body.position_code)
+    _ensure_position_catalog(db, tpl, body.position_code)
     obj = KpiTemplate(**body.model_dump())
     db.add(obj)
     db.commit()
@@ -196,14 +216,17 @@ def create_kpi_template(
 
 @router.patch("/{kpi_code}", response_model=KpiTemplateOut)
 def patch_kpi_template(
-    kpi_code: str, body: KpiTemplatePatch, db: Session = Depends(get_db)
+    kpi_code: str,
+    body: KpiTemplatePatch,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
 ) -> KpiTemplateOut:
-    obj = db.get(KpiTemplate, kpi_code)
+    obj = _get_kpi(db, template_code, kpi_code)
     if not obj:
         raise HTTPException(status_code=404, detail="kpi_template_not_found")
     data = body.model_dump(exclude_unset=True)
     if "position_code" in data:
-        _ensure_position_catalog(db, data["position_code"])
+        _ensure_position_catalog(db, template_code, data["position_code"])
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
@@ -212,8 +235,12 @@ def patch_kpi_template(
 
 
 @router.delete("/{kpi_code}", status_code=204)
-def delete_kpi_template(kpi_code: str, db: Session = Depends(get_db)) -> Response:
-    obj = db.get(KpiTemplate, kpi_code)
+def delete_kpi_template(
+    kpi_code: str,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> Response:
+    obj = _get_kpi(db, template_code, kpi_code)
     if not obj:
         raise HTTPException(status_code=404, detail="kpi_template_not_found")
     db.delete(obj)

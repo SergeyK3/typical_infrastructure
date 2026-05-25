@@ -22,7 +22,7 @@
     .modal.show { display: flex; }
     .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
-    .org-tree { padding: 0; margin: 0; }
+    .org-tree { padding: 0; margin: 0; max-height: min(70vh, 720px); overflow: auto; }
     .org-tree .tree-item {
       margin: 0.35rem 0; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border);
       border-radius: 6px; display: flex; flex-direction: column; gap: 0.25rem;
@@ -31,6 +31,20 @@
     .org-tree .tree-item .code { font-weight: 600; color: var(--accent); }
     .org-tree .tree-item .unit-type { font-size: 0.8rem; color: var(--text-muted); }
     .org-tree .tree-node { margin: 0.25rem 0 0 0; padding-left: 1rem; border-left: 2px solid var(--border); }
+    .org-row-actions { position: relative; margin-left: auto; }
+    .org-ctx-menu {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 11rem;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35); padding: 0.25rem 0;
+    }
+    .org-ctx-item {
+      display: block; width: 100%; text-align: left; border: 0; background: transparent;
+      color: var(--text); padding: 0.45rem 0.75rem; font: inherit; font-size: 0.85rem; cursor: pointer;
+    }
+    .org-ctx-item:hover { background: var(--surface-hover); }
+    .org-ctx-item--danger { color: var(--error); }
+    .org-drag-handle { cursor: grab; color: var(--text-muted); font-size: 0.85rem; user-select: none; padding: 0 0.25rem; }
+    .tree-item.org-drag-over { outline: 1px dashed var(--accent); }
     .err { font-size: 0.85rem; color: var(--error); margin-top: 0.5rem; }
     .row-actions { display: flex; gap: 0.35rem; }
     .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
@@ -171,6 +185,7 @@
       <div class="org-actions">
         <button class="btn btn-primary" id="btnAddOrg">+ Добавить подразделение</button>
         <button class="btn btn-secondary" id="btnDeployTemplate">Развернуть типовую оргструктуру</button>
+        <button class="btn btn-secondary" id="btnSaveOrgTemplate" title="Сохранить текущую структуру как новый типовой шаблон">Сохранить как шаблон</button>
         <a class="btn btn-secondary" id="exportOrgXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
       <div id="orgTree" style="margin-top: 1rem;"></div>
@@ -574,6 +589,26 @@
     </div>
   </div>
 
+  <!-- Modal: Save org structure as template -->
+  <div id="modalSaveOrgTemplate" class="modal">
+    <div class="modal-content">
+      <h3>Сохранить вариант оргструктуры</h3>
+      <div class="err hidden" id="modalSaveTplErr"></div>
+      <label>Код шаблона</label>
+      <input type="text" id="saveTplCode" placeholder="variant_retail">
+      <label>Название</label>
+      <input type="text" id="saveTplName" placeholder="Розничная сеть">
+      <label>Версия</label>
+      <input type="text" id="saveTplVersion" value="1">
+      <label>Комментарий</label>
+      <input type="text" id="saveTplComment" placeholder="Описание варианта">
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnSaveTplConfirm">Сохранить</button>
+        <button class="btn btn-secondary" id="btnSaveTplCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Add/Edit Org Unit -->
   <div id="modalOrg" class="modal">
     <div class="modal-content">
@@ -832,6 +867,7 @@
 
   <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-20260525"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -1692,15 +1728,101 @@
       updateWorkspaceExportLinks();
     }
 
-    function renderTree(nodes, level = 0) {
-      if (!nodes || !nodes.length) return '';
-      return nodes.map(n => {
-        const ch = renderTree(n.children || [], level + 1);
-        const actions = '<span class="card-actions" style="margin-left:auto;"><button class="btn btn-sm btn-secondary" data-edit="' + n.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-delete="' + n.id + '">Удалить</button></span>';
-        const label = '<span class="code">' + n.code + '</span> <span>' + n.name + '</span> <span class="unit-type">(' + (n.unit_type || 'department') + ')</span>';
-        const row = '<div class="tree-row">' + label + actions + '</div>';
-        return '<div class="tree-item">' + row + (ch ? '<div class="tree-node">' + ch + '</div>' : '') + '</div>';
-      }).join('');
+    function renderTree(nodes) {
+      if (!window.OrgTreeShared) {
+        return (nodes || []).map(n => n.code).join(', ');
+      }
+      return OrgTreeShared.renderOrgTreeHtml({
+        nodes: nodes,
+        extraBadges: function () { return ''; },
+      });
+    }
+
+    function bindOrgTreeUi(container) {
+      if (!container || !window.OrgTreeShared) return;
+      OrgTreeShared.bindOrgTreeActions(container, handleOrgTreeAction);
+      container.querySelectorAll('.tree-item').forEach(function (item) {
+        item.setAttribute('draggable', 'true');
+        item.addEventListener('dragstart', function (e) {
+          e.dataTransfer.setData('text/unit-id', item.dataset.unitId);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        item.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          item.classList.add('org-drag-over');
+        });
+        item.addEventListener('dragleave', function () {
+          item.classList.remove('org-drag-over');
+        });
+        item.addEventListener('drop', async function (e) {
+          e.preventDefault();
+          item.classList.remove('org-drag-over');
+          const draggedId = e.dataTransfer.getData('text/unit-id');
+          const targetId = item.dataset.unitId;
+          if (!draggedId || !targetId || draggedId === targetId) return;
+          const dragged = orgUnits.find(function (u) { return u.id === draggedId; });
+          const target = orgUnits.find(function (u) { return u.id === targetId; });
+          if (!dragged || !target) return;
+          try {
+            await fetchApi('/org-units/reorder?client_id=' + encodeURIComponent(clientId), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([
+                { id: draggedId, parent_id: target.parent_id, sort_order: target.sort_order + 1 },
+              ]),
+            });
+            await loadOrgTree();
+            showWorkspaceToast('Порядок подразделений обновлён.', 'success');
+          } catch (err) {
+            showWorkspaceToast(err.message, 'error');
+          }
+        });
+      });
+    }
+
+    async function handleOrgTreeAction(action, node) {
+      const full = orgUnits.find(function (u) { return u.id === node.id; });
+      if (!full) return;
+      if (action === 'rename') {
+        openEditOrg(full.id);
+        return;
+      }
+      if (action === 'add-section') {
+        fillOrgSelect(document.getElementById('orgParent'), null);
+        document.getElementById('orgParent').value = full.id;
+        document.getElementById('orgCode').value = '';
+        document.getElementById('orgName').value = '';
+        document.getElementById('orgType').value = 'section';
+        showErr(document.getElementById('modalOrgErr'), '');
+        document.getElementById('modalOrg').classList.add('show');
+        return;
+      }
+      if (action === 'clone') {
+        await cloneOrgUnit(full.id);
+        return;
+      }
+      if (action === 'delete') {
+        await deleteOrgUnit(full.id, full);
+      }
+    }
+
+    async function cloneOrgUnit(id) {
+      try {
+        const res = await fetchApi('/org-units/' + encodeURIComponent(id) + '/clone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name_suffix: 'Копия' }),
+        });
+        await loadOrgTree();
+        await loadPositions();
+        showWorkspaceToast(
+          'Создано отделение «' + res.org_unit.name + '», должностей: ' + res.positions_created +
+            '. Секции не копировались (' + res.sections_skipped + ' пропущено).',
+          'success'
+        );
+      } catch (e) {
+        showWorkspaceToast(e.message, 'error');
+      }
     }
 
     async function loadOrgTree() {
@@ -1708,13 +1830,12 @@
       try {
         orgTreeData = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
         orgUnits = flattenTree(orgTreeData);
-        el.innerHTML = orgTreeData.length ? '<div class="org-tree">' + renderTree(orgTreeData) + '</div>' : '<p class="meta">Нет подразделений</p>';
-        el.querySelectorAll('[data-edit]').forEach(btn => {
-          btn.onclick = () => openEditOrg(btn.dataset.edit);
-        });
-        el.querySelectorAll('[data-delete]').forEach(btn => {
-          btn.onclick = () => deleteOrgUnit(btn.dataset.delete);
-        });
+        if (!orgTreeData.length) {
+          el.innerHTML = '<p class="meta">Нет подразделений</p>';
+          return;
+        }
+        el.innerHTML = '<div class="org-tree">' + renderTree(orgTreeData) + '</div>';
+        bindOrgTreeUi(el.querySelector('.org-tree'));
       } catch (e) {
         el.innerHTML = '<p class="err">' + e.message + '</p>';
       }
@@ -1736,8 +1857,33 @@
       sel.innerHTML = opts.map(o => '<option value="' + o.value + '">' + o.text + '</option>').join('');
     }
 
-    async function deployTemplate() {
-      if (!clientId) return;
+    async function deployTemplate(triggerBtn) {
+      if (!clientId) {
+        showWorkspaceToast('Выберите организацию в списке выше.', 'error');
+        return;
+      }
+      const deployButtons = [
+        document.getElementById('btnDeployTemplate'),
+        document.getElementById('btnDeployTemplatePos'),
+      ];
+      const activeBtn = triggerBtn || deployButtons[0];
+      const prevLabel = activeBtn ? activeBtn.textContent : '';
+      let beforeOrgCount = orgUnits.length;
+      let beforePosCount = positionsCache.length;
+      if (!beforeOrgCount) {
+        try {
+          const tree = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
+          beforeOrgCount = flattenTree(tree).length;
+        } catch (_) {}
+      }
+      if (!beforePosCount) {
+        try {
+          const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
+          beforePosCount = (data.items || []).length;
+        } catch (_) {}
+      }
+      deployButtons.forEach(btn => { if (btn) btn.disabled = true; });
+      if (activeBtn) activeBtn.textContent = 'Развёртывание…';
       try {
         await fetchApi(
           '/org-units/deploy-template?client_id=' +
@@ -1747,20 +1893,75 @@
         );
         await loadOrgTree();
         await loadPositions();
+        const addedOrg = orgUnits.length - beforeOrgCount;
+        const addedPos = positionsCache.length - beforePosCount;
+        if (addedOrg <= 0 && addedPos <= 0) {
+          showWorkspaceToast(
+            'Типовая структура уже развёрнута: ' + orgUnits.length + ' подразделений, ' + positionsCache.length + ' должностей. Прокрутите список ниже, если видите не все узлы.',
+            'info'
+          );
+        } else {
+          showWorkspaceToast(
+            'Добавлено подразделений: ' + addedOrg + ', должностей: ' + addedPos + '.',
+            'success'
+          );
+        }
+        document.getElementById('orgTree')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showWorkspaceToast('Ошибка развёртывания: ' + e.message, 'error');
+      } finally {
+        deployButtons.forEach(btn => { if (btn) btn.disabled = false; });
+        if (activeBtn && prevLabel) activeBtn.textContent = prevLabel;
       }
     }
-    document.getElementById('btnDeployTemplate').onclick = deployTemplate;
-    document.getElementById('btnDeployTemplatePos').onclick = deployTemplate;
+    document.getElementById('btnDeployTemplate').onclick = () => deployTemplate(document.getElementById('btnDeployTemplate'));
+    document.getElementById('btnDeployTemplatePos').onclick = () => deployTemplate(document.getElementById('btnDeployTemplatePos'));
 
     document.getElementById('btnAddOrg').onclick = () => {
       fillOrgSelect(document.getElementById('orgParent'));
+      const company = orgUnits.find(function (u) { return u.code === 'company' || u.unit_type === 'company'; });
       document.getElementById('orgCode').value = '';
       document.getElementById('orgName').value = '';
       document.getElementById('orgType').value = 'department';
+      if (company) document.getElementById('orgParent').value = company.id;
       showErr(document.getElementById('modalOrgErr'), '');
       document.getElementById('modalOrg').classList.add('show');
+    };
+
+    document.getElementById('btnSaveOrgTemplate').onclick = () => {
+      if (!clientId) { showWorkspaceToast('Выберите организацию.', 'error'); return; }
+      document.getElementById('saveTplCode').value = '';
+      document.getElementById('saveTplName').value = '';
+      document.getElementById('saveTplVersion').value = '1';
+      document.getElementById('saveTplComment').value = '';
+      showErr(document.getElementById('modalSaveTplErr'), '');
+      document.getElementById('modalSaveOrgTemplate').classList.add('show');
+    };
+    document.getElementById('btnSaveTplCancel').onclick = () => {
+      document.getElementById('modalSaveOrgTemplate').classList.remove('show');
+    };
+    document.getElementById('btnSaveTplConfirm').onclick = async () => {
+      const errEl = document.getElementById('modalSaveTplErr');
+      const code = document.getElementById('saveTplCode').value.trim();
+      const name = document.getElementById('saveTplName').value.trim();
+      if (!code || !name) { showErr(errEl, 'Укажите код и название шаблона'); return; }
+      try {
+        await fetchApi('/enterprise-templates/save-from-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: clientId,
+            code: code,
+            name: name,
+            version: document.getElementById('saveTplVersion').value.trim() || '1',
+            comment: document.getElementById('saveTplComment').value.trim() || null,
+          }),
+        });
+        document.getElementById('modalSaveOrgTemplate').classList.remove('show');
+        showWorkspaceToast('Шаблон «' + name + '» сохранён.', 'success');
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
     };
 
     document.getElementById('btnOrgSave').onclick = async () => {
@@ -1825,13 +2026,24 @@
 
     document.getElementById('btnOrgEditCancel').onclick = () => document.getElementById('modalOrgEdit').classList.remove('show');
 
-    async function deleteOrgUnit(id) {
-      if (!confirm('Удалить подразделение?')) return;
+    async function deleteOrgUnit(id, unit) {
+      const u = unit || orgUnits.find(function (x) { return x.id === id; });
+      const hasChildren = u && orgUnits.some(function (x) { return x.parent_id === id; });
+      let mode = 'leaf';
+      let msg = 'Удалить подразделение «' + (u ? u.name : '') + '»?';
+      if (hasChildren && u && u.unit_type === 'department') {
+        if (!confirm(msg + '\n\nУ отделения есть секции. Удалить вместе с секциями и должностями на них?')) return;
+        mode = 'cascade';
+      } else if (!confirm(msg)) {
+        return;
+      }
       try {
-        await fetchApi('/org-units/' + id, { method: 'DELETE' });
-        loadOrgTree();
+        await fetchApi('/org-units/' + encodeURIComponent(id) + '?mode=' + mode, { method: 'DELETE' });
+        await loadOrgTree();
+        await loadPositions();
+        showWorkspaceToast('Подразделение удалено.', 'success');
       } catch (e) {
-        alert(e.message);
+        showWorkspaceToast(e.message, 'error');
       }
     }
 

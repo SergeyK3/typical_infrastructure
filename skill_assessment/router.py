@@ -527,6 +527,10 @@ def get_catalog_competency_matrix(
             description="Только строки каталога выбранной организации (локальная копия матрицы)",
         ),
     ] = None,
+    template_code: Annotated[
+        str | None,
+        Query(description="Код bundle шаблона (глобальный каталог навыков)"),
+    ] = "default",
     include_archived_versions: Annotated[
         bool,
         Query(
@@ -538,6 +542,7 @@ def get_catalog_competency_matrix(
     cid = (client_id or "").strip() or None
     return catalog_views_svc.list_competency_matrix_rows(
         db,
+        template_code=template_code,
         global_only=global_only,
         client_id=cid,
         version_statuses=_catalog_version_statuses(include_archived_versions),

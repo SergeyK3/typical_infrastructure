@@ -2,18 +2,35 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import Client, Employee, OrgUnit, Position
+from app.models import Client, Employee, EnterpriseTemplate, OrgUnit, Position
 from app.models import PositionCatalog, PositionDeptType
 from app.client_catalog_sync import sync_global_regulations_to_client
+from app.org_unit_ops import (
+    assert_valid_unit_type,
+    clone_local_department,
+    delete_local_org_unit_cascade,
+    delete_local_org_unit_leaf,
+)
 from app.template_org_resolve import resolve_template_structure
-from app.schemas import ListEnvelope, OrgUnitCreate, OrgUnitFromTemplateNode, OrgUnitNode, OrgUnitOut, OrgUnitPatch
+from app.schemas import (
+    ListEnvelope,
+    OrgUnitBulkCloneIn,
+    OrgUnitCloneIn,
+    OrgUnitCloneOut,
+    OrgUnitCreate,
+    OrgUnitFromTemplateNode,
+    OrgUnitNode,
+    OrgUnitOut,
+    OrgUnitPatch,
+    OrgUnitReorderItem,
+)
 from app.utils import new_id32
 
 router = APIRouter(prefix="/org-units", tags=["org_units"])
@@ -48,6 +65,17 @@ def _assert_parent_ok(db: Session, client_id: str, unit_id: str | None, parent_i
         if not nxt:
             break
         cur = nxt
+
+
+def _resolve_client_template_code(db: Session, client_id: str) -> str:
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="client_not_found")
+    if client.template_id:
+        tpl = db.get(EnterpriseTemplate, client.template_id)
+        if tpl and tpl.is_active:
+            return tpl.code
+    return "default"
 
 
 @router.get("", response_model=ListEnvelope[OrgUnitOut])
@@ -212,7 +240,8 @@ def deploy_template(
     """Развернуть типовую оргструктуру (отделения, секции и должности) для организации."""
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
-    structure = resolve_template_structure(db, "default")
+    template_code = _resolve_client_template_code(db, client_id)
+    structure = resolve_template_structure(db, template_code)
     ids_by_code: dict[str, str] = {}
     existing = {r.code: r for r in db.scalars(select(OrgUnit).where(OrgUnit.client_id == client_id)).all()}
     for spec in structure:
@@ -236,8 +265,19 @@ def deploy_template(
         db.flush()
         ids_by_code[spec["code"]] = obj.id
     if include_positions:
-        catalog_by_code = {r.position_code: r for r in db.scalars(select(PositionCatalog).where(PositionCatalog.is_active)).all()}
-        dept_links = db.scalars(select(PositionDeptType)).all()
+        tpl_code = _resolve_client_template_code(db, client_id)
+        catalog_by_code = {
+            r.position_code: r
+            for r in db.scalars(
+                select(PositionCatalog).where(
+                    PositionCatalog.template_code == tpl_code,
+                    PositionCatalog.is_active == True,
+                )
+            ).all()
+        }
+        dept_links = db.scalars(
+            select(PositionDeptType).where(PositionDeptType.template_code == tpl_code)
+        ).all()
         existing_pos = {(p.code, p.org_unit_id): p for p in db.scalars(select(Position).where(Position.client_id == client_id)).all()}
         for link in dept_links:
             catalog = catalog_by_code.get(link.position_code)
@@ -276,7 +316,13 @@ def deploy_template(
 
 @router.post("", response_model=OrgUnitOut)
 def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> OrgUnitOut:
+    assert_valid_unit_type(payload.unit_type)
     _assert_parent_ok(db, payload.client_id, payload.id, payload.parent_id)
+    dup = db.scalar(
+        select(OrgUnit).where(OrgUnit.client_id == payload.client_id, OrgUnit.code == payload.code)
+    )
+    if dup:
+        raise HTTPException(status_code=409, detail={"code": "org_unit_code_exists", "message": "Код подразделения уже существует."})
     obj = OrgUnit(
         id=payload.id or new_id32(),
         client_id=payload.client_id,
@@ -310,21 +356,88 @@ def patch_org_unit(unit_id: str, payload: OrgUnitPatch, db: Session = Depends(ge
     return OrgUnitOut.model_validate(obj)
 
 
-@router.delete("/{unit_id}", status_code=204)
-def delete_org_unit(unit_id: str, db: Session = Depends(get_db)) -> Response:
+@router.post("/{unit_id}/clone", response_model=OrgUnitCloneOut, status_code=201)
+def clone_org_unit(
+    unit_id: str, body: OrgUnitCloneIn, db: Session = Depends(get_db)
+) -> OrgUnitCloneOut:
     obj = _get_unit(db, unit_id)
     if not obj:
         raise HTTPException(status_code=404, detail="org_unit_not_found")
-    children = db.scalars(select(OrgUnit).where(OrgUnit.parent_id == unit_id)).all()
-    if children:
-        raise HTTPException(status_code=400, detail="org_unit_has_children")
-    positions = db.scalars(select(Position).where(Position.org_unit_id == unit_id)).all()
-    if positions:
-        raise HTTPException(status_code=400, detail="org_unit_has_positions")
-    employees = db.scalars(select(Employee).where(Employee.org_unit_id == unit_id)).all()
-    if employees:
-        raise HTTPException(status_code=400, detail="org_unit_has_employees")
-    db.delete(obj)
+    result = clone_local_department(
+        db,
+        obj,
+        name_suffix=body.name_suffix,
+        new_code=body.new_code,
+        target_parent_id=body.target_parent_id,
+    )
+    db.commit()
+    db.refresh(result.org_unit)
+    return OrgUnitCloneOut(
+        org_unit=OrgUnitOut.model_validate(result.org_unit),
+        positions_created=result.positions_created,
+        sections_skipped=result.sections_skipped,
+    )
+
+
+@router.post("/bulk-clone", response_model=list[OrgUnitCloneOut], status_code=201)
+def bulk_clone_org_units(body: OrgUnitBulkCloneIn, db: Session = Depends(get_db)) -> list[OrgUnitCloneOut]:
+    out: list[OrgUnitCloneOut] = []
+    results = []
+    for uid in body.unit_ids:
+        obj = _get_unit(db, uid)
+        if not obj:
+            raise HTTPException(status_code=404, detail=f"org_unit_not_found:{uid}")
+        if obj.unit_type != "department":
+            continue
+        result = clone_local_department(db, obj, name_suffix=body.name_suffix)
+        results.append(result)
+    db.commit()
+    for result in results:
+        db.refresh(result.org_unit)
+        out.append(
+            OrgUnitCloneOut(
+                org_unit=OrgUnitOut.model_validate(result.org_unit),
+                positions_created=result.positions_created,
+                sections_skipped=result.sections_skipped,
+            )
+        )
+    return out
+
+
+@router.post("/reorder", response_model=list[OrgUnitOut])
+def reorder_org_units(
+    client_id: str = Query(...),
+    body: list[OrgUnitReorderItem] = Body(...),
+    db: Session = Depends(get_db),
+) -> list[OrgUnitOut]:
+    if not db.get(Client, client_id):
+        raise HTTPException(status_code=404, detail="client_not_found")
+    out: list[OrgUnitOut] = []
+    for it in body:
+        obj = _get_unit(db, it.id)
+        if not obj or obj.client_id != client_id:
+            raise HTTPException(status_code=404, detail="org_unit_not_found")
+        _assert_parent_ok(db, client_id, it.id, it.parent_id)
+        obj.parent_id = it.parent_id
+        obj.sort_order = it.sort_order
+        out.append(OrgUnitOut.model_validate(obj))
+    db.commit()
+    return out
+
+
+@router.delete("/{unit_id}", status_code=204)
+def delete_org_unit(
+    unit_id: str,
+    mode: str = Query("leaf", pattern="^(leaf|cascade)$"),
+    db: Session = Depends(get_db),
+) -> Response:
+    obj = _get_unit(db, unit_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    if mode == "cascade":
+        delete_local_org_unit_cascade(db, obj)
+    else:
+        delete_local_org_unit_leaf(db, obj)
     db.commit()
     return Response(status_code=204)
 

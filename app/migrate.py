@@ -606,11 +606,380 @@ def migrate_pt_sessions_and_telegram() -> None:
         conn.commit()
 
 
+def migrate_enterprise_template_metadata() -> None:
+    """Расширение enterprise_templates: status, author, comment, archived_at, cloned_from_id."""
+    if not _table_exists("enterprise_templates"):
+        return
+    cols = [
+        ("status", "TEXT NOT NULL DEFAULT 'active'"),
+        ("author", "TEXT NULL"),
+        ("comment", "TEXT NULL"),
+        ("archived_at", "TEXT NULL"),
+        ("cloned_from_id", "TEXT NULL"),
+    ]
+    with engine.connect() as conn:
+        for col, typ in cols:
+            if _column_exists("enterprise_templates", col):
+                continue
+            conn.execute(text(f"ALTER TABLE enterprise_templates ADD COLUMN {col} {typ}"))
+            conn.commit()
+
+
+def migrate_position_regulations_template_scope() -> None:
+    """Убрать глобальный UNIQUE(regulation_code); уникальность в рамках template_code."""
+    if not _table_exists("position_regulations"):
+        return
+    if not _column_exists("position_regulations", "template_code"):
+        return
+    with engine.connect() as conn:
+        ddl = conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='position_regulations'")
+        ).scalar()
+        if not ddl or "UNIQUE (regulation_code)" not in ddl.replace("\n", " "):
+            # Уже пересобрано или схема без устаревшего ограничения
+            idx = conn.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='index' "
+                    "AND tbl_name='position_regulations' AND sql LIKE '%template_code%regulation_code%'"
+                )
+            ).fetchone()
+            if idx:
+                return
+        conn.execute(
+            text(
+                """
+                CREATE TABLE position_regulations_new (
+                    id VARCHAR(32) NOT NULL,
+                    template_code VARCHAR(64) NOT NULL DEFAULT 'default',
+                    regulation_code VARCHAR(64) NOT NULL,
+                    position_code VARCHAR(64) NOT NULL,
+                    dept_type_code VARCHAR(32) NOT NULL,
+                    regulation_name VARCHAR(256) NOT NULL,
+                    goal_summary VARCHAR(512),
+                    ckp_short VARCHAR(512),
+                    ckp_full TEXT,
+                    google_doc_url VARCHAR(512),
+                    instructions_folder_url VARCHAR(512),
+                    version_no VARCHAR(16) NOT NULL,
+                    status VARCHAR(16) NOT NULL,
+                    effective_from DATE,
+                    effective_to DATE,
+                    is_current BOOLEAN NOT NULL,
+                    owner_unit_code VARCHAR(64),
+                    notes VARCHAR(512),
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    PRIMARY KEY (id)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO position_regulations_new (
+                    id, template_code, regulation_code, position_code, dept_type_code,
+                    regulation_name, goal_summary, ckp_short, ckp_full,
+                    google_doc_url, instructions_folder_url, version_no, status,
+                    effective_from, effective_to, is_current, owner_unit_code,
+                    notes, created_at, updated_at
+                )
+                SELECT
+                    id, template_code, regulation_code, position_code, dept_type_code,
+                    regulation_name, goal_summary, ckp_short, ckp_full,
+                    google_doc_url, instructions_folder_url, version_no, status,
+                    effective_from, effective_to, is_current, owner_unit_code,
+                    notes, created_at, updated_at
+                FROM position_regulations
+                """
+            )
+        )
+        conn.execute(text("DROP TABLE position_regulations"))
+        conn.execute(text("ALTER TABLE position_regulations_new RENAME TO position_regulations"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_position_regulations_tpl_code "
+                "ON position_regulations (template_code, regulation_code)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_position_regulations_unique "
+                "ON position_regulations (template_code, position_code, dept_type_code, version_no)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_position_regulations_current "
+                "ON position_regulations (template_code, position_code, dept_type_code, is_current)"
+            )
+        )
+        conn.commit()
+
+
+def migrate_template_code_bundle() -> None:
+    """Добавить template_code к bundle-справочникам и пересобрать PK где нужно."""
+    if not _table_exists("position_catalog"):
+        return
+
+    def _rebuild_position_catalog() -> None:
+        if _column_exists("position_catalog", "template_code"):
+            return
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE position_catalog_new (
+                        template_code VARCHAR(64) NOT NULL DEFAULT 'default',
+                        position_code VARCHAR(64) NOT NULL,
+                        position_name_ru VARCHAR(256) NOT NULL,
+                        position_name_en VARCHAR(256) NULL,
+                        function_code VARCHAR(32) NOT NULL,
+                        position_level VARCHAR(16) NOT NULL DEFAULT 'SPEC',
+                        is_managerial INTEGER NOT NULL DEFAULT 0,
+                        position_family VARCHAR(64) NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        default_regulation_code VARCHAR(64) NULL,
+                        notes VARCHAR(512) NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL,
+                        PRIMARY KEY (template_code, position_code)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO position_catalog_new (
+                        template_code, position_code, position_name_ru, position_name_en,
+                        function_code, position_level, is_managerial, position_family,
+                        is_active, default_regulation_code, notes, created_at, updated_at
+                    )
+                    SELECT 'default', position_code, position_name_ru, position_name_en,
+                           function_code, position_level, is_managerial, position_family,
+                           is_active, default_regulation_code, notes, created_at, updated_at
+                    FROM position_catalog
+                    """
+                )
+            )
+            conn.execute(text("DROP TABLE position_catalog"))
+            conn.execute(text("ALTER TABLE position_catalog_new RENAME TO position_catalog"))
+            conn.commit()
+
+    def _rebuild_position_dept_types() -> None:
+        if _column_exists("position_dept_types", "template_code"):
+            return
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE position_dept_types_new (
+                        template_code VARCHAR(64) NOT NULL DEFAULT 'default',
+                        position_code VARCHAR(64) NOT NULL,
+                        dept_type_code VARCHAR(32) NOT NULL,
+                        is_primary INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY (template_code, position_code, dept_type_code)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO position_dept_types_new (template_code, position_code, dept_type_code, is_primary)
+                    SELECT 'default', position_code, dept_type_code, is_primary FROM position_dept_types
+                    """
+                )
+            )
+            conn.execute(text("DROP TABLE position_dept_types"))
+            conn.execute(text("ALTER TABLE position_dept_types_new RENAME TO position_dept_types"))
+            conn.commit()
+
+    def _rebuild_kpi_templates() -> None:
+        if not _table_exists("kpi_templates"):
+            return
+        if _column_exists("kpi_templates", "template_code"):
+            return
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE kpi_templates_new (
+                        template_code VARCHAR(64) NOT NULL DEFAULT 'default',
+                        kpi_code VARCHAR(64) NOT NULL,
+                        kpi_name VARCHAR(256) NOT NULL,
+                        unit VARCHAR(32) NOT NULL DEFAULT '%',
+                        period_type VARCHAR(16) NOT NULL DEFAULT 'month',
+                        formula_or_rule VARCHAR(512) NULL,
+                        default_target REAL NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        position_code VARCHAR(64) NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL,
+                        PRIMARY KEY (template_code, kpi_code)
+                    )
+                    """
+                )
+            )
+            cols = "kpi_code, kpi_name, unit, period_type, formula_or_rule, default_target, is_active, created_at, updated_at"
+            if _column_exists("kpi_templates", "position_code"):
+                cols += ", position_code"
+                sel = (
+                    "'default', kpi_code, kpi_name, unit, period_type, formula_or_rule, "
+                    "default_target, is_active, created_at, updated_at, position_code"
+                )
+            else:
+                sel = (
+                    "'default', kpi_code, kpi_name, unit, period_type, formula_or_rule, "
+                    "default_target, is_active, created_at, updated_at"
+                )
+            conn.execute(
+                text(
+                    f"INSERT INTO kpi_templates_new (template_code, {cols}) "
+                    f"SELECT {sel} FROM kpi_templates"
+                )
+            )
+            conn.execute(text("DROP TABLE kpi_templates"))
+            conn.execute(text("ALTER TABLE kpi_templates_new RENAME TO kpi_templates"))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_kpi_templates_position_code "
+                    "ON kpi_templates (position_code)"
+                )
+            )
+            conn.commit()
+
+    def _add_template_code_column(table: str) -> None:
+        if not _table_exists(table):
+            return
+        if _column_exists(table, "template_code"):
+            return
+        with engine.connect() as conn:
+            conn.execute(
+                text(f"ALTER TABLE {table} ADD COLUMN template_code VARCHAR(64) NOT NULL DEFAULT 'default'")
+            )
+            conn.execute(text(f"UPDATE {table} SET template_code = 'default' WHERE template_code IS NULL OR template_code = ''"))
+            conn.commit()
+
+    _rebuild_position_catalog()
+    _rebuild_position_dept_types()
+    _rebuild_kpi_templates()
+    _add_template_code_column("position_regulations")
+    _add_template_code_column("regulation_kpis")
+    _add_template_code_column("regulation_instructions")
+    _add_template_code_column("sa_competency_catalog_versions")
+    _add_template_code_column("sa_competency_skill_definitions")
+
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "UPDATE sa_competency_catalog_versions SET template_code = 'default' "
+                "WHERE client_id IS NULL AND (template_code IS NULL OR template_code = '')"
+            )
+        )
+        conn.execute(
+            text(
+                "UPDATE sa_competency_skill_definitions SET template_code = 'default' "
+                "WHERE client_id IS NULL AND (template_code IS NULL OR template_code = '')"
+            )
+        )
+        conn.commit()
+
+
+def migrate_competency_skill_definitions_template_scope() -> None:
+    """Убрать глобальный UNIQUE(skill_code); уникальность в рамках template_code."""
+    if not _table_exists("sa_competency_skill_definitions"):
+        return
+    if not _column_exists("sa_competency_skill_definitions", "template_code"):
+        return
+    with engine.connect() as conn:
+        ddl = conn.execute(
+            text(
+                "SELECT sql FROM sqlite_master WHERE type='table' "
+                "AND name='sa_competency_skill_definitions'"
+            )
+        ).scalar()
+        if not ddl:
+            return
+        ddl_norm = ddl.replace("\n", " ")
+        if "UNIQUE (skill_code)" not in ddl_norm and "UNIQUE (template_code, skill_code)" in ddl_norm:
+            return
+        if "uq_sa_csd_tpl_skill_code" in ddl_norm:
+            return
+        idx = conn.execute(
+            text(
+                "SELECT name FROM sqlite_master WHERE type='index' "
+                "AND tbl_name='sa_competency_skill_definitions' "
+                "AND sql LIKE '%template_code%skill_code%'"
+            )
+        ).fetchone()
+        if idx and "UNIQUE (skill_code)" not in ddl_norm:
+            return
+        conn.execute(
+            text(
+                """
+                CREATE TABLE sa_competency_skill_definitions_new (
+                    id VARCHAR(36) NOT NULL,
+                    client_id VARCHAR(32),
+                    template_code VARCHAR(64) NOT NULL DEFAULT 'default',
+                    skill_code VARCHAR(64) NOT NULL,
+                    title_ru VARCHAR(512) NOT NULL,
+                    description TEXT,
+                    is_active BOOLEAN NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    CONSTRAINT uq_sa_csd_tpl_skill_code UNIQUE (template_code, skill_code)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO sa_competency_skill_definitions_new (
+                    id, client_id, template_code, skill_code, title_ru,
+                    description, is_active, created_at, updated_at
+                )
+                SELECT
+                    id, client_id, template_code, skill_code, title_ru,
+                    description, is_active, created_at, updated_at
+                FROM sa_competency_skill_definitions
+                """
+            )
+        )
+        conn.execute(text("DROP TABLE sa_competency_skill_definitions"))
+        conn.execute(
+            text("ALTER TABLE sa_competency_skill_definitions_new RENAME TO sa_competency_skill_definitions")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_sa_competency_skill_definitions_skill_code "
+                "ON sa_competency_skill_definitions (skill_code)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_sa_competency_skill_definitions_client_id "
+                "ON sa_competency_skill_definitions (client_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_sa_competency_skill_definitions_is_active "
+                "ON sa_competency_skill_definitions (is_active)"
+            )
+        )
+        conn.commit()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
     migrate_position_regulations_instructions_folder()
     migrate_org_units_catalog_detached()
+    migrate_enterprise_template_metadata()
     migrate_kpi_templates_position_code()
     migrate_positions_is_detached()
     migrate_employees_telegram_id()
@@ -620,3 +989,6 @@ def run_migrations() -> None:
     migrate_pt_assignment_test_id()
     migrate_pt_assignment_completion_history()
     migrate_pt_sessions_and_telegram()
+    migrate_template_code_bundle()
+    migrate_position_regulations_template_scope()
+    migrate_competency_skill_definitions_template_scope()

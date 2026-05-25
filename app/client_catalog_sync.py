@@ -15,6 +15,7 @@ from app.models import (
     RegulationInstruction,
     RegulationKpi,
 )
+from app.template_bundle_clone import resolve_client_template_code
 from app.utils import new_id32
 
 
@@ -70,7 +71,10 @@ def copy_global_regulation_to_client(
     db.add(obj)
     db.flush()
     for k in db.scalars(
-        select(RegulationKpi).where(RegulationKpi.regulation_code == glob.regulation_code)
+        select(RegulationKpi).where(
+            RegulationKpi.template_code == glob.template_code,
+            RegulationKpi.regulation_code == glob.regulation_code,
+        )
     ).all():
         db.add(
             ClientRegulationKpi(
@@ -85,7 +89,10 @@ def copy_global_regulation_to_client(
         )
     for ins in db.scalars(
         select(RegulationInstruction)
-        .where(RegulationInstruction.regulation_code == glob.regulation_code)
+        .where(
+            RegulationInstruction.template_code == glob.template_code,
+            RegulationInstruction.regulation_code == glob.regulation_code,
+        )
         .order_by(RegulationInstruction.sort_order)
     ).all():
         db.add(
@@ -104,9 +111,10 @@ def copy_global_regulation_to_client(
 
 def sync_global_regulations_to_client(db: Session, client_id: str) -> int:
     """
-    Для каждого глобального регламента, чья пара (position_code, dept_type_code)
+    Для каждого глобального регламента bundle клиента, чья пара (position_code, dept_type_code)
     покрыта должностями клиента на соответствующих подразделениях, создать клиентскую копию (если ещё нет).
     """
+    template_code = resolve_client_template_code(db, client_id)
     pairs = _client_position_dept_pairs(db, client_id)
     if not pairs:
         return 0
@@ -118,7 +126,9 @@ def sync_global_regulations_to_client(db: Session, client_id: str) -> int:
         ).all()
     )
     created = 0
-    for glob in db.scalars(select(PositionRegulation)).all():
+    for glob in db.scalars(
+        select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+    ).all():
         if (glob.position_code, glob.dept_type_code) not in pairs:
             continue
         if glob.regulation_code in existing_codes:

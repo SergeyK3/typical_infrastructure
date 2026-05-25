@@ -220,6 +220,18 @@
 ### Создаётся
 - набор OrgUnit на основании TemplateOrgUnit.
 
+### Bundle шаблона (template_code)
+Код шаблона (`EnterpriseTemplate.code`) — ключ изоляции для всего нормативного набора:
+- `template_org_units` — дерево подразделений;
+- `position_catalog` + `position_dept_types` — должности и привязки к типам отделений;
+- `kpi_templates` — типовые KPI;
+- `position_regulations` + `regulation_kpis` + `regulation_instructions` — регламенты;
+- `sa_competency_catalog_versions` + `sa_competency_matrix` + `sa_competency_skill_definitions` — матрица навыков.
+
+При onboarding и deploy-template система резолвит `template_code` через `Client.template_id` и разворачивает только записи выбранного bundle, а не глобальный каталог целиком.
+
+Клонирование bundle (`POST /api/enterprise-templates/{id}/clone`) создаёт новый черновой шаблон с копией всех слоёв; опциональный `code_prefix` добавляет префикс к кодам узлов/должностей для читаемости в сводных отчётах.
+
 ### Требования
 - должна соблюдаться иерархия;
 - должны сохраняться связи parent-child;
@@ -560,6 +572,9 @@
 - `GET /customers/onboarding-runs/{id}` — получить статус run;
 - `POST /customers/onboarding-runs/{id}/retry` — повторить неуспешный run или отдельные шаги;
 - `GET /enterprise-templates` — список шаблонов;
+- `GET /enterprise-templates/{id}/structure-preview` — preview bundle (оргструктура, должности, KPI, регламенты, навыки);
+- `PATCH /enterprise-templates/{id}` — свойства шаблона (название, версия, описание);
+- `POST /enterprise-templates/{id}/clone` — клонирование изолированного bundle;
 - `GET /enterprise-templates/{id}/preview` — preview того, что будет создано;
 - `POST /customers/{id}/org-structure/bootstrap-missing` — дозагрузить недостающие типовые блоки.
 

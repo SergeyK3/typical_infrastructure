@@ -7,6 +7,7 @@
   <title>Типовые регламенты — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
   <style>
     .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
@@ -154,12 +155,15 @@
         </div>
         <div class="filters-toolbar">
           <div class="search-row">
+            <label for="filterTemplate" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Шаблон:</label>
+            <select id="filterTemplate" title="Bundle шаблона"><option value="default">default</option></select>
             <label for="filterSearch" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Поиск по реестру:</label>
             <input type="search" id="filterSearch" class="search-input" placeholder="Код, название, должность, тип подразделения, фрагмент цели…" autocomplete="off" title="Общесистемный справочник — все организации видят одни и те же регламенты" />
             <button type="button" class="btn btn-secondary btn-sm" id="btnApply">Найти / применить фильтры</button>
             <label class="th-filter-inline"><input type="checkbox" id="filterCurrent" /> Только действующие</label>
           </div>
         </div>
+        <p id="globalEditTemplateHint" class="meta" style="margin: 0 0 0.75rem 0;"></p>
         <p id="listMeta" class="meta hidden" style="margin: 0 0 0.75rem 0;"></p>
         <div style="overflow-x:auto;">
         <table class="data-table">
@@ -404,6 +408,8 @@
 
     function regulationFilterBaseParams() {
       const params = new URLSearchParams();
+      const tpl = document.getElementById('filterTemplate').value;
+      if (tpl) params.set('template_code', tpl);
       const pos = document.getElementById('filterPosition').value;
       const dept = document.getElementById('filterDept').value;
       const status = document.getElementById('filterStatus').value;
@@ -629,6 +635,7 @@
           return;
         }
         const body = {
+          template_code: document.getElementById('filterTemplate').value || 'default',
           regulation_code, position_code, dept_type_code, version_no, regulation_name,
           goal_summary: document.getElementById('f_goal_summary').value.trim() || null,
           ckp_short: document.getElementById('f_ckp_short').value.trim() || null,
@@ -685,10 +692,27 @@
 
     async function loadFilterOptions() {
       try {
-        const [positions, regs] = await Promise.all([
-          fetchApi('/regulations/positions/list'),
-          fetchApi('/regulations?limit=500'),
+        const GTC = window.GlobalTemplateContext;
+        const tplSelect = document.getElementById('filterTemplate');
+        const tplVal = GTC.resolveTemplateCode(
+          await GTC.fetchEnterpriseTemplates(true),
+          tplSelect.value || GTC.getGlobalEditTemplateCode('default'),
+          'default'
+        );
+        const tplQs = '?template_code=' + encodeURIComponent(tplVal);
+        const [positions, regs, templates] = await Promise.all([
+          fetchApi('/regulations/positions/list' + tplQs),
+          fetchApi('/regulations?limit=500&template_code=' + encodeURIComponent(tplVal)),
+          GTC.fetchEnterpriseTemplates(true),
         ]);
+        tplSelect.innerHTML = (templates || []).map(t =>
+          '<option value="' + t.code + '">' + GTC.formatTemplateOptionLabel(t) + '</option>'
+        ).join('') || '<option value="default">default</option>';
+        if ([...tplSelect.options].some(o => o.value === tplVal)) tplSelect.value = tplVal;
+        GTC.setGlobalEditTemplateCode(tplSelect.value);
+        GTC.syncUrl(tplSelect.value);
+        GTC.renderEditHint();
+        const tpl = tplSelect.value || 'default';
         const posSelect = document.getElementById('filterPosition');
         const posVal = posSelect.value;
         posSelect.innerHTML = '<option value="">— все —</option>';
@@ -718,6 +742,14 @@
     document.getElementById('btnExportXlsx').onclick = () => {
       const qs = regulationFilterBaseParams().toString();
       window.location.href = '/api/regulations/export/excel' + (qs ? '?' + qs : '');
+    };
+    document.getElementById('filterTemplate').onchange = async () => {
+      const GTC = window.GlobalTemplateContext;
+      GTC.setGlobalEditTemplateCode(document.getElementById('filterTemplate').value);
+      GTC.syncUrl(document.getElementById('filterTemplate').value);
+      GTC.renderEditHint();
+      await loadFilterOptions();
+      await loadRegulations();
     };
     document.getElementById('filterPosition').onchange = loadRegulations;
     document.getElementById('filterDept').onchange = loadRegulations;

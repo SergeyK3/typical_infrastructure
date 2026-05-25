@@ -37,6 +37,11 @@ class EnterpriseTemplate(Base, TimestampMixin):
     version: Mapped[str] = mapped_column(String(16), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    author: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    comment: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cloned_from_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class TemplateOrgUnitRow(Base, TimestampMixin):
@@ -99,7 +104,9 @@ class PositionCatalog(Base, TimestampMixin):
     """
 
     __tablename__ = "position_catalog"
+    __table_args__ = (Index("ix_position_catalog_tpl_code", "template_code", "position_code", unique=True),)
 
+    template_code: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     position_code: Mapped[str] = mapped_column(String(64), primary_key=True)
     position_name_ru: Mapped[str] = mapped_column(String(256), nullable=False)
     position_name_en: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -116,7 +123,17 @@ class PositionDeptType(Base):
     """Связь типовой должности с типом подразделения (многие ко многим)."""
 
     __tablename__ = "position_dept_types"
+    __table_args__ = (
+        Index(
+            "ix_position_dept_types_tpl",
+            "template_code",
+            "position_code",
+            "dept_type_code",
+            unique=True,
+        ),
+    )
 
+    template_code: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     position_code: Mapped[str] = mapped_column(String(64), primary_key=True)
     dept_type_code: Mapped[str] = mapped_column(String(32), primary_key=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -230,7 +247,9 @@ class KpiTemplate(Base, TimestampMixin):
     """
 
     __tablename__ = "kpi_templates"
+    __table_args__ = (Index("ix_kpi_templates_tpl_code", "template_code", "kpi_code", unique=True),)
 
+    template_code: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     kpi_code: Mapped[str] = mapped_column(String(64), primary_key=True)
     kpi_name: Mapped[str] = mapped_column(String(256), nullable=False)
     unit: Mapped[str] = mapped_column(String(32), nullable=False, default="%")
@@ -246,12 +265,21 @@ class PositionRegulation(Base, TimestampMixin):
 
     __tablename__ = "position_regulations"
     __table_args__ = (
-        Index("ix_position_regulations_unique", "position_code", "dept_type_code", "version_no", unique=True),
-        Index("ix_position_regulations_current", "position_code", "dept_type_code", "is_current"),
+        Index("ix_position_regulations_tpl_code", "template_code", "regulation_code", unique=True),
+        Index(
+            "ix_position_regulations_unique",
+            "template_code",
+            "position_code",
+            "dept_type_code",
+            "version_no",
+            unique=True,
+        ),
+        Index("ix_position_regulations_current", "template_code", "position_code", "dept_type_code", "is_current"),
     )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    regulation_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    template_code: Mapped[str] = mapped_column(String(64), nullable=False, default="default", index=True)
+    regulation_code: Mapped[str] = mapped_column(String(64), nullable=False)
     position_code: Mapped[str] = mapped_column(String(64), nullable=False)
     dept_type_code: Mapped[str] = mapped_column(String(32), nullable=False)
     regulation_name: Mapped[str] = mapped_column(String(256), nullable=False)
@@ -340,8 +368,10 @@ class RegulationKpi(Base):
     """Связь регламента с KPI."""
 
     __tablename__ = "regulation_kpis"
+    __table_args__ = (Index("ix_regulation_kpis_tpl_reg", "template_code", "regulation_code"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    template_code: Mapped[str] = mapped_column(String(64), nullable=False, default="default", index=True)
     regulation_code: Mapped[str] = mapped_column(String(64), nullable=False)
     kpi_code: Mapped[str] = mapped_column(String(64), nullable=False)
     target_value: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -477,8 +507,10 @@ class RegulationInstruction(Base):
     """Связь регламента с должностными инструкциями."""
 
     __tablename__ = "regulation_instructions"
+    __table_args__ = (Index("ix_regulation_instructions_tpl_reg", "template_code", "regulation_code"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    template_code: Mapped[str] = mapped_column(String(64), nullable=False, default="default", index=True)
     regulation_code: Mapped[str] = mapped_column(String(64), nullable=False)
     instruction_code: Mapped[str] = mapped_column(String(64), nullable=False)
     instruction_name: Mapped[str] = mapped_column(String(256), nullable=False)

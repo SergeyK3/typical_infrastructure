@@ -74,10 +74,12 @@ def get_template_positions(template_code: str, org_unit_ids_by_code: dict[str, s
     return positions
 
 
-def list_positions_from_position_catalog(db: "Session") -> list[dict]:
+from app.template_constants import DEFAULT_TEMPLATE_CODE
+
+
+def list_positions_from_position_catalog(db: "Session", template_code: str = DEFAULT_TEMPLATE_CODE) -> list[dict]:
     """
-    Все пары «типовая должность ↔ тип подразделения» из глобального каталога (position_catalog × position_dept_types).
-    Совпадает с логикой «Развернуть типовую оргструктуру» в рабочем пространстве клиента.
+    Пары «типовая должность ↔ тип подразделения» для указанного template_code.
     """
     from sqlalchemy import select
 
@@ -85,10 +87,17 @@ def list_positions_from_position_catalog(db: "Session") -> list[dict]:
 
     catalog_by_code = {
         r.position_code: r
-        for r in db.scalars(select(PositionCatalog).where(PositionCatalog.is_active == True)).all()
+        for r in db.scalars(
+            select(PositionCatalog).where(
+                PositionCatalog.template_code == template_code,
+                PositionCatalog.is_active == True,
+            )
+        ).all()
     }
     rows: list[dict] = []
-    for link in db.scalars(select(PositionDeptType)).all():
+    for link in db.scalars(
+        select(PositionDeptType).where(PositionDeptType.template_code == template_code)
+    ).all():
         catalog = catalog_by_code.get(link.position_code)
         if not catalog:
             continue
@@ -106,3 +115,77 @@ def list_positions_from_position_catalog(db: "Session") -> list[dict]:
         )
     rows.sort(key=lambda x: (x["org_unit_code"], x["code"]))
     return rows
+
+
+def list_template_bundle_preview(db: "Session", template_code: str) -> dict:
+    """Сводка bundle для preview: positions, kpi, regulations, skills."""
+    from sqlalchemy import func, select
+
+    from app.models import KpiTemplate, PositionRegulation
+    from app.template_org_resolve import resolve_template_structure
+
+    structure = resolve_template_structure(db, template_code)
+    dept_codes = {s["code"] for s in structure if s.get("unit_type") == "department"}
+    positions = list_positions_from_position_catalog(db, template_code)
+    position_codes = {p["code"] for p in positions}
+
+    kpi_rows = db.scalars(
+        select(KpiTemplate).where(KpiTemplate.template_code == template_code, KpiTemplate.is_active == True)
+    ).all()
+    kpi = [
+        {"code": k.kpi_code, "name": k.kpi_name, "position_code": k.position_code}
+        for k in kpi_rows
+        if not k.position_code or k.position_code in position_codes
+    ]
+
+    regs = db.scalars(
+        select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+    ).all()
+    regulations = [
+        {
+            "code": r.regulation_code,
+            "name": r.regulation_name,
+            "position_code": r.position_code,
+            "dept_type_code": r.dept_type_code,
+        }
+        for r in regs
+        if r.dept_type_code in dept_codes and r.position_code in position_codes
+    ]
+
+    skills_count = 0
+    try:
+        from skill_assessment.infrastructure.db_models import CompetencyCatalogVersionRow, CompetencyMatrixRow
+
+        version = db.scalar(
+            select(CompetencyCatalogVersionRow)
+            .where(
+                CompetencyCatalogVersionRow.client_id.is_(None),
+                CompetencyCatalogVersionRow.template_code == template_code,
+                CompetencyCatalogVersionRow.status == "active",
+            )
+            .order_by(CompetencyCatalogVersionRow.created_at.desc())
+            .limit(1)
+        )
+        if version:
+            skills_count = db.scalar(
+                select(func.count())
+                .select_from(CompetencyMatrixRow)
+                .where(CompetencyMatrixRow.version_id == version.id)
+            ) or 0
+    except ImportError:
+        pass
+
+    return {
+        "positions": positions,
+        "kpi": kpi,
+        "regulations": regulations,
+        "skills": [{"matrix_rows": skills_count}],
+        "counts": {
+            "org_units": len(structure),
+            "positions": len(positions),
+            "kpi": len(kpi),
+            "regulations": len(regulations),
+            "skills": skills_count,
+        },
+    }
+

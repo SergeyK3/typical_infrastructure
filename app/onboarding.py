@@ -328,7 +328,7 @@ def run_onboarding_bootstrap(
             (p.code, p.org_unit_id)
             for p in db.scalars(select(Position).where(Position.client_id == client.id)).all()
         }
-        for p in list_positions_from_position_catalog(db):
+        for p in list_positions_from_position_catalog(db, template_code):
             ou_id = ids_by_code.get(p["org_unit_code"])
             if not ou_id:
                 continue

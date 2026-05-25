@@ -57,12 +57,23 @@
       <div class="main-header">
         <h1>Глобальные справочники</h1>
         <p class="subtitle">Общесистемные шаблоны и нормативные реестры. Изменения здесь влияют на новые развёртывания и на выбор при копировании в организации.</p>
+        <p class="note">Каждый шаблон предприятия (<code>EnterpriseTemplate.code</code>) — изолированный <strong>bundle</strong>: оргдерево, должности, KPI, регламенты и матрица навыков привязаны к одному <code>template_code</code>. Правки в одном шаблоне не затрагивают другие. Редактор bundle — на странице <a href="/global/template-org" data-global-template-link>типовой оргструктуры</a>.</p>
+        <p class="note" id="globalHubTemplateNote">Выбранный в любом справочнике шаблон запоминается и подставляется при открытии остальных страниц глобального каталога.</p>
         <p class="note">Карточки организации не синхронизируются с глобальными записями автоматически после копирования — правки ведутся отдельно в <code>/client/…</code>.</p>
       </div>
       <div class="content">
         <div class="hub-grid">
           <div class="hub-card">
-            <a class="hub-card-main" href="/global/template-org">
+            <a class="hub-card-main" href="/global/template-org" data-global-template-link>
+              <h2>Шаблон bundle</h2>
+              <p>Единая точка редактирования изолированного набора: оргструктура, должности, KPI, регламенты и навыки с одним <code>template_code</code>. Клонирование bundle и свойства шаблона.</p>
+            </a>
+            <div class="hub-export">
+              <a class="btn btn-secondary btn-sm" href="/global/template-org" data-global-template-link>Открыть редактор</a>
+            </div>
+          </div>
+          <div class="hub-card">
+            <a class="hub-card-main" href="/global/template-org" data-global-template-link>
               <h2>Типовая оргструктура</h2>
               <p>Узлы шаблона в БД (<code>template_org_units</code>): коды, названия, иерархия для onboarding и «из шаблона».</p>
             </a>
@@ -71,7 +82,7 @@
             </div>
           </div>
           <div class="hub-card">
-            <a class="hub-card-main" href="/global/positions">
+            <a class="hub-card-main" href="/global/positions" data-global-template-link>
               <h2>Типовые должности</h2>
               <p>Глобальный каталог должностей: функция, уровень, привязка к регламенту по умолчанию.</p>
             </a>
@@ -80,16 +91,17 @@
             </div>
           </div>
           <div class="hub-card">
-            <a class="hub-card-main" href="/global/skills">
+            <a class="hub-card-main" href="/global/skills" data-global-template-link>
               <h2>Типовые навыки</h2>
-              <p>Нормализованная матрица ключевых навыков по типовым должностям: код должности, ранг и формулировка навыка.</p>
+              <p>Нормализованная матрица ключевых навыков по типовым должностям из БД (<code>sa_competency_matrix</code>); CSV — legacy-экспорт.</p>
             </a>
             <div class="hub-export">
-              <a class="btn btn-secondary btn-sm" href="/static/global/position-skills-normalized.csv">Скачать CSV</a>
+              <a class="btn btn-secondary btn-sm" href="/api/skill-assessment/catalog/competency-matrix/export/excel?template_code=default">Скачать Excel</a>
+              <a class="btn btn-secondary btn-sm" href="/static/global/position-skills-normalized.csv" style="margin-left:0.35rem;">CSV (legacy)</a>
             </div>
           </div>
           <div class="hub-card">
-            <a class="hub-card-main" href="/global/kpi">
+            <a class="hub-card-main" href="/global/kpi" data-global-template-link>
               <h2>Типовые KPI</h2>
               <p>Типовые метрики для привязки к регламентам и карточкам.</p>
             </a>
@@ -98,7 +110,7 @@
             </div>
           </div>
           <div class="hub-card">
-            <a class="hub-card-main" href="/regulations">
+            <a class="hub-card-main" href="/regulations" data-global-template-link>
               <h2>Типовые регламенты</h2>
               <p>Полный реестр нормативных карточек, KPI-строки и инструкции внутри карточки.</p>
             </a>
@@ -110,5 +122,19 @@
       </div>
     </main>
   </div>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script>
+    (function () {
+      const GTC = window.GlobalTemplateContext;
+      if (!GTC) return;
+      GTC.applyTemplateLinks(document);
+      const note = document.getElementById('globalHubTemplateNote');
+      if (note) {
+        const code = GTC.getGlobalEditTemplateCode();
+        note.textContent =
+          'Сейчас для редактирования выбран шаблон «' + code + '». Он подставится при открытии любого справочника ниже.';
+      }
+    })();
+  </script>
 </body>
 </html>
