@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import TemplateOrgUnitRow
 from app.org_structures import get_template_structure
+from app.org_unit_ops import format_org_unit_name
 
 
 def _order_parents_before_children(rows: list[dict]) -> list[dict]:
@@ -44,10 +45,11 @@ def resolve_template_structure(db: Session, template_code: str) -> list[dict]:
         specs = [
             {
                 "code": r.code,
-                "name": r.name,
+                "name": format_org_unit_name(r.name, r.unit_type),
                 "parent_code": r.parent_code,
                 "unit_type": r.unit_type,
                 "sort_order": r.sort_order,
+                "log_group": r.log_group,
             }
             for r in rows
         ]

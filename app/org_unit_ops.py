@@ -5,14 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import Employee, OrgUnit, Position, PositionDeptType, TemplateOrgUnitRow
+from app.models import (
+    Employee,
+    OrgUnit,
+    Position,
+    PositionDeptType,
+    PositionRegulation,
+    TemplateOrgUnitRow,
+)
 from app.utils import new_id32
 
 PROTECTED_ORG_CODES = frozenset({"company"})
 VALID_UNIT_TYPES = frozenset({"company", "department", "section"})
+LOG_GROUP_UNIT_TYPES = frozenset({"department", "section"})
 
 
 def assert_valid_unit_type(unit_type: str) -> None:
@@ -23,12 +31,116 @@ def assert_valid_unit_type(unit_type: str) -> None:
         )
 
 
+def format_org_unit_name(name: str, unit_type: str) -> str:
+    """Отделения — UPPER; секции — первая буква заглавная, остальные строчные; company без изменений."""
+    text = (name or "").strip()
+    if not text:
+        return text
+    if unit_type == "department":
+        return text.upper()
+    if unit_type == "section":
+        return text[0].upper() + text[1:].lower()
+    return text
+
+
+def normalize_org_unit_name(name: str, unit_type: str) -> str:
+    """Алиас для единообразного именования при сохранении."""
+    return format_org_unit_name(name, unit_type)
+
+
+def normalize_template_log_group(unit_type: str, log_group: str | None) -> str | None:
+    """log_group задаётся для отделений и секций, не для company."""
+    lg = (log_group or "").strip() or None
+    if unit_type in LOG_GROUP_UNIT_TYPES:
+        return lg
+    if lg:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "log_group_only_for_department",
+                "message": "Логическая группа допустима только для отделений и секций.",
+            },
+        )
+    return None
+
+
 def assert_not_protected_code(code: str) -> None:
     if code in PROTECTED_ORG_CODES:
         raise HTTPException(
             status_code=403,
-            detail={"code": "org_unit_protected", "message": "Системный узел нельзя удалить или клонировать."},
+            detail={"code": "org_unit_protected", "message": "Системный узел нельзя удалить, переименовать или клонировать."},
         )
+
+
+def rename_template_org_unit_code(db: Session, row: TemplateOrgUnitRow, new_code: str) -> None:
+    """Переименовать код узла шаблона и обновить ссылки (дети, должности, регламенты)."""
+    new_code = new_code.strip()
+    if not new_code:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_org_code", "message": "Код узла не может быть пустым."},
+        )
+    if new_code == row.code:
+        return
+    assert_not_protected_code(row.code)
+    if new_code in PROTECTED_ORG_CODES:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "org_unit_protected", "message": "Код «company» зарезервирован."},
+        )
+    dup = db.scalar(
+        select(func.count())
+        .select_from(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == row.template_code,
+            TemplateOrgUnitRow.code == new_code,
+        )
+    )
+    if dup:
+        raise HTTPException(status_code=409, detail="template_org_unit_code_exists")
+
+    old_code = row.code
+    tpl = row.template_code
+
+    db.execute(
+        update(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == tpl,
+            TemplateOrgUnitRow.parent_code == old_code,
+        )
+        .values(parent_code=new_code)
+    )
+
+    links = db.scalars(
+        select(PositionDeptType).where(
+            PositionDeptType.template_code == tpl,
+            PositionDeptType.dept_type_code == old_code,
+        )
+    ).all()
+    for link in links:
+        if db.get(PositionDeptType, (tpl, link.position_code, new_code)):
+            db.delete(link)
+            continue
+        db.add(
+            PositionDeptType(
+                template_code=tpl,
+                position_code=link.position_code,
+                dept_type_code=new_code,
+                is_primary=link.is_primary,
+            )
+        )
+        db.delete(link)
+
+    db.execute(
+        update(PositionRegulation)
+        .where(
+            PositionRegulation.template_code == tpl,
+            PositionRegulation.dept_type_code == old_code,
+        )
+        .values(dept_type_code=new_code)
+    )
+
+    row.code = new_code
 
 
 def _local_codes(db: Session, client_id: str) -> set[str]:
@@ -127,6 +239,7 @@ def clone_local_department(
     ) or 0
 
     copy_name = source.name if name_suffix in source.name else f"{source.name} ({name_suffix})"
+    copy_name = format_org_unit_name(copy_name, "department")
     new_ou = OrgUnit(
         id=new_id32(),
         client_id=source.client_id,
@@ -163,6 +276,75 @@ def clone_local_department(
 
     db.flush()
     return LocalCloneResult(org_unit=new_ou, positions_created=positions_created, sections_skipped=int(sections_skipped))
+
+
+def clone_local_section(
+    db: Session,
+    source: OrgUnit,
+    *,
+    name_suffix: str = "Копия",
+    new_code: str | None = None,
+) -> LocalCloneResult:
+    if source.unit_type != "section":
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "clone_source_not_section", "message": "Копировать можно только секцию (section)."},
+        )
+    assert_not_protected_code(source.code)
+
+    parent_id = source.parent_id
+    if parent_id:
+        parent = db.get(OrgUnit, parent_id)
+        if not parent or parent.client_id != source.client_id:
+            raise HTTPException(status_code=400, detail={"code": "parent_not_found", "message": "Родитель не найден."})
+
+    code = (new_code or _unique_local_code(db, source.client_id, source.code)).strip()
+    if not code:
+        raise HTTPException(status_code=422, detail={"code": "validation_error", "message": "Код обязателен."})
+    dup = db.scalar(
+        select(OrgUnit).where(OrgUnit.client_id == source.client_id, OrgUnit.code == code)
+    )
+    if dup:
+        raise HTTPException(status_code=409, detail={"code": "org_unit_code_exists", "message": "Код подразделения уже существует."})
+
+    copy_name = source.name if name_suffix in source.name else f"{source.name} ({name_suffix})"
+    copy_name = format_org_unit_name(copy_name, "section")
+    new_ou = OrgUnit(
+        id=new_id32(),
+        client_id=source.client_id,
+        code=code,
+        name=copy_name,
+        parent_id=parent_id,
+        unit_type="section",
+        is_active=source.is_active,
+        sort_order=source.sort_order + 1,
+        catalog_source_code=None,
+        is_detached=True,
+    )
+    db.add(new_ou)
+    db.flush()
+
+    positions_created = 0
+    for pos in db.scalars(select(Position).where(Position.org_unit_id == source.id)).all():
+        new_pos = Position(
+            id=new_id32(),
+            client_id=pos.client_id,
+            org_unit_id=new_ou.id,
+            code=pos.code,
+            name=pos.name,
+            grade=pos.grade,
+            is_active=pos.is_active,
+            position_catalog_code=pos.position_catalog_code,
+            function_code=pos.function_code,
+            position_level=pos.position_level,
+            is_managerial=pos.is_managerial,
+            is_detached=True,
+        )
+        db.add(new_pos)
+        positions_created += 1
+
+    db.flush()
+    return LocalCloneResult(org_unit=new_ou, positions_created=positions_created, sections_skipped=0)
 
 
 def delete_local_org_unit_leaf(db: Session, obj: OrgUnit) -> None:
@@ -279,10 +461,11 @@ def clone_template_department(db: Session, source: TemplateOrgUnitRow) -> Templa
         id=new_id32(),
         template_code=source.template_code,
         code=new_code,
-        name=f"{source.name} (Копия)",
+        name=format_org_unit_name(f"{source.name} (Копия)", "department"),
         parent_code=source.parent_code,
         unit_type="department",
         sort_order=source.sort_order + 1,
+        log_group=source.log_group,
     )
     db.add(row)
     db.flush()
@@ -302,13 +485,59 @@ def clone_template_department(db: Session, source: TemplateOrgUnitRow) -> Templa
                 template_code=source.template_code,
                 position_code=link.position_code,
                 dept_type_code=new_code,
-                is_primary=link.is_primary,
+                is_primary=False,
             )
         )
         links_created += 1
 
     db.flush()
     return TemplateCloneResult(row=row, position_links_created=links_created, sections_skipped=int(sections_skipped))
+
+
+def clone_template_section(db: Session, source: TemplateOrgUnitRow) -> TemplateCloneResult:
+    if source.unit_type != "section":
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "clone_source_not_section", "message": "Копировать можно только секцию (section)."},
+        )
+    assert_not_protected_code(source.code)
+
+    new_code = _unique_template_code(db, source.template_code, source.code)
+    row = TemplateOrgUnitRow(
+        id=new_id32(),
+        template_code=source.template_code,
+        code=new_code,
+        name=format_org_unit_name(f"{source.name} (Копия)", "section"),
+        parent_code=source.parent_code,
+        unit_type="section",
+        sort_order=source.sort_order + 1,
+        log_group=source.log_group,
+    )
+    db.add(row)
+    db.flush()
+
+    links_created = 0
+    for link in db.scalars(
+        select(PositionDeptType).where(
+            PositionDeptType.template_code == source.template_code,
+            PositionDeptType.dept_type_code == source.code,
+        )
+    ).all():
+        exists = db.get(PositionDeptType, (source.template_code, link.position_code, new_code))
+        if exists:
+            continue
+        db.add(
+            PositionDeptType(
+                template_code=source.template_code,
+                position_code=link.position_code,
+                dept_type_code=new_code,
+                is_primary=False,
+            )
+        )
+        links_created += 1
+
+    db.flush()
+    return TemplateCloneResult(row=row, position_links_created=links_created, sections_skipped=0)
 
 
 def template_delete_impact(db: Session, row: TemplateOrgUnitRow) -> dict:

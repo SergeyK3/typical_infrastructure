@@ -974,6 +974,78 @@ def migrate_competency_skill_definitions_template_scope() -> None:
         conn.commit()
 
 
+def migrate_template_org_units_log_group() -> None:
+    """Логическая группа (log_group) для отделений и секций типового шаблона оргструктуры."""
+    if not _table_exists("template_org_units"):
+        return
+    if _column_exists("template_org_units", "log_group"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text("ALTER TABLE template_org_units ADD COLUMN log_group VARCHAR(64) NULL")
+        )
+        conn.commit()
+
+
+def migrate_position_catalog_sort_order() -> None:
+    """Индекс сортировки для типовых должностей в глобальном каталоге."""
+    if not _table_exists("position_catalog"):
+        return
+    if _column_exists("position_catalog", "sort_order"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text("ALTER TABLE position_catalog ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        )
+        conn.commit()
+
+
+def migrate_org_unit_name_casing() -> None:
+    """Привести названия отделений (UPPER) и секций (Sentence case) в оргструктурах."""
+    from app.db import SessionLocal
+    from app.models import OrgUnit, TemplateOrgUnitRow
+    from app.org_unit_ops import format_org_unit_name
+    from sqlalchemy import select
+
+    if not _table_exists("org_units") and not _table_exists("template_org_units"):
+        return
+    db = SessionLocal()
+    try:
+        if _table_exists("template_org_units"):
+            for row in db.scalars(select(TemplateOrgUnitRow)).all():
+                formatted = format_org_unit_name(row.name, row.unit_type)
+                if formatted != row.name:
+                    row.name = formatted
+        if _table_exists("org_units"):
+            for row in db.scalars(select(OrgUnit)).all():
+                formatted = format_org_unit_name(row.name, row.unit_type)
+                if formatted != row.name:
+                    row.name = formatted
+        db.commit()
+    finally:
+        db.close()
+
+
+def migrate_normalize_position_dept_links() -> None:
+    """Одна primary-связь должность↔отделение в каждом шаблоне (убирает дубли вроде MAIN_NURSE×6)."""
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import EnterpriseTemplate
+    from app.position_deploy import normalize_template_position_dept_links
+
+    db = SessionLocal()
+    try:
+        codes = db.scalars(
+            select(EnterpriseTemplate.code).where(EnterpriseTemplate.is_active == True)
+        ).all()
+        for code in codes:
+            normalize_template_position_dept_links(db, code)
+        db.commit()
+    finally:
+        db.close()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -992,3 +1064,7 @@ def run_migrations() -> None:
     migrate_template_code_bundle()
     migrate_position_regulations_template_scope()
     migrate_competency_skill_definitions_template_scope()
+    migrate_template_org_units_log_group()
+    migrate_position_catalog_sort_order()
+    migrate_org_unit_name_casing()
+    migrate_normalize_position_dept_links()

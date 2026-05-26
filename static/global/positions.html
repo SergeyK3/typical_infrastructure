@@ -9,10 +9,17 @@
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
   <style>
-    .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
+    .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .list-toolbar label.table-sort-label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+    .list-toolbar label.table-sort-label select {
+      padding: 0.3rem 0.5rem; margin-left: 0.35rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 0.85rem;
+    }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
     .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
     .data-table th { color: var(--text-muted); font-weight: 500; }
+    .data-table th.num, .data-table td.num { text-align: right; width: 3.5rem; }
     .row-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; }
     .row-actions .btn { padding: 0.18rem 0.45rem; font-size: 0.75rem; }
     .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
@@ -20,12 +27,25 @@
     .modal.show { display: flex; }
     .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 520px; width: 100%; max-height: 92vh; overflow: auto; }
     .modal-content label { display: block; margin-top: 0.65rem; font-size: 0.82rem; color: var(--text-muted); }
+    .modal-content label.check-row {
+      display: flex; align-items: center; gap: 0.5rem; margin-top: 0.65rem; cursor: pointer;
+      font-size: 0.9rem; color: var(--text);
+    }
+    .modal-content label.check-row input[type=checkbox] { width: auto; margin: 0; padding: 0; flex-shrink: 0; }
     .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 0.45rem 0.65rem; margin-top: 0.2rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); box-sizing: border-box; font-size: 0.9rem; }
     .modal-content textarea { min-height: 56px; resize: vertical; }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.1rem; }
     .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
+    .modal-content input:disabled { opacity: 0.65; cursor: not-allowed; }
     .meta { color: var(--text-muted); font-size: 0.88rem; }
+    .modal-hint { margin: 0.2rem 0 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.35; }
+    .th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
+    .th-filter select {
+      margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%; padding: 0.35rem 0.45rem;
+      font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -63,11 +83,30 @@
           <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить</button>
         </div>
         <p id="globalEditTemplateHint" class="meta"></p>
+        <div class="list-toolbar">
+          <label class="table-sort-label">
+            Сортировка
+            <select id="listSort" title="Порядок строк в таблице">
+              <option value="sort_order">По индексу сортировки</option>
+              <option value="position_name_ru">По названию</option>
+              <option value="function_code">По функции</option>
+              <option value="position_code">По коду</option>
+            </select>
+          </label>
+        </div>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
           <table class="data-table">
-            <thead><tr><th>Код</th><th>Название</th><th>Функция</th><th>Уровень</th><th>Активна</th><th></th></tr></thead>
+            <thead><tr>
+              <th class="num">Сорт.</th>
+              <th>Код</th>
+              <th>Название</th>
+              <th><label class="th-filter">Функция<select id="filterFunc" title="Фильтр по функции"><option value="">— все —</option></select></label></th>
+              <th><label class="th-filter">Уровень<select id="filterLevel" title="Фильтр по уровню"><option value="">— все —</option></select></label></th>
+              <th>Активна</th>
+              <th></th>
+            </tr></thead>
             <tbody id="tbody"></tbody>
           </table>
         </div>
@@ -76,32 +115,37 @@
   </div>
 
   <div id="modal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" id="modalContent">
       <h3 id="modalTitle">Должность в каталоге</h3>
       <div id="modalErr" class="err hidden"></div>
-      <label>Код (не меняется после создания)</label>
-      <input type="text" id="fCode" />
-      <label>Название (RU)</label>
-      <input type="text" id="fNameRu" />
-      <label>Название (EN)</label>
-      <input type="text" id="fNameEn" />
-      <label>Код функции</label>
-      <input type="text" id="fFunc" placeholder="OPS" />
-      <label>Уровень</label>
+      <label for="fSort">Индекс сортировки</label>
+      <input type="number" id="fSort" value="0" step="1" />
+      <label for="fCode">Код должности</label>
+      <input type="text" id="fCode" autocomplete="off" />
+      <p class="modal-hint">Латиница, цифры и «_». При изменении кода обновятся связи в шаблоне.</p>
+      <label for="fNameRu">Название (RU)</label>
+      <input type="text" id="fNameRu" autocomplete="off" />
+      <label for="fNameEn">Название (EN)</label>
+      <input type="text" id="fNameEn" autocomplete="off" />
+      <label for="fFunc">Код функции</label>
+      <input type="text" id="fFunc" placeholder="OPS" autocomplete="off" />
+      <label for="fLevel">Уровень</label>
       <select id="fLevel">
-        <option value="SPEC">SPEC</option>
-        <option value="LEAD">LEAD</option>
-        <option value="MGR">MGR</option>
-        <option value="DIR">DIR</option>
+        <option value="SPEC">SPEC — специалист</option>
+        <option value="LEAD">LEAD — лид / старший</option>
+        <option value="MGR">MGR — менеджер</option>
+        <option value="HEAD">HEAD — руководитель подразделения</option>
+        <option value="DEPUTY">DEPUTY — заместитель</option>
+        <option value="DIR">DIR — директор</option>
       </select>
-      <label><input type="checkbox" id="fMgr" /> Руководящая</label>
-      <label>Семейство должностей</label>
-      <input type="text" id="fFamily" />
-      <label>Код регламента по умолчанию</label>
-      <input type="text" id="fReg" placeholder="опционально" />
-      <label>Заметки</label>
+      <label class="check-row"><input type="checkbox" id="fMgr" /> Руководящая</label>
+      <label for="fFamily">Семейство должностей</label>
+      <input type="text" id="fFamily" autocomplete="off" />
+      <label for="fReg">Код регламента по умолчанию</label>
+      <input type="text" id="fReg" placeholder="опционально" autocomplete="off" />
+      <label for="fNotes">Заметки</label>
       <textarea id="fNotes"></textarea>
-      <label><input type="checkbox" id="fActive" checked /> Активна</label>
+      <label class="check-row"><input type="checkbox" id="fActive" checked /> Активна</label>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="btnCancel">Отмена</button>
         <button type="button" class="btn btn-primary" id="btnSave">Сохранить</button>
@@ -111,6 +155,7 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const SORT_KEY = 'positionsListSort';
     function errText(j, fallback) {
       if (j && j.error) return j.error.message || j.error.code || fallback;
       return fallback;
@@ -129,13 +174,40 @@
       return j;
     }
     let items = [];
+    let allItems = [];
     let templateCode = window.GlobalTemplateContext.getGlobalEditTemplateCode('default');
+    let listSort = 'sort_order';
+
+    function syncLevelSelect(level) {
+      const sel = $('fLevel');
+      const value = (level || 'SPEC').trim() || 'SPEC';
+      if (![...sel.options].some((o) => o.value === value)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        sel.appendChild(opt);
+      }
+      sel.value = value;
+    }
+
+    function fillFilterSelect(selectId, values) {
+      const sel = $(selectId);
+      const prev = sel.value;
+      const sorted = [...values].sort((a, b) => a.localeCompare(b, 'ru'));
+      sel.innerHTML = '<option value="">— все —</option>' +
+        sorted.map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+      if (prev && sorted.includes(prev)) sel.value = prev;
+    }
 
     async function loadTemplatesList() {
       try {
         templateCode = await window.GlobalTemplateContext.bindTemplateSelect($('tplSelect'), {
           onChange: (code) => { templateCode = code; load(); },
         });
+        try {
+          listSort = sessionStorage.getItem(SORT_KEY) || listSort;
+          if ([...$('listSort').options].some((o) => o.value === listSort)) $('listSort').value = listSort;
+        } catch (_) {}
         await load();
       } catch (_) {}
     }
@@ -145,22 +217,46 @@
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    function listQueryParams() {
+      const p = new URLSearchParams();
+      p.set('template_code', templateCode);
+      p.set('limit', '500');
+      p.set('offset', '0');
+      p.set('sort_by', listSort);
+      p.set('sort_dir', 'asc');
+      const fn = $('filterFunc').value.trim();
+      const lv = $('filterLevel').value.trim();
+      if (fn) p.set('function_code', fn);
+      if (lv) p.set('position_level', lv);
+      return p.toString();
+    }
+
     async function load() {
       $('listErr').classList.add('hidden');
       try {
-        const data = await api('GET', '/position-catalog?limit=500&offset=0&' + tplQ());
+        const data = await api('GET', '/position-catalog?' + listQueryParams());
         items = data.items || [];
-        $('listMeta').textContent = 'Записей: ' + (data.total ?? items.length);
+        const dataAll = await api('GET', '/position-catalog?' + tplQ() + '&limit=500&offset=0&sort_by=sort_order&sort_dir=asc');
+        allItems = dataAll.items || [];
+        fillFilterSelect('filterFunc', [...new Set(allItems.map((r) => r.function_code).filter(Boolean))]);
+        fillFilterSelect('filterLevel', [...new Set(allItems.map((r) => r.position_level).filter(Boolean))]);
+        const parts = ['Записей: ' + (data.total ?? items.length)];
+        if ($('filterFunc').value) parts.push('функция: ' + $('filterFunc').value);
+        if ($('filterLevel').value) parts.push('уровень: ' + $('filterLevel').value);
+        $('listMeta').textContent = parts.join(' · ');
         const tb = $('tbody');
         tb.innerHTML = '';
         for (const row of items) {
           const tr = document.createElement('tr');
-          tr.innerHTML = '<td><code>' + escapeHtml(row.position_code) + '</code></td><td>' + escapeHtml(row.position_name_ru) + '</td><td>' + escapeHtml(row.function_code) + '</td><td>' + escapeHtml(row.position_level) + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
+          tr.innerHTML = '<td class="num">' + escapeHtml(String(row.sort_order ?? 0)) + '</td>' +
+            '<td><code>' + escapeHtml(row.position_code) + '</code></td><td>' + escapeHtml(row.position_name_ru) + '</td><td>' + escapeHtml(row.function_code) + '</td><td>' + escapeHtml(row.position_level) + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
             '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.position_code) + '">Изменить</button>' +
+            '<button type="button" class="btn btn-secondary btn-clone" data-code="' + escapeHtml(row.position_code) + '">Копировать</button>' +
             '<button type="button" class="btn btn-danger btn-del" data-code="' + escapeHtml(row.position_code) + '">Удалить</button></td>';
           tb.appendChild(tr);
         }
         tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.code));
+        tb.querySelectorAll('.btn-clone').forEach((b) => b.onclick = () => cloneRow(b.dataset.code));
         tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.code));
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -173,44 +269,56 @@
       editCode = null;
       $('modalTitle').textContent = 'Новая должность в каталоге';
       $('modalErr').classList.add('hidden');
+      $('fSort').value = '0';
       $('fCode').disabled = false;
       $('fCode').value = '';
       $('fNameRu').value = '';
       $('fNameEn').value = '';
       $('fFunc').value = '';
-      $('fLevel').value = 'SPEC';
+      syncLevelSelect('SPEC');
       $('fMgr').checked = false;
       $('fFamily').value = '';
       $('fReg').value = '';
       $('fNotes').value = '';
       $('fActive').checked = true;
       $('modal').classList.add('show');
+      $('fCode').focus();
     }
     function openEdit(code) {
-      const row = items.find((x) => x.position_code === code);
+      const row = items.find((x) => x.position_code === code) || allItems.find((x) => x.position_code === code);
       if (!row) return;
       editCode = code;
       $('modalTitle').textContent = 'Изменить запись каталога';
       $('modalErr').classList.add('hidden');
-      $('fCode').disabled = true;
+      $('fSort').value = String(row.sort_order ?? 0);
+      $('fCode').disabled = false;
       $('fCode').value = row.position_code;
       $('fNameRu').value = row.position_name_ru;
       $('fNameEn').value = row.position_name_en || '';
       $('fFunc').value = row.function_code;
-      $('fLevel').value = row.position_level || 'SPEC';
+      syncLevelSelect(row.position_level || 'SPEC');
       $('fMgr').checked = !!row.is_managerial;
       $('fFamily').value = row.position_family || '';
       $('fReg').value = row.default_regulation_code || '';
       $('fNotes').value = row.notes || '';
       $('fActive').checked = !!row.is_active;
       $('modal').classList.add('show');
+      $('fNameRu').focus();
     }
     function closeModal() { $('modal').classList.remove('show'); }
 
     $('btnLoad').onclick = load;
     $('btnAdd').onclick = openAdd;
     $('btnCancel').onclick = closeModal;
-    $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+    $('listSort').onchange = () => {
+      listSort = $('listSort').value;
+      try { sessionStorage.setItem(SORT_KEY, listSort); } catch (_) {}
+      load();
+    };
+    $('filterFunc').onchange = load;
+    $('filterLevel').onchange = load;
+    $('modalContent').addEventListener('mousedown', (e) => e.stopPropagation());
+    $('modalContent').addEventListener('click', (e) => e.stopPropagation());
 
     $('btnSave').onclick = async () => {
       $('modalErr').classList.add('hidden');
@@ -224,9 +332,13 @@
         default_regulation_code: $('fReg').value.trim() || null,
         notes: $('fNotes').value.trim() || null,
         is_active: $('fActive').checked,
+        sort_order: parseInt($('fSort').value, 10) || 0,
       };
       try {
         if (editCode) {
+          const code = $('fCode').value.trim();
+          if (!code) throw new Error('Укажите код должности');
+          if (code !== editCode) body.position_code = code;
           await api('PATCH', '/position-catalog/' + encodeURIComponent(editCode) + '?' + tplQ(), body);
         } else {
           const code = $('fCode').value.trim();
@@ -241,6 +353,23 @@
       }
     };
 
+    async function cloneRow(code) {
+      $('listErr').classList.add('hidden');
+      try {
+        const res = await api('POST', '/position-catalog/' + encodeURIComponent(code) + '/clone?' + tplQ());
+        alert(
+          'Создана должность «' + res.row.position_name_ru + '» (' + res.row.position_code + '). ' +
+          'Связей с подразделениями: ' + res.dept_links_created +
+          ', регламентов: ' + res.regulations_created +
+          ', KPI: ' + res.kpi_templates_created + '.'
+        );
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
     async function delRow(code) {
       if (!confirm('Удалить строку из глобального каталога?')) return;
       $('listErr').classList.add('hidden');
@@ -253,8 +382,9 @@
       }
     }
 
-    $('btnExportXlsx').onclick = () => {
-      window.location.href = '/api/position-catalog/export/excel?' + tplQ();
+    $('btnExportXlsx').onclick = (e) => {
+      e.preventDefault();
+      window.location.href = '/api/position-catalog/export/excel?' + listQueryParams();
     };
 
     loadTemplatesList();

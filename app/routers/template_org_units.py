@@ -12,11 +12,16 @@ from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import PositionDeptType, TemplateOrgUnitRow
 from app.org_unit_ops import (
+    LOG_GROUP_UNIT_TYPES,
     assert_not_protected_code,
     assert_valid_unit_type,
     clone_template_department,
+    clone_template_section,
     delete_template_org_unit_cascade,
     delete_template_org_unit_leaf,
+    normalize_template_log_group,
+    rename_template_org_unit_code,
+    format_org_unit_name,
     template_delete_impact,
 )
 from app.schemas import (
@@ -144,6 +149,7 @@ def export_template_org_units_excel(
         "name",
         "parent_code",
         "unit_type",
+        "log_group",
         "sort_order",
         "created_at",
         "updated_at",
@@ -156,6 +162,7 @@ def export_template_org_units_excel(
             r.name,
             r.parent_code,
             r.unit_type,
+            r.log_group,
             r.sort_order,
             r.created_at,
             r.updated_at,
@@ -171,6 +178,7 @@ def create_template_org_unit(
     body: TemplateOrgUnitCreate, db: Session = Depends(get_db)
 ) -> TemplateOrgUnitOut:
     assert_valid_unit_type(body.unit_type)
+    log_group = normalize_template_log_group(body.unit_type, body.log_group)
     dup = db.scalar(
         select(func.count())
         .select_from(TemplateOrgUnitRow)
@@ -186,10 +194,11 @@ def create_template_org_unit(
         id=new_id32(),
         template_code=body.template_code,
         code=body.code,
-        name=body.name,
+        name=format_org_unit_name(body.name, body.unit_type),
         parent_code=body.parent_code,
         unit_type=body.unit_type,
         sort_order=body.sort_order,
+        log_group=log_group,
     )
     db.add(row)
     db.commit()
@@ -202,7 +211,15 @@ def clone_template_org_unit(row_id: str, db: Session = Depends(get_db)) -> Templ
     row = db.get(TemplateOrgUnitRow, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="template_org_unit_not_found")
-    result = clone_template_department(db, row)
+    if row.unit_type == "department":
+        result = clone_template_department(db, row)
+    elif row.unit_type == "section":
+        result = clone_template_section(db, row)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "clone_not_supported", "message": "Копировать можно только отделение или секцию."},
+        )
     db.commit()
     db.refresh(result.row)
     return TemplateOrgUnitCloneOut(
@@ -220,6 +237,8 @@ def patch_template_org_unit(
     if not row:
         raise HTTPException(status_code=404, detail="template_org_unit_not_found")
     data = body.model_dump(exclude_unset=True)
+    if "code" in data and data["code"] is not None:
+        rename_template_org_unit_code(db, row, data.pop("code"))
     if "unit_type" in data and data["unit_type"] is not None:
         assert_valid_unit_type(data["unit_type"])
     new_parent = data.get("parent_code", row.parent_code)
@@ -227,6 +246,14 @@ def patch_template_org_unit(
         _ensure_parent_exists(db, row.template_code, new_parent)
     if new_parent == row.code:
         raise HTTPException(status_code=400, detail="template_org_parent_self")
+    unit_type = data.get("unit_type", row.unit_type)
+    if "log_group" in data:
+        data["log_group"] = normalize_template_log_group(unit_type, data["log_group"])
+    elif "unit_type" in data and unit_type not in LOG_GROUP_UNIT_TYPES:
+        data["log_group"] = None
+    if "name" in data or "unit_type" in data:
+        current_name = data.get("name", row.name)
+        data["name"] = format_org_unit_name(current_name, unit_type)
     for k, v in data.items():
         setattr(row, k, v)
     db.commit()

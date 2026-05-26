@@ -90,7 +90,9 @@ def test_clients_page_routes_creation_and_template_apply_through_onboarding():
 
     assert '<button type="button" class="btn btn-primary" id="btnCreate">Создать</button>' in clients_page
     assert '<a class="btn btn-secondary" href="/wizard"' not in clients_page
-    assert "window.location.href = '/wizard'" in clients_page
+    assert 'id="createTemplateCode"' in clients_page
+    assert 'id="applyTemplateCode"' in clients_page
+    assert "window.location.href = '/wizard?' + params.toString()" in clients_page
     assert "btn-apply-template" in clients_page
     assert "apply_existing" in clients_page
     assert "/onboarding-runs" in clients_page

@@ -57,6 +57,8 @@ class TemplateOrgUnitRow(Base, TimestampMixin):
     parent_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     unit_type: Mapped[str] = mapped_column(String(32), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: Логическая группа — только для отделений (unit_type=department).
+    log_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Client(Base, TimestampMixin):
@@ -117,6 +119,7 @@ class PositionCatalog(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     default_regulation_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class PositionDeptType(Base):

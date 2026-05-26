@@ -27,9 +27,27 @@ def _client_position_dept_pairs(db: Session, client_id: str) -> set[tuple[str, s
         if not ou:
             continue
         code = (pos.position_catalog_code or pos.code or "").strip()
-        if code:
-            out.add((code, ou.code.strip()))
+        dept = (ou.code or "").strip()
+        if code and dept:
+            out.add((code, dept))
     return out
+
+
+def _existing_regulation_keys(db: Session, client_id: str) -> tuple[set[str], set[str], set[tuple[str, str, str]]]:
+    codes: set[str] = set()
+    global_codes: set[str] = set()
+    slots: set[tuple[str, str, str]] = set()
+    for reg in db.scalars(
+        select(ClientPositionRegulation).where(ClientPositionRegulation.client_id == client_id)
+    ).all():
+        codes.add(reg.regulation_code.strip())
+        glob = (reg.global_regulation_code or "").strip()
+        if glob:
+            global_codes.add(glob)
+        slots.add(
+            (reg.position_code.strip(), reg.dept_type_code.strip(), reg.version_no.strip())
+        )
+    return codes, global_codes, slots
 
 
 def copy_global_regulation_to_client(
@@ -109,31 +127,117 @@ def copy_global_regulation_to_client(
     return obj
 
 
-def sync_global_regulations_to_client(db: Session, client_id: str) -> int:
+def _sync_missing_regulation_children(
+    db: Session, client_id: str, template_code: str
+) -> tuple[int, int]:
+    """Добавить отсутствующие KPI и инструкции в уже скопированные клиентские регламенты."""
+    kpis_added = 0
+    instructions_added = 0
+    for client_reg in db.scalars(
+        select(ClientPositionRegulation).where(ClientPositionRegulation.client_id == client_id)
+    ).all():
+        glob_code = (client_reg.global_regulation_code or client_reg.regulation_code).strip()
+        glob = db.scalar(
+            select(PositionRegulation).where(
+                PositionRegulation.template_code == template_code,
+                PositionRegulation.regulation_code == glob_code,
+            )
+        )
+        if not glob:
+            continue
+        existing_kpi = {
+            k.kpi_code.strip()
+            for k in db.scalars(
+                select(ClientRegulationKpi).where(
+                    ClientRegulationKpi.client_regulation_id == client_reg.id
+                )
+            ).all()
+        }
+        for k in db.scalars(
+            select(RegulationKpi).where(
+                RegulationKpi.template_code == template_code,
+                RegulationKpi.regulation_code == glob.regulation_code,
+            )
+        ).all():
+            if k.kpi_code.strip() in existing_kpi:
+                continue
+            db.add(
+                ClientRegulationKpi(
+                    id=new_id32(),
+                    client_regulation_id=client_reg.id,
+                    kpi_code=k.kpi_code,
+                    target_value=k.target_value,
+                    period_type=k.period_type,
+                    weight=k.weight,
+                    is_required=k.is_required,
+                )
+            )
+            existing_kpi.add(k.kpi_code.strip())
+            kpis_added += 1
+
+        existing_ins = {
+            i.instruction_code.strip()
+            for i in db.scalars(
+                select(ClientRegulationInstruction).where(
+                    ClientRegulationInstruction.client_regulation_id == client_reg.id
+                )
+            ).all()
+        }
+        for ins in db.scalars(
+            select(RegulationInstruction)
+            .where(
+                RegulationInstruction.template_code == template_code,
+                RegulationInstruction.regulation_code == glob.regulation_code,
+            )
+            .order_by(RegulationInstruction.sort_order)
+        ).all():
+            if ins.instruction_code.strip() in existing_ins:
+                continue
+            db.add(
+                ClientRegulationInstruction(
+                    id=new_id32(),
+                    client_regulation_id=client_reg.id,
+                    instruction_code=ins.instruction_code,
+                    instruction_name=ins.instruction_name,
+                    instruction_url=ins.instruction_url,
+                    is_required=ins.is_required,
+                    sort_order=ins.sort_order,
+                )
+            )
+            existing_ins.add(ins.instruction_code.strip())
+            instructions_added += 1
+    return kpis_added, instructions_added
+
+
+def sync_global_regulations_to_client(
+    db: Session, client_id: str, *, template_code: str | None = None
+) -> int:
     """
     Для каждого глобального регламента bundle клиента, чья пара (position_code, dept_type_code)
     покрыта должностями клиента на соответствующих подразделениях, создать клиентскую копию (если ещё нет).
     """
-    template_code = resolve_client_template_code(db, client_id)
+    tpl = template_code or resolve_client_template_code(db, client_id)
     pairs = _client_position_dept_pairs(db, client_id)
     if not pairs:
         return 0
-    existing_codes = set(
-        db.scalars(
-            select(ClientPositionRegulation.regulation_code).where(
-                ClientPositionRegulation.client_id == client_id
-            )
-        ).all()
-    )
+    existing_codes, existing_global_codes, existing_slots = _existing_regulation_keys(db, client_id)
     created = 0
     for glob in db.scalars(
-        select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+        select(PositionRegulation).where(PositionRegulation.template_code == tpl)
     ).all():
         if (glob.position_code, glob.dept_type_code) not in pairs:
             continue
-        if glob.regulation_code in existing_codes:
+        slot = (glob.position_code.strip(), glob.dept_type_code.strip(), glob.version_no.strip())
+        if (
+            glob.regulation_code in existing_codes
+            or glob.regulation_code in existing_global_codes
+            or slot in existing_slots
+        ):
             continue
         if copy_global_regulation_to_client(db, client_id, glob):
             created += 1
             existing_codes.add(glob.regulation_code)
+            existing_global_codes.add(glob.regulation_code)
+            existing_slots.add(slot)
+    _sync_missing_regulation_children(db, client_id, tpl)
     return created

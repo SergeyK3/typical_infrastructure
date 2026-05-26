@@ -176,8 +176,9 @@
 
     <!-- Step 1: Template -->
     <div class="panel" id="panel1" data-step="1">
-      <h2>1. Выбор шаблона</h2>
-      <label>Шаблон предприятия</label>
+      <h2>1. Типовая инфраструктура</h2>
+      <p class="wizard-help">Выберите набор оргструктуры, должностей, KPI и регламентов, который будет развёрнут для новой организации.</p>
+      <label>Шаблон предприятия *</label>
       <select id="templateCode">
         <option value="">— Загрузка... —</option>
       </select>
@@ -325,6 +326,37 @@
       if (errId) showErr(errId, hasError || '');
     }
 
+    function readWizardUrlParams() {
+      try {
+        const p = new URLSearchParams(globalThis.location.search);
+        return {
+          template_code: (p.get('template_code') || '').trim(),
+          client_code: (p.get('client_code') || '').trim(),
+          client_name: (p.get('client_name') || '').trim(),
+          mode: (p.get('mode') || '').trim(),
+        };
+      } catch (_) {
+        return { template_code: '', client_code: '', client_name: '', mode: '' };
+      }
+    }
+
+    function applyWizardUrlParams() {
+      const url = readWizardUrlParams();
+      if (url.template_code && $('templateCode').querySelector('option[value="' + url.template_code + '"]')) {
+        $('templateCode').value = url.template_code;
+      }
+      if (url.client_code) $('clientCode').value = url.client_code;
+      if (url.client_name) $('clientName').value = url.client_name;
+      if (url.mode === 'apply_existing') {
+        const modeInput = document.querySelector('input[name="onboardingMode"][value="apply_existing"]');
+        if (modeInput) modeInput.checked = true;
+      } else if (url.mode === 'create') {
+        const modeInput = document.querySelector('input[name="onboardingMode"][value="create"]');
+        if (modeInput) modeInput.checked = true;
+      }
+      if (url.template_code || url.client_code || url.client_name) saveDraft();
+    }
+
     function loadDraft() {
       try {
         const s = localStorage.getItem(DRAFT_KEY);
@@ -373,7 +405,7 @@
       let ok = true;
       if (step === 1) {
         const v = $('templateCode').value;
-        setInputError('templateCode', 'errTemplate', !v ? 'Выберите шаблон' : null);
+        setInputError('templateCode', 'errTemplate', !v ? 'Выберите типовую инфраструктуру' : null);
         ok = !!v;
       } else if (step === 2) {
         if (onboardingMode() === 'apply_existing') {
@@ -451,6 +483,11 @@
         sel.appendChild(opt);
       });
       loadDraft();
+      applyWizardUrlParams();
+      if (!sel.value && templates.length === 1) {
+        sel.value = templates[0].code;
+        saveDraft();
+      }
       if (sel.value) loadStructurePreview();
     }
 
@@ -477,9 +514,12 @@
       const id = t?.id || code;
       structurePreview = await fetchApi(`/enterprise-templates/${encodeURIComponent(id)}/structure-preview`);
       const ouList = $('orgUnitsPreview');
-      ouList.innerHTML = (structurePreview.org_units || []).map(
-        ou => `<li>${ou.code}: ${ou.name} (${ou.unit_type})</li>`
-      ).join('');
+      ouList.innerHTML = (structurePreview.org_units || []).map(function (ou) {
+        const nameHtml = ou.unit_type === 'department'
+          ? '<strong class="org-ou-name--department">' + ou.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</strong>'
+          : ou.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<li>' + ou.code + ': ' + nameHtml + ' (' + ou.unit_type + ')</li>';
+      }).join('');
       const posList = $('positionsPreview');
       posList.innerHTML = (structurePreview.positions || []).map(
         p => `<li>${p.code}: ${p.name} → ${p.org_unit_code}</li>`

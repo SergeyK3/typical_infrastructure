@@ -19,6 +19,7 @@
     }
     .org-tree .tree-item > .tree-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
     .org-tree .tree-item .code { font-weight: 600; color: var(--accent); }
+    .org-tree .org-ou-name--department { font-weight: 700; }
     .org-tree .tree-item .unit-type { font-size: 0.8rem; color: var(--text-muted); }
     .org-tree .tree-node { margin: 0.25rem 0 0 0; padding-left: 1rem; border-left: 2px solid var(--border); }
     .org-row-actions { position: relative; margin-left: auto; }
@@ -40,12 +41,50 @@
     .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 440px; width: 100%; max-height: 90vh; overflow: auto; }
     .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
     .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); box-sizing: border-box; }
+    .modal-check-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    .modal-check-list label {
+      display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer;
+      font-size: 0.9rem; color: var(--text);
+    }
+    .modal-check-list input[type=checkbox] {
+      width: auto; margin: 0; padding: 0; flex-shrink: 0;
+    }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; flex-wrap: wrap; }
     .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
+    .log-group-field.hidden { display: none !important; }
     .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.45); }
     .btn-danger:hover { border-color: var(--error); }
     .meta { color: var(--text-muted); font-size: 0.88rem; }
+    .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .view-toggle .btn { border-radius: 0; border: 0; margin: 0; }
+    .view-toggle .btn.active { background: var(--accent); color: #fff; }
+    .org-table-wrap { max-height: min(70vh, 720px); overflow: auto; }
+    .org-data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+    .org-data-table th, .org-data-table td { padding: 0.45rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .org-data-table th { color: var(--text-muted); font-weight: 500; font-size: 0.82rem; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+    .org-data-table th.num, .org-data-table td.num { text-align: right; width: 4rem; }
+    .org-data-table th:nth-child(1), .org-data-table td:nth-child(1) { width: 11%; }
+    .org-data-table th:nth-child(2), .org-data-table td:nth-child(2) { width: 22%; }
+    .org-data-table th:nth-child(3), .org-data-table td:nth-child(3) { width: 11%; }
+    .org-data-table th:nth-child(4), .org-data-table td:nth-child(4) { width: 10%; }
+    .org-data-table th:nth-child(5), .org-data-table td:nth-child(5) { width: 10%; }
+    .org-data-table th:nth-child(7), .org-data-table td:nth-child(7) { width: 8.5rem; min-width: 8.5rem; }
+    .org-data-table .td-code code, .org-data-table .td-parent code { color: var(--accent); font-size: 0.85em; }
+    .org-data-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .org-data-table .org-ou-name--department { font-weight: 700; }
+    .org-data-table .td-log-group { font-family: inherit; font-size: 0.85rem; color: var(--text-muted); }
+    .org-data-table .td-actions { overflow: visible; white-space: nowrap; }
+    .org-data-table .org-table-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.25rem; }
+    .org-data-table .org-act-btn { padding: 0.15rem 0.35rem; font-size: 0.72rem; line-height: 1.2; min-width: 0; }
+    .org-data-table .org-act-btn.btn-danger { padding: 0.15rem 0.35rem; }
+    .org-data-table tr:hover td { background: var(--surface-hover); }
+    .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .list-toolbar label.table-sort-label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+    .list-toolbar label.table-sort-label select {
+      padding: 0.3rem 0.5rem; margin-left: 0.35rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
@@ -86,8 +125,23 @@
         </div>
         <p id="globalEditTemplateHint" class="meta"></p>
         <p id="listMeta" class="meta"></p>
+        <div class="list-toolbar">
+          <span class="meta">Вид:</span>
+          <span class="view-toggle" role="group" aria-label="Вид списка узлов">
+            <button type="button" class="btn btn-secondary btn-sm active" id="btnViewTable" data-view="table">Таблица</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnViewTree" data-view="tree">Дерево</button>
+          </span>
+          <label id="tableSortWrap" class="table-sort-label">
+            Сортировка
+            <select id="orgTableSort" title="Порядок строк в таблице">
+              <option value="tree">Как в дереве</option>
+              <option value="sort_order">По сорт.</option>
+              <option value="log_group">По лог. группе</option>
+            </select>
+          </label>
+        </div>
         <div id="listErr" class="err hidden"></div>
-        <div id="orgTreeMount"></div>
+        <div id="orgViewMount"></div>
       </div>
     </main>
   </div>
@@ -109,6 +163,9 @@
         <option value="department" selected>department</option>
         <option value="section">section</option>
       </select>
+      <label id="lblLogGroup" class="log-group-field">Логическая группа <span class="meta">(log_group)</span></label>
+      <input type="text" id="fLogGroup" class="log-group-field" placeholder="например hr_ops" maxlength="64" />
+      <p id="logGroupHint" class="meta log-group-field">Для отделений и секций. Пустое значение — сброс группы.</p>
       <label>Порядок сортировки</label>
       <input type="number" id="fSort" value="0" />
       <div class="modal-actions">
@@ -149,10 +206,12 @@
       <input type="text" id="cloneName" placeholder="Розничная сеть" />
       <label>Префикс кодов (опционально)</label>
       <input type="text" id="clonePrefix" placeholder="retail_" />
-      <label><input type="checkbox" id="clonePos" checked /> Должности</label>
-      <label><input type="checkbox" id="cloneKpi" checked /> KPI</label>
-      <label><input type="checkbox" id="cloneReg" checked /> Регламенты</label>
-      <label><input type="checkbox" id="cloneSkills" checked /> Навыки (competency)</label>
+      <div class="modal-check-list">
+        <label><input type="checkbox" id="clonePos" checked /> Должности</label>
+        <label><input type="checkbox" id="cloneKpi" checked /> KPI</label>
+        <label><input type="checkbox" id="cloneReg" checked /> Регламенты</label>
+        <label><input type="checkbox" id="cloneSkills" checked /> Навыки (competency)</label>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="btnCloneCancel">Отмена</button>
         <button type="button" class="btn btn-primary" id="btnCloneConfirm">Клонировать</button>
@@ -160,12 +219,24 @@
     </div>
   </div>
 
-  <script src="/static/shared/org-tree.js?v=org-tree-20260525"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-20260526"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     let treeData = [];
     let flatRows = [];
     let templates = [];
+    const VIEW_KEY = 'template-org-view';
+    const TABLE_SORT_KEY = 'template-org-table-sort';
+    let orgViewMode = (function () {
+      try { return sessionStorage.getItem(VIEW_KEY) || 'table'; } catch (_) { return 'table'; }
+    })();
+    let orgTableSort = (function () {
+      try {
+        const v = sessionStorage.getItem(TABLE_SORT_KEY) || 'tree';
+        return v === 'sort_order' || v === 'log_group' ? v : 'tree';
+      } catch (_) { return 'tree'; }
+    })();
+    let editSnapshot = null;
 
     function errText(j, fallback) {
       if (j && j.error) return j.error.message || j.error.code || fallback;
@@ -257,6 +328,43 @@
       }
     }
 
+    function syncViewToggleUi() {
+      const isTable = orgViewMode === 'table';
+      $('btnViewTable').classList.toggle('active', isTable);
+      $('btnViewTree').classList.toggle('active', !isTable);
+      $('tableSortWrap').classList.toggle('hidden', !isTable);
+      $('orgTableSort').value = orgTableSort;
+    }
+
+    function getTableRows() {
+      return OrgTreeShared.sortOrgTableRows(flatRows, orgTableSort);
+    }
+
+    function setOrgViewMode(mode) {
+      orgViewMode = mode === 'tree' ? 'tree' : 'table';
+      try { sessionStorage.setItem(VIEW_KEY, orgViewMode); } catch (_) {}
+      syncViewToggleUi();
+      renderOrgView();
+    }
+
+    function renderOrgView() {
+      const mount = $('orgViewMount');
+      if (!treeData.length) {
+        mount.innerHTML = '<p class="meta">Нет узлов для этого шаблона.</p>';
+        return;
+      }
+      if (orgViewMode === 'tree') {
+        mount.innerHTML = '<div class="org-tree">' + OrgTreeShared.renderOrgTreeHtml({
+          nodes: treeData,
+          extraBadges: (n) => n.position_count ? '<span class="pos-badge">' + n.position_count + ' должн.</span>' : '',
+        }) + '</div>';
+        OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-tree'), handleAction);
+        return;
+      }
+      mount.innerHTML = OrgTreeShared.renderOrgTableHtml({ rows: getTableRows() });
+      OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-table-wrap'), handleAction);
+    }
+
     async function load() {
       $('listErr').classList.add('hidden');
       flatRows = [];
@@ -264,16 +372,8 @@
         treeData = await api('GET', '/template-org-units/tree?template_code=' + encodeURIComponent(tpl()));
         flattenTree(treeData, flatRows);
         await loadPreviewMeta();
-        const mount = $('orgTreeMount');
-        if (!treeData.length) {
-          mount.innerHTML = '<p class="meta">Нет узлов для этого шаблона.</p>';
-          return;
-        }
-        mount.innerHTML = '<div class="org-tree">' + OrgTreeShared.renderOrgTreeHtml({
-          nodes: treeData,
-          extraBadges: (n) => n.position_count ? '<span class="pos-badge">' + n.position_count + ' должн.</span>' : '',
-        }) + '</div>';
-        OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-tree'), handleAction);
+        syncViewToggleUi();
+        renderOrgView();
         updateTemplateActionButtons();
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -285,6 +385,18 @@
       return flatRows.find(r => r.id === id);
     }
 
+    function supportsLogGroup(unitType) {
+      return unitType === 'department' || unitType === 'section';
+    }
+
+    function syncLogGroupField() {
+      const show = supportsLogGroup($('fType').value);
+      document.querySelectorAll('.log-group-field').forEach((el) => {
+        el.classList.toggle('hidden', !show);
+      });
+      if (!show) $('fLogGroup').value = '';
+    }
+
     async function handleAction(action, node) {
       const row = findRow(node.id);
       if (!row) return;
@@ -293,6 +405,7 @@
         return;
       }
       if (action === 'add-section') {
+        editSnapshot = null;
         $('modalTitle').textContent = 'Новая секция';
         $('rowId').value = '';
         $('modalErr').classList.add('hidden');
@@ -302,14 +415,20 @@
         $('fParent').value = row.code;
         $('fType').value = 'section';
         $('fSort').value = '0';
+        $('fLogGroup').value = '';
+        syncLogGroupField();
         $('modal').classList.add('show');
         return;
       }
       if (action === 'clone') {
         try {
           const res = await api('POST', '/template-org-units/' + encodeURIComponent(row.id) + '/clone');
-          alert('Создано отделение «' + res.row.name + '». Связей должностей: ' + res.position_links_created +
-            '. Секции не копировались: ' + res.sections_skipped);
+          const kind = row.unit_type === 'section' ? 'секция' : 'отделение';
+          let msg = 'Создана ' + kind + ' «' + res.row.name + '». Связей должностей: ' + res.position_links_created;
+          if (row.unit_type === 'department') {
+            msg += '. Секции не копировались: ' + res.sections_skipped;
+          }
+          alert(msg);
           await load();
         } catch (e) {
           alert(e.message);
@@ -322,6 +441,7 @@
     }
 
     function openAdd() {
+      editSnapshot = null;
       $('modalTitle').textContent = 'Новый узел';
       $('rowId').value = '';
       $('modalErr').classList.add('hidden');
@@ -331,25 +451,41 @@
       $('fParent').value = '';
       $('fType').value = 'department';
       $('fSort').value = '0';
+      $('fLogGroup').value = '';
+      syncLogGroupField();
       $('modal').classList.add('show');
     }
 
     function openEdit(id) {
       const row = findRow(id);
       if (!row) return;
+      editSnapshot = {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        parent_code: row.parent_code || null,
+        unit_type: row.unit_type,
+        sort_order: Number(row.sort_order),
+        log_group: row.log_group || null,
+      };
       $('modalTitle').textContent = 'Изменить узел';
       $('rowId').value = row.id;
       $('modalErr').classList.add('hidden');
-      $('fCode').disabled = true;
+      $('fCode').disabled = row.code === 'company';
       $('fCode').value = row.code;
       $('fName').value = row.name;
       $('fParent').value = row.parent_code || '';
       $('fType').value = row.unit_type;
       $('fSort').value = String(row.sort_order);
+      $('fLogGroup').value = row.log_group || '';
+      syncLogGroupField();
       $('modal').classList.add('show');
     }
 
-    function closeModal() { $('modal').classList.remove('show'); }
+    function closeModal() {
+      $('modal').classList.remove('show');
+      editSnapshot = null;
+    }
 
     async function delRow(id, row) {
       const hasChildren = flatRows.some(r => r.parent_code === row.code);
@@ -378,36 +514,69 @@
       GTC.renderEditHint();
       load();
     }
+    $('btnViewTable').onclick = () => setOrgViewMode('table');
+    $('btnViewTree').onclick = () => setOrgViewMode('tree');
+    $('orgTableSort').onchange = () => {
+      orgTableSort = $('orgTableSort').value;
+      try { sessionStorage.setItem(TABLE_SORT_KEY, orgTableSort); } catch (_) {}
+      if (orgViewMode === 'table') renderOrgView();
+    };
     $('btnLoad').onclick = applyTemplateFromInputs;
     $('tplCode').onchange = applyTemplateFromInputs;
     $('btnAdd').onclick = openAdd;
     $('btnExportXlsx').onclick = () => {
       window.location.href = '/api/template-org-units/export/excel?template_code=' + encodeURIComponent(tpl());
     };
+    $('fType').onchange = syncLogGroupField;
     $('btnCancel').onclick = closeModal;
-    $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+
+    function buildSavePayload(forEdit) {
+      const unitType = $('fType').value;
+      const name = $('fName').value.trim();
+      const parentRaw = $('fParent').value.trim();
+      const parentCode = parentRaw ? parentRaw : null;
+      const sortOrder = parseInt($('fSort').value, 10) || 0;
+      const logGroup = supportsLogGroup(unitType) ? ($('fLogGroup').value.trim() || null) : null;
+      if (!forEdit) {
+        return {
+          name,
+          parent_code: parentCode,
+          unit_type: unitType,
+          sort_order: sortOrder,
+          log_group: logGroup,
+        };
+      }
+      const row = editSnapshot || findRow($('rowId').value);
+      if (!row) return { name, parent_code: parentCode, unit_type: unitType, sort_order: sortOrder, log_group: logGroup };
+      const payload = {};
+      if (name !== row.name) payload.name = name;
+      if (parentCode !== (row.parent_code || null)) payload.parent_code = parentCode;
+      if (unitType !== row.unit_type) payload.unit_type = unitType;
+      if (sortOrder !== Number(row.sort_order)) payload.sort_order = sortOrder;
+      if (supportsLogGroup(unitType) && logGroup !== (row.log_group || null)) payload.log_group = logGroup;
+      const newCode = $('fCode').value.trim();
+      if (newCode && !$('fCode').disabled && newCode !== row.code) payload.code = newCode;
+      return payload;
+    }
 
     $('btnSave').onclick = async () => {
       $('modalErr').classList.add('hidden');
       const id = $('rowId').value;
-      const parentRaw = $('fParent').value.trim();
-      const payload = {
-        name: $('fName').value.trim(),
-        parent_code: parentRaw ? parentRaw : null,
-        unit_type: $('fType').value,
-        sort_order: parseInt($('fSort').value, 10) || 0,
-      };
       try {
         if (id) {
+          const payload = buildSavePayload(true);
+          if (!Object.keys(payload).length) {
+            $('modalErr').textContent = 'Нет изменений для сохранения.';
+            $('modalErr').classList.remove('hidden');
+            return;
+          }
           await api('PATCH', '/template-org-units/' + encodeURIComponent(id), payload);
         } else {
+          const payload = buildSavePayload(false);
           await api('POST', '/template-org-units', {
             template_code: tpl(),
             code: $('fCode').value.trim(),
-            name: payload.name,
-            parent_code: payload.parent_code,
-            unit_type: payload.unit_type,
-            sort_order: payload.sort_order,
+            ...payload,
           });
         }
         closeModal();

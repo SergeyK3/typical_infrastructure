@@ -154,10 +154,11 @@ def clone_template_bundle(
                 id=new_id32(),
                 template_code=target_code,
                 code=new_node_code,
-                name=r.name,
+                name=format_org_unit_name(r.name, r.unit_type),
                 parent_code=parent,
                 unit_type=r.unit_type,
                 sort_order=r.sort_order,
+                log_group=r.log_group,
             )
         )
         counts.org_units += 1
@@ -259,6 +260,7 @@ def _clone_positions(
                     cat.default_regulation_code, code_prefix, code_map
                 ),
                 notes=cat.notes,
+                sort_order=cat.sort_order,
             )
         )
         counts.positions += 1

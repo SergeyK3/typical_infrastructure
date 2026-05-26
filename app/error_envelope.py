@@ -41,6 +41,7 @@ _ERROR_MESSAGES: dict[str, str] = {
     ),
     "employee_no_telegram": "У сотрудника не заполнено поле Telegram в карточке.",
     "telegram_bot_token_missing": "Не задан TELEGRAM_BOT_TOKEN в .env.",
+    "log_group_only_for_department": "Логическая группа задаётся только для отделений и секций.",
     "template_archived": "Шаблон в архиве; восстановите или удалите его.",
     "template_code_exists": "Шаблон с таким кодом уже существует.",
     "bundle_clone_conflict": (

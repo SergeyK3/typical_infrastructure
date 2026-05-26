@@ -58,7 +58,7 @@ def test_clone_local_department_with_positions(client):
     data = r.json()
     assert data["sections_skipped"] >= 0
     assert data["org_unit"]["code"].startswith("HR_COPY")
-    assert "Копия" in data["org_unit"]["name"]
+    assert "копия" in data["org_unit"]["name"].lower()
     assert data["positions_created"] == len(hr_positions)
 
     tree2 = client.get("/api/org-units/tree", params={"client_id": cid}).json()
@@ -159,7 +159,7 @@ def test_clone_global_template_department(client):
     assert r.status_code == 201, r.text
     data = r.json()
     assert data["row"]["code"].startswith("HR_COPY")
-    assert "Копия" in data["row"]["name"]
+    assert "копия" in data["row"]["name"].lower()
     assert data["position_links_created"] >= 0
 
     from sqlalchemy import select
@@ -183,6 +183,38 @@ def test_clone_global_template_department(client):
         assert len(copied) == len(orig)
     finally:
         db.close()
+
+
+def test_clone_global_template_section(client):
+    rows = client.get(
+        "/api/template-org-units", params={"template_code": "default", "limit": 200}
+    ).json()["items"]
+    section = next(r for r in rows if r["code"] == "HR_RECR_ONB" and r["unit_type"] == "section")
+
+    r = client.post(f"/api/template-org-units/{section['id']}/clone")
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["row"]["code"].startswith("HR_RECR_ONB_COPY")
+    assert data["row"]["unit_type"] == "section"
+    assert data["row"]["parent_code"] == "HR"
+    assert "копия" in data["row"]["name"].lower()
+    assert data["sections_skipped"] == 0
+
+
+def test_clone_local_section(client):
+    cid, tree = _setup_client(client)
+    hr = _find_unit(tree, "HR")
+    assert hr and hr.get("children")
+    section = hr["children"][0]
+    assert section["unit_type"] == "section"
+
+    r = client.post(f"/api/org-units/{section['id']}/clone", json={"name_suffix": "Копия"})
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["org_unit"]["code"].startswith(section["code"] + "_COPY")
+    assert data["org_unit"]["unit_type"] == "section"
+    assert "копия" in data["org_unit"]["name"].lower()
+    assert data["sections_skipped"] == 0
 
 
 def test_global_cascade_delete_template_department(client):

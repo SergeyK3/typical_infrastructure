@@ -29,6 +29,7 @@
     }
     .org-tree .tree-item > .tree-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
     .org-tree .tree-item .code { font-weight: 600; color: var(--accent); }
+    .org-tree .org-ou-name--department { font-weight: 700; }
     .org-tree .tree-item .unit-type { font-size: 0.8rem; color: var(--text-muted); }
     .org-tree .tree-node { margin: 0.25rem 0 0 0; padding-left: 1rem; border-left: 2px solid var(--border); }
     .org-row-actions { position: relative; margin-left: auto; }
@@ -45,6 +46,34 @@
     .org-ctx-item--danger { color: var(--error); }
     .org-drag-handle { cursor: grab; color: var(--text-muted); font-size: 0.85rem; user-select: none; padding: 0 0.25rem; }
     .tree-item.org-drag-over { outline: 1px dashed var(--accent); }
+    .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .view-toggle .btn { border-radius: 0; border: 0; margin: 0; }
+    .view-toggle .btn.active { background: var(--accent); color: #fff; }
+    .org-table-wrap { max-height: min(70vh, 720px); overflow: auto; }
+    .org-data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+    .org-data-table th, .org-data-table td { padding: 0.45rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .org-data-table th { color: var(--text-muted); font-weight: 500; font-size: 0.82rem; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+    .org-data-table th.num, .org-data-table td.num { text-align: right; width: 4rem; }
+    .org-data-table th:nth-child(1), .org-data-table td:nth-child(1) { width: 11%; }
+    .org-data-table th:nth-child(2), .org-data-table td:nth-child(2) { width: 22%; }
+    .org-data-table th:nth-child(3), .org-data-table td:nth-child(3) { width: 11%; }
+    .org-data-table th:nth-child(4), .org-data-table td:nth-child(4) { width: 10%; }
+    .org-data-table th:nth-child(5), .org-data-table td:nth-child(5) { width: 10%; }
+    .org-data-table th:nth-child(7), .org-data-table td:nth-child(7) { width: 8.5rem; min-width: 8.5rem; }
+    .org-data-table .td-code code, .org-data-table .td-parent code { color: var(--accent); font-size: 0.85em; }
+    .org-data-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .org-data-table .org-ou-name--department { font-weight: 700; }
+    .org-data-table .td-log-group { font-size: 0.85rem; color: var(--text-muted); }
+    .org-data-table .td-actions { overflow: visible; white-space: nowrap; }
+    .org-data-table .org-table-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.25rem; }
+    .org-data-table .org-act-btn { padding: 0.15rem 0.35rem; font-size: 0.72rem; line-height: 1.2; min-width: 0; }
+    .org-data-table tr:hover td { background: var(--surface-hover); }
+    .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.75rem 0 0.5rem 0; }
+    .list-toolbar label.table-sort-label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+    .list-toolbar label.table-sort-label select {
+      padding: 0.3rem 0.5rem; margin-left: 0.35rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 0.85rem;
+    }
     .err { font-size: 0.85rem; color: var(--error); margin-top: 0.5rem; }
     .row-actions { display: flex; gap: 0.35rem; }
     .row-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
@@ -188,7 +217,22 @@
         <button class="btn btn-secondary" id="btnSaveOrgTemplate" title="Сохранить текущую структуру как новый типовой шаблон">Сохранить как шаблон</button>
         <a class="btn btn-secondary" id="exportOrgXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
-      <div id="orgTree" style="margin-top: 1rem;"></div>
+      <p id="orgListMeta" class="meta" style="margin: 0.75rem 0 0;"></p>
+      <div class="list-toolbar">
+        <span class="meta">Вид:</span>
+        <span class="view-toggle" role="group" aria-label="Вид справочника подразделений">
+          <button type="button" class="btn btn-secondary btn-sm active" id="btnOrgViewTable" data-view="table">Таблица</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnOrgViewTree" data-view="tree">Дерево</button>
+        </span>
+        <label id="orgTableSortWrap" class="table-sort-label">
+          Сортировка
+          <select id="orgTableSort" title="Порядок строк в таблице">
+            <option value="tree">Как в дереве</option>
+            <option value="sort_order">По сорт.</option>
+          </select>
+        </label>
+      </div>
+      <div id="orgViewMount"></div>
     </div>
 
     <!-- Должности -->
@@ -867,7 +911,7 @@
 
   <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
-  <script src="/static/shared/org-tree.js?v=org-tree-20260525"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-20260526"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -879,6 +923,18 @@
     let clientId = '';
     let orgUnits = [];
     let orgTreeData = [];
+    let orgFlatRows = [];
+    const ORG_VIEW_KEY = 'workspace-local-org-view';
+    const ORG_TABLE_SORT_KEY = 'workspace-local-org-table-sort';
+    let orgViewMode = (function () {
+      try { return sessionStorage.getItem(ORG_VIEW_KEY) || 'table'; } catch (_) { return 'table'; }
+    })();
+    let orgTableSort = (function () {
+      try {
+        const v = sessionStorage.getItem(ORG_TABLE_SORT_KEY) || 'tree';
+        return v === 'sort_order' ? 'sort_order' : 'tree';
+      } catch (_) { return 'tree'; }
+    })();
     let roles = [];
     /** Полный список сотрудников (для должностей, аккаунтов, выпадающих списков). */
     let employeesAllCache = [];
@@ -1798,7 +1854,7 @@
         return;
       }
       if (action === 'clone') {
-        await cloneOrgUnit(full.id);
+        await cloneOrgUnit(full.id, full.unit_type);
         return;
       }
       if (action === 'delete') {
@@ -1806,7 +1862,7 @@
       }
     }
 
-    async function cloneOrgUnit(id) {
+    async function cloneOrgUnit(id, unitType) {
       try {
         const res = await fetchApi('/org-units/' + encodeURIComponent(id) + '/clone', {
           method: 'POST',
@@ -1815,29 +1871,36 @@
         });
         await loadOrgTree();
         await loadPositions();
-        showWorkspaceToast(
-          'Создано отделение «' + res.org_unit.name + '», должностей: ' + res.positions_created +
-            '. Секции не копировались (' + res.sections_skipped + ' пропущено).',
-          'success'
-        );
+        const kind = unitType === 'section' ? 'секция' : 'отделение';
+        let msg = 'Создана ' + kind + ' «' + res.org_unit.name + '», должностей: ' + res.positions_created;
+        if (unitType === 'department') {
+          msg += '. Секции не копировались (' + res.sections_skipped + ' пропущено).';
+        }
+        showWorkspaceToast(msg, 'success');
       } catch (e) {
         showWorkspaceToast(e.message, 'error');
       }
     }
 
     async function loadOrgTree() {
-      const el = document.getElementById('orgTree');
+      const mount = document.getElementById('orgViewMount');
+      const metaEl = document.getElementById('orgListMeta');
       try {
         orgTreeData = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
-        orgUnits = flattenTree(orgTreeData);
-        if (!orgTreeData.length) {
-          el.innerHTML = '<p class="meta">Нет подразделений</p>';
-          return;
+        orgUnits = [];
+        flattenTree(orgTreeData, orgUnits);
+        orgFlatRows = [];
+        flattenOrgTreeWithParent(orgTreeData, orgFlatRows, null);
+        if (metaEl) {
+          metaEl.textContent = orgUnits.length
+            ? 'Подразделений: ' + orgUnits.length
+            : '';
         }
-        el.innerHTML = '<div class="org-tree">' + renderTree(orgTreeData) + '</div>';
-        bindOrgTreeUi(el.querySelector('.org-tree'));
+        syncOrgViewToggleUi();
+        renderOrgView();
       } catch (e) {
-        el.innerHTML = '<p class="err">' + e.message + '</p>';
+        if (mount) mount.innerHTML = '<p class="err">' + e.message + '</p>';
+        if (metaEl) metaEl.textContent = '';
       }
     }
 
@@ -1847,6 +1910,56 @@
         flattenTree(n.children, out);
       }
       return out;
+    }
+
+    function flattenOrgTreeWithParent(nodes, out, parentCode) {
+      for (const n of nodes || []) {
+        out.push(Object.assign({}, n, { parent_code: parentCode ?? null }));
+        flattenOrgTreeWithParent(n.children || [], out, n.code);
+      }
+      return out;
+    }
+
+    function syncOrgViewToggleUi() {
+      const isTable = orgViewMode === 'table';
+      const btnTable = document.getElementById('btnOrgViewTable');
+      const btnTree = document.getElementById('btnOrgViewTree');
+      const sortWrap = document.getElementById('orgTableSortWrap');
+      const sortSel = document.getElementById('orgTableSort');
+      if (btnTable) btnTable.classList.toggle('active', isTable);
+      if (btnTree) btnTree.classList.toggle('active', !isTable);
+      if (sortWrap) sortWrap.classList.toggle('hidden', !isTable);
+      if (sortSel) sortSel.value = orgTableSort;
+    }
+
+    function setOrgViewMode(mode) {
+      orgViewMode = mode === 'tree' ? 'tree' : 'table';
+      try { sessionStorage.setItem(ORG_VIEW_KEY, orgViewMode); } catch (_) {}
+      syncOrgViewToggleUi();
+      renderOrgView();
+    }
+
+    function renderOrgView() {
+      const mount = document.getElementById('orgViewMount');
+      if (!mount) return;
+      if (!orgTreeData.length) {
+        mount.innerHTML = '<p class="meta">Нет подразделений</p>';
+        return;
+      }
+      if (orgViewMode === 'tree') {
+        mount.innerHTML = '<div class="org-tree">' + renderTree(orgTreeData) + '</div>';
+        bindOrgTreeUi(mount.querySelector('.org-tree'));
+        return;
+      }
+      const rows = window.OrgTreeShared
+        ? OrgTreeShared.sortOrgTableRows(orgFlatRows, orgTableSort)
+        : orgFlatRows;
+      mount.innerHTML = window.OrgTreeShared
+        ? OrgTreeShared.renderOrgTableHtml({ rows: rows })
+        : '<p class="meta">Нет модуля org-tree</p>';
+      if (window.OrgTreeShared) {
+        OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-table-wrap'), handleOrgTreeAction);
+      }
     }
 
     function fillOrgSelect(sel, excludeId) {
@@ -1906,7 +2019,7 @@
             'success'
           );
         }
-        document.getElementById('orgTree')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document.getElementById('orgViewMount')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } catch (e) {
         showWorkspaceToast('Ошибка развёртывания: ' + e.message, 'error');
       } finally {
@@ -1916,6 +2029,14 @@
     }
     document.getElementById('btnDeployTemplate').onclick = () => deployTemplate(document.getElementById('btnDeployTemplate'));
     document.getElementById('btnDeployTemplatePos').onclick = () => deployTemplate(document.getElementById('btnDeployTemplatePos'));
+
+    document.getElementById('btnOrgViewTable').onclick = () => setOrgViewMode('table');
+    document.getElementById('btnOrgViewTree').onclick = () => setOrgViewMode('tree');
+    document.getElementById('orgTableSort').onchange = () => {
+      orgTableSort = document.getElementById('orgTableSort').value === 'sort_order' ? 'sort_order' : 'tree';
+      try { sessionStorage.setItem(ORG_TABLE_SORT_KEY, orgTableSort); } catch (_) {}
+      if (orgViewMode === 'table') renderOrgView();
+    };
 
     document.getElementById('btnAddOrg').onclick = () => {
       fillOrgSelect(document.getElementById('orgParent'));

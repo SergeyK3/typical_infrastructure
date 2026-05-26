@@ -28,6 +28,7 @@
     .modal-content h3 { margin: 0 0 1rem 0; font-size: 1.1rem; }
     .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
     .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
+    .modal-hint { margin: 0.35rem 0 0 0; font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
     .modal-actions .btn { flex: 1; }
     .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
@@ -78,20 +79,35 @@
   <div id="createModal" class="modal">
     <div class="modal-content">
       <h3>Создать организацию</h3>
-      <label>Код</label>
-      <input type="text" id="createCode" maxlength="64" placeholder="Например: myorg" />
-      <label>Название</label>
-      <input type="text" id="createName" maxlength="256" placeholder="Название организации" />
-      <label>БИН</label>
-      <input type="text" id="createBin" maxlength="32" placeholder="Необязательно" />
-      <label>Статус</label>
-      <select id="createStatus">
-        <option value="active">active</option>
-        <option value="inactive">inactive</option>
+      <label>Типовая инфраструктура *</label>
+      <select id="createTemplateCode">
+        <option value="">— Загрузка... —</option>
       </select>
+      <p class="modal-hint">Набор оргструктуры, должностей, KPI и регламентов, который будет развёрнут для организации.</p>
+      <label>Код *</label>
+      <input type="text" id="createCode" maxlength="64" placeholder="Например: myorg" />
+      <label>Название *</label>
+      <input type="text" id="createName" maxlength="256" placeholder="Название организации" />
+      <p class="modal-hint">Далее откроется мастер onboarding: предпросмотр структуры, данные администратора и запуск развёртывания.</p>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="btnCancelCreate">Отмена</button>
-        <button type="button" class="btn btn-primary" id="btnSaveCreate">Создать</button>
+        <button type="button" class="btn btn-primary" id="btnSaveCreate">Продолжить в мастере</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="applyTemplateModal" class="modal">
+    <div class="modal-content">
+      <h3>Применить типовую инфраструктуру</h3>
+      <input type="hidden" id="applyTemplateClientId" />
+      <label>Шаблон *</label>
+      <select id="applyTemplateCode">
+        <option value="">— Загрузка... —</option>
+      </select>
+      <p class="modal-hint">Будут добавлены отсутствующие подразделения, должности и регламенты. Существующие данные не удаляются.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancelApplyTemplate">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnApplyTemplateDo">Применить</button>
       </div>
     </div>
   </div>
@@ -118,6 +134,7 @@
     </div>
   </div>
 
+  <script src="/static/shared/global-template-context.js"></script>
   <script>
     const API = '/api';
     async function fetchApi(path, opts = {}) {
@@ -152,7 +169,7 @@
             <div class="card-body">
               <a href="/client/${c.id}" target="_blank" rel="noopener noreferrer">
                 <h3>${c.name}</h3>
-                <div class="meta">Код: ${c.code} · Статус: ${c.status || 'active'} · Войти в организацию →</div>
+                <div class="meta">Код: ${c.code} · Статус: ${c.status || 'active'}${c.template_code ? ' · Инфраструктура: ' + c.template_code : ''} · Войти в организацию →</div>
               </a>
             </div>
             <div class="card-actions">
@@ -163,7 +180,7 @@
           </div>
         `).join('');
         list.querySelectorAll('.btn-apply-template').forEach(btn => {
-          btn.addEventListener('click', (e) => { e.stopPropagation(); applyTemplateToClient(btn.dataset.id); });
+          btn.addEventListener('click', (e) => { e.stopPropagation(); openApplyTemplateModal(btn.dataset.id); });
         });
         list.querySelectorAll('.btn-edit').forEach(btn => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.id); });
@@ -212,53 +229,85 @@
         alert('Ошибка: ' + e.message);
       }
     }
+    let applyTemplateClientId = null;
+
+    async function loadTemplateSelect(selectEl, preferredCode) {
+      const GTC = window.GlobalTemplateContext;
+      if (preferredCode) {
+        GTC.setGlobalEditTemplateCode(preferredCode);
+      }
+      await GTC.bindTemplateSelect(selectEl, { fallback: 'default', includeArchived: false });
+      if (preferredCode && selectEl.querySelector('option[value="' + preferredCode + '"]')) {
+        selectEl.value = preferredCode;
+      }
+    }
+
     function openCreateModal() {
       document.getElementById('createCode').value = '';
       document.getElementById('createName').value = '';
-      document.getElementById('createBin').value = '';
-      document.getElementById('createStatus').value = 'active';
       document.getElementById('createModal').classList.add('show');
+      loadTemplateSelect(document.getElementById('createTemplateCode')).catch((e) => {
+        alert('Не удалось загрузить список шаблонов: ' + e.message);
+      });
     }
     function closeCreateModal() {
       document.getElementById('createModal').classList.remove('show');
     }
-    async function saveCreate() {
-      const payload = {
-        code: document.getElementById('createCode').value.trim(),
-        name: document.getElementById('createName').value.trim(),
-        bin: document.getElementById('createBin').value.trim() || null,
-        status: document.getElementById('createStatus').value,
-      };
-      if (!payload.code || !payload.name) {
+    function saveCreate() {
+      const templateCode = document.getElementById('createTemplateCode').value.trim();
+      const code = document.getElementById('createCode').value.trim();
+      const name = document.getElementById('createName').value.trim();
+      if (!templateCode) {
+        alert('Выберите типовую инфраструктуру');
+        return;
+      }
+      if (!code || !name) {
         alert('Код и название обязательны');
         return;
       }
-      try {
-        await fetchApi('/clients', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        closeCreateModal();
-        loadClients();
-      } catch (e) {
-        alert('Ошибка: ' + e.message);
-      }
+      window.GlobalTemplateContext.setGlobalEditTemplateCode(templateCode);
+      const params = new URLSearchParams({
+        template_code: templateCode,
+        client_code: code,
+        client_name: name,
+        mode: 'create',
+      });
+      window.location.href = '/wizard?' + params.toString();
     }
-    async function applyTemplateToClient(clientId) {
-      if (!confirm('Применить шаблон onboarding к существующей организации? Будут добавлены отсутствующие локальные справочники без удаления текущих данных.')) return;
+    function openApplyTemplateModal(clientId) {
+      applyTemplateClientId = clientId;
+      document.getElementById('applyTemplateClientId').value = clientId;
+      document.getElementById('applyTemplateModal').classList.add('show');
+      fetchApi('/clients/' + clientId).then((c) => {
+        return loadTemplateSelect(document.getElementById('applyTemplateCode'), c.template_code || undefined);
+      }).catch((e) => {
+        alert('Не удалось загрузить данные: ' + e.message);
+      });
+    }
+    function closeApplyTemplateModal() {
+      document.getElementById('applyTemplateModal').classList.remove('show');
+      applyTemplateClientId = null;
+    }
+    async function applyTemplateToClient() {
+      const clientId = applyTemplateClientId || document.getElementById('applyTemplateClientId').value;
+      const templateCode = document.getElementById('applyTemplateCode').value.trim();
+      if (!clientId || !templateCode) {
+        alert('Выберите шаблон');
+        return;
+      }
       try {
         const res = await fetchApi('/onboarding-runs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'apply_existing',
-            template_code: 'default',
+            template_code: templateCode,
             existing_client_id: clientId,
             idempotency_key: 'clients-apply-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
           }),
         });
-        alert('Шаблон применён. Статус onboarding: ' + (res.status || 'completed'));
+        closeApplyTemplateModal();
+        alert('Шаблон «' + templateCode + '» применён. Статус onboarding: ' + (res.status || 'completed'));
         loadClients();
       } catch (e) {
         alert('Ошибка onboarding: ' + e.message);
@@ -273,11 +322,16 @@
         alert('Ошибка: ' + e.message);
       }
     }
-    document.getElementById('btnCreate').onclick = () => { window.location.href = '/wizard'; };
+    document.getElementById('btnCreate').onclick = openCreateModal;
     document.getElementById('btnCancelCreate').onclick = closeCreateModal;
     document.getElementById('btnSaveCreate').onclick = saveCreate;
     document.getElementById('createModal').addEventListener('click', (e) => {
       if (e.target.id === 'createModal') closeCreateModal();
+    });
+    document.getElementById('btnCancelApplyTemplate').onclick = closeApplyTemplateModal;
+    document.getElementById('btnApplyTemplateDo').onclick = applyTemplateToClient;
+    document.getElementById('applyTemplateModal').addEventListener('click', (e) => {
+      if (e.target.id === 'applyTemplateModal') closeApplyTemplateModal();
     });
     document.getElementById('btnCancelEdit').onclick = closeEditModal;
     document.getElementById('btnSaveEdit').onclick = saveEdit;

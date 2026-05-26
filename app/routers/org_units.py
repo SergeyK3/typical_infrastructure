@@ -9,14 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import Client, Employee, EnterpriseTemplate, OrgUnit, Position
-from app.models import PositionCatalog, PositionDeptType
-from app.client_catalog_sync import sync_global_regulations_to_client
+from app.models import Client, Employee, EnterpriseTemplate, OrgUnit
+from app.client_template_apply import apply_template_to_client
 from app.org_unit_ops import (
     assert_valid_unit_type,
     clone_local_department,
+    clone_local_section,
     delete_local_org_unit_cascade,
     delete_local_org_unit_leaf,
+    format_org_unit_name,
 )
 from app.template_org_resolve import resolve_template_structure
 from app.schemas import (
@@ -213,7 +214,7 @@ def add_org_unit_from_template(
         id=new_id32(),
         client_id=body.client_id,
         code=spec["code"],
-        name=spec["name"],
+        name=format_org_unit_name(spec["name"], spec["unit_type"]),
         parent_id=parent_id,
         unit_type=spec["unit_type"],
         is_active=True,
@@ -241,72 +242,15 @@ def deploy_template(
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
     template_code = _resolve_client_template_code(db, client_id)
-    structure = resolve_template_structure(db, template_code)
-    ids_by_code: dict[str, str] = {}
-    existing = {r.code: r for r in db.scalars(select(OrgUnit).where(OrgUnit.client_id == client_id)).all()}
-    for spec in structure:
-        if spec["code"] in existing:
-            ids_by_code[spec["code"]] = existing[spec["code"]].id
-            continue
-        parent_id = ids_by_code.get(spec["parent_code"]) if spec.get("parent_code") else None
-        obj = OrgUnit(
-            id=new_id32(),
-            client_id=client_id,
-            code=spec["code"],
-            name=spec["name"],
-            parent_id=parent_id,
-            unit_type=spec["unit_type"],
-            is_active=True,
-            sort_order=int(spec.get("sort_order", 0)),
-            catalog_source_code=spec["code"],
-            is_detached=True,
-        )
-        db.add(obj)
-        db.flush()
-        ids_by_code[spec["code"]] = obj.id
-    if include_positions:
-        tpl_code = _resolve_client_template_code(db, client_id)
-        catalog_by_code = {
-            r.position_code: r
-            for r in db.scalars(
-                select(PositionCatalog).where(
-                    PositionCatalog.template_code == tpl_code,
-                    PositionCatalog.is_active == True,
-                )
-            ).all()
-        }
-        dept_links = db.scalars(
-            select(PositionDeptType).where(PositionDeptType.template_code == tpl_code)
-        ).all()
-        existing_pos = {(p.code, p.org_unit_id): p for p in db.scalars(select(Position).where(Position.client_id == client_id)).all()}
-        for link in dept_links:
-            catalog = catalog_by_code.get(link.position_code)
-            if not catalog:
-                continue
-            ou_id = ids_by_code.get(link.dept_type_code)
-            if not ou_id:
-                continue
-            if (catalog.position_code, ou_id) in existing_pos:
-                continue
-            pos = Position(
-                id=new_id32(),
-                client_id=client_id,
-                org_unit_id=ou_id,
-                code=catalog.position_code,
-                name=catalog.position_name_ru,
-                grade=None,
-                is_active=True,
-                position_catalog_code=catalog.position_code,
-                function_code=catalog.function_code,
-                position_level=catalog.position_level,
-                is_managerial=catalog.is_managerial,
-                is_detached=True,
-            )
-            db.add(pos)
-            db.flush()
-            existing_pos[(catalog.position_code, ou_id)] = pos
-    if include_regulations:
-        sync_global_regulations_to_client(db, client_id)
+    apply_template_to_client(
+        db,
+        client_id,
+        template_code,
+        include_org_units=True,
+        include_positions=include_positions,
+        include_regulations=include_regulations,
+        update_client_template=False,
+    )
     db.commit()
     rows = db.scalars(
         select(OrgUnit).where(OrgUnit.client_id == client_id).order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc())
@@ -327,7 +271,7 @@ def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> Or
         id=payload.id or new_id32(),
         client_id=payload.client_id,
         code=payload.code,
-        name=payload.name,
+        name=format_org_unit_name(payload.name, payload.unit_type),
         parent_id=payload.parent_id,
         unit_type=payload.unit_type,
         is_active=payload.is_active,
@@ -349,6 +293,9 @@ def patch_org_unit(unit_id: str, payload: OrgUnitPatch, db: Session = Depends(ge
     data = payload.model_dump(exclude_unset=True)
     if "parent_id" in data:
         _assert_parent_ok(db, obj.client_id, unit_id, data["parent_id"])
+    unit_type = data.get("unit_type", obj.unit_type)
+    if "name" in data or "unit_type" in data:
+        data["name"] = format_org_unit_name(data.get("name", obj.name), unit_type)
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
@@ -363,13 +310,26 @@ def clone_org_unit(
     obj = _get_unit(db, unit_id)
     if not obj:
         raise HTTPException(status_code=404, detail="org_unit_not_found")
-    result = clone_local_department(
-        db,
-        obj,
-        name_suffix=body.name_suffix,
-        new_code=body.new_code,
-        target_parent_id=body.target_parent_id,
-    )
+    if obj.unit_type == "department":
+        result = clone_local_department(
+            db,
+            obj,
+            name_suffix=body.name_suffix,
+            new_code=body.new_code,
+            target_parent_id=body.target_parent_id,
+        )
+    elif obj.unit_type == "section":
+        result = clone_local_section(
+            db,
+            obj,
+            name_suffix=body.name_suffix,
+            new_code=body.new_code,
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "clone_not_supported", "message": "Копировать можно только отделение или секцию."},
+        )
     db.commit()
     db.refresh(result.org_unit)
     return OrgUnitCloneOut(
@@ -457,7 +417,7 @@ def bulk_upsert_org_units(items: list[OrgUnitCreate], db: Session = Depends(get_
                 raise HTTPException(status_code=400, detail="client_mismatch")
             _assert_parent_ok(db, it.client_id, obj.id, it.parent_id)
             obj.code = it.code
-            obj.name = it.name
+            obj.name = format_org_unit_name(it.name, it.unit_type)
             obj.parent_id = it.parent_id
             obj.unit_type = it.unit_type
             obj.is_active = it.is_active
@@ -469,7 +429,7 @@ def bulk_upsert_org_units(items: list[OrgUnitCreate], db: Session = Depends(get_
                 id=it.id or new_id32(),
                 client_id=it.client_id,
                 code=it.code,
-                name=it.name,
+                name=format_org_unit_name(it.name, it.unit_type),
                 parent_id=it.parent_id,
                 unit_type=it.unit_type,
                 is_active=it.is_active,

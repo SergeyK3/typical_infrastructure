@@ -8,11 +8,32 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Account, AccountRole, Client, Employee, OrgUnit, Position
+from app.models import Account, AccountRole, Client, Employee, EnterpriseTemplate, OrgUnit, Position
 from app.schemas import ClientCreate, ClientOut, ClientPatch, ListEnvelope
 from app.utils import new_id32
 
 router = APIRouter(prefix="/clients", tags=["clients"])
+
+
+def _resolve_template_id(db: Session, template_code: str) -> str:
+    code = template_code.strip()
+    tpl = db.scalar(
+        select(EnterpriseTemplate).where(
+            EnterpriseTemplate.code == code,
+            EnterpriseTemplate.is_active == True,
+        )
+    )
+    if not tpl:
+        raise HTTPException(status_code=404, detail="template_not_found")
+    return tpl.id
+
+
+def _client_out(db: Session, obj: Client) -> ClientOut:
+    template_code: str | None = None
+    if obj.template_id:
+        tpl = db.get(EnterpriseTemplate, obj.template_id)
+        template_code = tpl.code if tpl else None
+    return ClientOut.model_validate(obj).model_copy(update={"template_code": template_code})
 
 
 @router.get("", response_model=ListEnvelope[ClientOut])
@@ -24,7 +45,7 @@ def list_clients(
     total = db.scalar(select(func.count()).select_from(Client)) or 0
     rows = db.scalars(select(Client).order_by(Client.created_at.desc()).limit(limit).offset(offset)).all()
     return ListEnvelope[ClientOut](
-        items=[ClientOut.model_validate(r) for r in rows],
+        items=[_client_out(db, r) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -36,23 +57,26 @@ def get_client(client_id: str, db: Session = Depends(get_db)) -> ClientOut:
     obj = db.get(Client, client_id)
     if not obj:
         raise HTTPException(status_code=404, detail="client_not_found")
-    return ClientOut.model_validate(obj)
+    return _client_out(db, obj)
 
 
 @router.post("", response_model=ClientOut)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db)) -> ClientOut:
+    template_id = payload.template_id
+    if payload.template_code and not template_id:
+        template_id = _resolve_template_id(db, payload.template_code)
     obj = Client(
         id=payload.id or new_id32(),
         code=payload.code,
         name=payload.name,
         bin=payload.bin,
         status=payload.status,
-        template_id=payload.template_id,
+        template_id=template_id,
     )
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return ClientOut.model_validate(obj)
+    return _client_out(db, obj)
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
@@ -61,11 +85,14 @@ def patch_client(client_id: str, payload: ClientPatch, db: Session = Depends(get
     if not obj:
         raise HTTPException(status_code=404, detail="client_not_found")
     data = payload.model_dump(exclude_unset=True)
+    template_code = data.pop("template_code", None)
+    if template_code is not None:
+        data["template_id"] = _resolve_template_id(db, template_code)
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
-    return ClientOut.model_validate(obj)
+    return _client_out(db, obj)
 
 
 @router.delete("/{client_id}", status_code=204)
@@ -88,4 +115,3 @@ def delete_client(client_id: str, db: Session = Depends(get_db)) -> Response:
     db.delete(obj)
     db.commit()
     return Response(status_code=204)
-

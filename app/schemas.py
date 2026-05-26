@@ -30,6 +30,7 @@ class ClientBase(BaseModel):
 
 class ClientCreate(ClientBase):
     id: str | None = None
+    template_code: str | None = Field(default=None, max_length=64)
 
 
 class ClientPatch(BaseModel):
@@ -38,11 +39,13 @@ class ClientPatch(BaseModel):
     bin: str | None = None
     status: str | None = None
     template_id: str | None = None
+    template_code: str | None = Field(default=None, max_length=64)
 
 
 class ClientOut(ClientBase):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    template_code: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -157,6 +160,7 @@ class PositionCatalogBase(BaseModel):
     is_active: bool = True
     default_regulation_code: str | None = None
     notes: str | None = None
+    sort_order: int = 0
 
 
 class PositionCatalogOut(PositionCatalogBase):
@@ -177,6 +181,7 @@ class PositionCatalogCreate(PositionCatalogBase):
 
 
 class PositionCatalogPatch(BaseModel):
+    position_code: str | None = Field(default=None, min_length=1, max_length=64)
     position_name_ru: str | None = None
     position_name_en: str | None = None
     function_code: str | None = None
@@ -186,6 +191,15 @@ class PositionCatalogPatch(BaseModel):
     is_active: bool | None = None
     default_regulation_code: str | None = None
     notes: str | None = None
+    sort_order: int | None = None
+
+
+class PositionCatalogCloneOut(BaseModel):
+    row: PositionCatalogOut
+    dept_links_created: int
+    regulations_created: int
+    kpi_templates_created: int
+    competency_matrix_rows_created: int = 0
 
 
 class TemplateOrgUnitOut(BaseModel):
@@ -198,6 +212,7 @@ class TemplateOrgUnitOut(BaseModel):
     parent_code: str | None
     unit_type: str
     sort_order: int
+    log_group: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -209,13 +224,24 @@ class TemplateOrgUnitCreate(BaseModel):
     parent_code: str | None = Field(default=None, max_length=64)
     unit_type: str = Field(min_length=1, max_length=32)
     sort_order: int = 0
+    log_group: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Логическая группа; допустимо для unit_type=department или section",
+    )
 
 
 class TemplateOrgUnitPatch(BaseModel):
+    code: str | None = Field(default=None, min_length=1, max_length=64)
     name: str | None = Field(default=None, min_length=1, max_length=256)
     parent_code: str | None = Field(default=None, max_length=64)
     unit_type: str | None = Field(default=None, min_length=1, max_length=32)
     sort_order: int | None = None
+    log_group: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Логическая группа; допустимо для unit_type=department или section",
+    )
 
 
 class TemplateOrgUnitNode(TemplateOrgUnitOut):

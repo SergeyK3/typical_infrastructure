@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.client_catalog_sync import sync_global_regulations_to_client
-from app.models import Account, AccountRole, Client, Employee, EnterpriseTemplate, OnboardingRun, OnboardingStep, OrgUnit, Position, Role
+from app.client_template_apply import apply_template_to_client
+from app.models import Account, AccountRole, Client, Employee, EnterpriseTemplate, OnboardingRun, OnboardingStep, OrgUnit, Role
 from app.onboarding_constants import (
     ERROR_BOOTSTRAP_FAILED,
     ERROR_CLIENT_CODE_ALREADY_EXISTS,
@@ -33,8 +33,7 @@ from app.onboarding_constants import (
     STEP_STATUS_RUNNING,
     STEP_STATUS_SKIPPED,
 )
-from app.org_structures import ADMIN_ORG_UNIT_CODE, list_positions_from_position_catalog
-from app.template_org_resolve import resolve_template_structure
+from app.org_structures import ADMIN_ORG_UNIT_CODE
 from app.utils import generate_temp_password, hash_password, new_id32
 
 
@@ -264,96 +263,46 @@ def run_onboarding_bootstrap(
             _finish_step(steps["create_client"], STEP_STATUS_COMPLETED, detail=f"client_id={client.id}")
         db.commit()
 
-        structure = resolve_template_structure(db, template_code)
-        ids_by_code: dict[str, str] = {
+        _start_step(steps["create_root_org_unit"])
+        _start_step(steps["deploy_org_units"])
+        _start_step(steps["deploy_positions"])
+        apply_result = apply_template_to_client(
+            db,
+            client.id,
+            template_code,
+            update_client_template=True,
+        )
+        ids_by_code = {
             ou.code: ou.id
             for ou in db.scalars(select(OrgUnit).where(OrgUnit.client_id == client.id)).all()
         }
-
-        _start_step(steps["create_root_org_unit"])
-        root_spec = next(x for x in structure if x["parent_code"] is None)
-        if root_spec["code"] in ids_by_code:
-            _finish_step(steps["create_root_org_unit"], STEP_STATUS_SKIPPED, detail=f"existing_org_unit_id={ids_by_code[root_spec['code']]}")
+        root_spec_code = "company"
+        if root_spec_code in ids_by_code:
+            _finish_step(
+                steps["create_root_org_unit"],
+                STEP_STATUS_COMPLETED if not target_client else STEP_STATUS_SKIPPED,
+                detail=f"org_unit_id={ids_by_code.get(root_spec_code)}",
+            )
         else:
-            root = OrgUnit(
-                id=new_id32(),
-                client_id=client.id,
-                code=root_spec["code"],
-                name=root_spec["name"],
-                parent_id=None,
-                unit_type=root_spec["unit_type"],
-                is_active=True,
-                sort_order=int(root_spec["sort_order"]),
-                catalog_source_code=root_spec["code"],
-                is_detached=True,
-            )
-            db.add(root)
-            db.flush()
-            ids_by_code[root.code] = root.id
-            _finish_step(steps["create_root_org_unit"], STEP_STATUS_COMPLETED, detail=f"org_unit_id={root.id}")
-        db.commit()
-
-        _start_step(steps["deploy_org_units"])
-        created_org_unit_ids: list[str] = []
-        for spec in structure:
-            if spec["parent_code"] is None:
-                continue
-            if spec["code"] in ids_by_code:
-                continue
-            parent_id = ids_by_code.get(spec["parent_code"])
-            if not parent_id:
-                raise RuntimeError(f"missing_parent:{spec['parent_code']}")
-            ou = OrgUnit(
-                id=new_id32(),
-                client_id=client.id,
-                code=spec["code"],
-                name=spec["name"],
-                parent_id=parent_id,
-                unit_type=spec["unit_type"],
-                is_active=True,
-                sort_order=int(spec["sort_order"]),
-                catalog_source_code=spec["code"],
-                is_detached=True,
-            )
-            db.add(ou)
-            db.flush()
-            ids_by_code[ou.code] = ou.id
-            created_org_unit_ids.append(ou.id)
-        _finish_step(steps["deploy_org_units"], STEP_STATUS_COMPLETED, detail=f"created_org_units={len(created_org_unit_ids)}")
-        db.commit()
-
-        _start_step(steps["deploy_positions"])
+            _finish_step(steps["create_root_org_unit"], STEP_STATUS_COMPLETED, detail="created_via_apply")
+        _finish_step(
+            steps["deploy_org_units"],
+            STEP_STATUS_COMPLETED,
+            detail=(
+                f"created={apply_result.org_units_created}; "
+                f"skipped={apply_result.org_units_skipped}"
+            ),
+        )
+        _finish_step(
+            steps["deploy_positions"],
+            STEP_STATUS_COMPLETED,
+            detail=(
+                f"created_positions={apply_result.positions_created}; "
+                f"skipped={apply_result.positions_skipped}; "
+                f"regulations={apply_result.regulations_created}"
+            ),
+        )
         position_ids: list[str] = []
-        existing_positions = {
-            (p.code, p.org_unit_id)
-            for p in db.scalars(select(Position).where(Position.client_id == client.id)).all()
-        }
-        for p in list_positions_from_position_catalog(db, template_code):
-            ou_id = ids_by_code.get(p["org_unit_code"])
-            if not ou_id:
-                continue
-            if (p["code"], ou_id) in existing_positions:
-                continue
-            pos = Position(
-                id=new_id32(),
-                client_id=client.id,
-                org_unit_id=ou_id,
-                code=p["code"],
-                name=p["name"],
-                grade=p.get("grade"),
-                is_active=bool(p.get("is_active", True)),
-                position_catalog_code=p["code"],
-                function_code=p.get("function_code"),
-                position_level=p.get("position_level"),
-                is_managerial=p.get("is_managerial"),
-                is_detached=True,
-            )
-            db.add(pos)
-            db.flush()
-            position_ids.append(pos.id)
-            existing_positions.add((p["code"], ou_id))
-        regulations_created = sync_global_regulations_to_client(db, client.id)
-        _finish_step(steps["deploy_positions"], STEP_STATUS_COMPLETED, detail=f"created_positions={len(position_ids)}; regulations={regulations_created}")
         db.commit()
 
         _start_step(steps["create_admin_employee"])
@@ -415,11 +364,12 @@ def run_onboarding_bootstrap(
         # Traceability: store created entity IDs for run-to-entities mapping
         created_entities = {
             "client_id": client_id,
-            "org_unit_ids": created_org_unit_ids if target_client else list(ids_by_code.values()),
+            "org_unit_ids": list(ids_by_code.values()),
             "position_ids": position_ids,
             "employee_id": admin.id if admin else None,
             "account_id": acc.id if acc else None,
             "action": action,
+            "apply": apply_result.as_dict(),
         }
         run.created_entities = json.dumps(created_entities)
         _finish_step(steps["finalize_run"], STEP_STATUS_COMPLETED)

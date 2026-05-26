@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import PositionCatalog, PositionDeptType
+from app.position_catalog_ops import clone_position_catalog, rename_position_catalog_code
 from app.schemas import (
     ListEnvelope,
+    PositionCatalogCloneOut,
     PositionCatalogCreate,
     PositionCatalogOut,
     PositionCatalogPatch,
@@ -22,6 +24,19 @@ from app.template_constants import DEFAULT_TEMPLATE_CODE
 
 router = APIRouter(prefix="/position-catalog", tags=["position_catalog"])
 
+_SORT_COLUMNS = {
+    "sort_order": PositionCatalog.sort_order,
+    "position_name_ru": PositionCatalog.position_name_ru,
+    "function_code": PositionCatalog.function_code,
+    "position_code": PositionCatalog.position_code,
+}
+
+
+def _catalog_order(sort_by: str, sort_dir: str):
+    col = _SORT_COLUMNS.get(sort_by, PositionCatalog.sort_order)
+    primary = col.desc() if sort_dir == "desc" else col.asc()
+    return primary, PositionCatalog.position_code.asc()
+
 
 def _get_catalog(db: Session, template_code: str, position_code: str) -> PositionCatalog | None:
     return db.get(PositionCatalog, (template_code, position_code))
@@ -31,7 +46,10 @@ def _get_catalog(db: Session, template_code: str, position_code: str) -> Positio
 def list_position_catalog(
     template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     function_code: str | None = Query(None, description="Фильтр по функции"),
+    position_level: str | None = Query(None, description="Фильтр по уровню"),
     is_active: bool | None = Query(None, description="Фильтр по активности"),
+    sort_by: str = Query("sort_order", description="Поле сортировки"),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -39,10 +57,13 @@ def list_position_catalog(
     q = select(PositionCatalog).where(PositionCatalog.template_code == template_code)
     if function_code:
         q = q.where(PositionCatalog.function_code == function_code)
+    if position_level:
+        q = q.where(PositionCatalog.position_level == position_level)
     if is_active is not None:
         q = q.where(PositionCatalog.is_active == is_active)
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
-    rows = db.scalars(q.order_by(PositionCatalog.function_code, PositionCatalog.position_code).limit(limit).offset(offset)).all()
+    order = _catalog_order(sort_by, sort_dir)
+    rows = db.scalars(q.order_by(*order).limit(limit).offset(offset)).all()
     return ListEnvelope[PositionCatalogOut](
         items=[PositionCatalogOut.model_validate(r) for r in rows],
         total=total,
@@ -55,15 +76,21 @@ def list_position_catalog(
 def export_position_catalog_excel(
     template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     function_code: str | None = Query(None),
+    position_level: str | None = Query(None),
     is_active: bool | None = Query(None),
+    sort_by: str = Query("sort_order"),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> Response:
     q = select(PositionCatalog).where(PositionCatalog.template_code == template_code)
     if function_code:
         q = q.where(PositionCatalog.function_code == function_code)
+    if position_level:
+        q = q.where(PositionCatalog.position_level == position_level)
     if is_active is not None:
         q = q.where(PositionCatalog.is_active == is_active)
-    rows = db.scalars(q.order_by(PositionCatalog.function_code, PositionCatalog.position_code).limit(5000)).all()
+    order = _catalog_order(sort_by, sort_dir)
+    rows = db.scalars(q.order_by(*order).limit(5000)).all()
     headers = [
         "template_code",
         "position_code",
@@ -74,6 +101,7 @@ def export_position_catalog_excel(
         "is_managerial",
         "position_family",
         "is_active",
+        "sort_order",
         "default_regulation_code",
         "notes",
     ]
@@ -88,6 +116,7 @@ def export_position_catalog_excel(
             r.is_managerial,
             r.position_family,
             r.is_active,
+            r.sort_order,
             r.default_regulation_code,
             r.notes,
         ]
@@ -127,6 +156,27 @@ def get_position_catalog(
     return PositionCatalogOut.model_validate(obj)
 
 
+@router.post("/{position_code}/clone", response_model=PositionCatalogCloneOut, status_code=201)
+def clone_position_catalog_row(
+    position_code: str,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> PositionCatalogCloneOut:
+    obj = _get_catalog(db, template_code, position_code)
+    if not obj:
+        raise HTTPException(status_code=404, detail="position_catalog_not_found")
+    result = clone_position_catalog(db, obj)
+    db.commit()
+    db.refresh(result.row)
+    return PositionCatalogCloneOut(
+        row=PositionCatalogOut.model_validate(result.row),
+        dept_links_created=result.dept_links_created,
+        regulations_created=result.regulations_created,
+        kpi_templates_created=result.kpi_templates_created,
+        competency_matrix_rows_created=result.competency_matrix_rows_created,
+    )
+
+
 @router.patch("/{position_code}", response_model=PositionCatalogOut)
 def patch_position_catalog(
     position_code: str,
@@ -137,7 +187,11 @@ def patch_position_catalog(
     obj = _get_catalog(db, template_code, position_code)
     if not obj:
         raise HTTPException(status_code=404, detail="position_catalog_not_found")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    new_code = data.pop("position_code", None)
+    if new_code is not None and new_code.strip() != obj.position_code:
+        obj = rename_position_catalog_code(db, obj, new_code)
+    for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)

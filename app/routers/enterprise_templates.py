@@ -111,7 +111,13 @@ def get_structure_preview(template_id: str, db: Session = Depends(get_db)) -> di
         "template_id": obj.id,
         "template_code": obj.code,
         "org_units": [
-            {"code": s["code"], "name": s["name"], "unit_type": s["unit_type"], "parent_code": s["parent_code"]}
+            {
+                "code": s["code"],
+                "name": s["name"],
+                "unit_type": s["unit_type"],
+                "parent_code": s["parent_code"],
+                "log_group": s.get("log_group"),
+            }
             for s in structure
         ],
         "positions": preview["positions"],
@@ -254,13 +260,19 @@ def save_template_from_client(
         )
 
     dept_codes = {u.code for u in units if u.unit_type == "department"}
+    primary_dept_by_pos: dict[str, str] = {}
     for u in units:
         if u.unit_type != "department":
             continue
         for pos in db.scalars(select(Position).where(Position.org_unit_id == u.id)).all():
-            pc = pos.position_catalog_code or pos.code
+            pc = (pos.position_catalog_code or pos.code or "").strip()
+            if not pc:
+                continue
+            if pc in primary_dept_by_pos:
+                continue
             if db.get(PositionDeptType, (body.code, pc, u.code)):
                 continue
+            primary_dept_by_pos[pc] = u.code
             db.add(
                 PositionDeptType(
                     template_code=body.code,

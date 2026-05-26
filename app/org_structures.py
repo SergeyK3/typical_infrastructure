@@ -59,10 +59,13 @@ ADMIN_ORG_UNIT_CODE = "ADM"
 
 def get_template_structure(template_code: str) -> list[dict]:
     """Возвращает структуру оргподразделений для шаблона."""
+    from app.org_unit_ops import format_org_unit_name
+
     if template_code == "default":
-        return DEFAULT_ORG_UNITS.copy()
-    # fallback: default
-    return DEFAULT_ORG_UNITS.copy()
+        units = DEFAULT_ORG_UNITS.copy()
+    else:
+        units = DEFAULT_ORG_UNITS.copy()
+    return [{**u, "name": format_org_unit_name(u["name"], u["unit_type"])} for u in units]
 
 
 def get_template_positions(template_code: str, org_unit_ids_by_code: dict[str, str]) -> list[dict]:
@@ -83,7 +86,9 @@ def list_positions_from_position_catalog(db: "Session", template_code: str = DEF
     """
     from sqlalchemy import select
 
-    from app.models import PositionCatalog, PositionDeptType
+    from app.models import PositionCatalog
+    from app.position_deploy import select_position_dept_links_for_deploy
+    from app.template_org_resolve import resolve_template_structure
 
     catalog_by_code = {
         r.position_code: r
@@ -94,10 +99,9 @@ def list_positions_from_position_catalog(db: "Session", template_code: str = DEF
             )
         ).all()
     }
+    structure = resolve_template_structure(db, template_code)
     rows: list[dict] = []
-    for link in db.scalars(
-        select(PositionDeptType).where(PositionDeptType.template_code == template_code)
-    ).all():
+    for link in select_position_dept_links_for_deploy(db, template_code, structure):
         catalog = catalog_by_code.get(link.position_code)
         if not catalog:
             continue

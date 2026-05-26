@@ -20,6 +20,7 @@ from app.models import (
     TemplateOrgUnitRow,
 )
 from app.org_structures import DEFAULT_ORG_UNITS
+from app.org_unit_ops import format_org_unit_name
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.utils import new_id32
 
@@ -449,10 +450,11 @@ def seed_template_org_units(db: Session) -> int:
                 id=new_id32(),
                 template_code="default",
                 code=spec["code"],
-                name=spec["name"],
+                name=format_org_unit_name(spec["name"], spec["unit_type"]),
                 parent_code=spec.get("parent_code"),
                 unit_type=spec["unit_type"],
                 sort_order=int(spec.get("sort_order", 0)),
+                log_group=spec.get("log_group"),
             )
         )
         created += 1
