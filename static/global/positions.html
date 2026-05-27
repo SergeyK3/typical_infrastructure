@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
@@ -102,7 +103,9 @@
               <th class="num">Сорт.</th>
               <th>Код</th>
               <th>Название</th>
+              <th>Название (EN)</th>
               <th><label class="th-filter">Функция<select id="filterFunc" title="Фильтр по функции"><option value="">— все —</option></select></label></th>
+              <th><label class="th-filter">Подразделение<select id="filterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
               <th><label class="th-filter">Уровень<select id="filterLevel" title="Фильтр по уровню"><option value="">— все —</option></select></label></th>
               <th>Активна</th>
               <th></th>
@@ -129,6 +132,9 @@
       <input type="text" id="fNameEn" autocomplete="off" />
       <label for="fFunc">Код функции</label>
       <input type="text" id="fFunc" placeholder="OPS" autocomplete="off" />
+      <label for="fDept">Тип подразделения</label>
+      <select id="fDept"><option value="">— выберите —</option></select>
+      <p class="modal-hint">Код отделения из типовой оргструктуры шаблона (ADM, HR, SALES и т.д.).</p>
       <label for="fLevel">Уровень</label>
       <select id="fLevel">
         <option value="SPEC">SPEC — специалист</option>
@@ -175,6 +181,7 @@
     }
     let items = [];
     let allItems = [];
+    let deptTypeCodes = [];
     let templateCode = window.GlobalTemplateContext.getGlobalEditTemplateCode('default');
     let listSort = 'sort_order';
 
@@ -199,15 +206,46 @@
       if (prev && sorted.includes(prev)) sel.value = prev;
     }
 
+    async function loadDeptTypeOptions() {
+      try {
+        const data = await api('GET', '/template-org-units?' + tplQ() + '&limit=500&offset=0');
+        deptTypeCodes = [...new Set((data.items || [])
+          .filter((u) => u.unit_type === 'department')
+          .map((u) => u.code)
+          .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+      } catch (_) {
+        deptTypeCodes = [];
+      }
+      fillFilterSelect('filterDept', deptTypeCodes);
+      const sel = $('fDept');
+      const keep = sel.value;
+      sel.innerHTML = '<option value="">— выберите —</option>' +
+        deptTypeCodes.map((c) => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join('');
+      if (keep && deptTypeCodes.includes(keep)) sel.value = keep;
+    }
+
+    function syncDeptSelect(value) {
+      const sel = $('fDept');
+      const v = (value || '').trim();
+      if (v && ![...sel.options].some((o) => o.value === v)) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      }
+      sel.value = v;
+    }
+
     async function loadTemplatesList() {
       try {
         templateCode = await window.GlobalTemplateContext.bindTemplateSelect($('tplSelect'), {
-          onChange: (code) => { templateCode = code; load(); },
+          onChange: (code) => { templateCode = code; loadDeptTypeOptions().then(load); },
         });
         try {
           listSort = sessionStorage.getItem(SORT_KEY) || listSort;
           if ([...$('listSort').options].some((o) => o.value === listSort)) $('listSort').value = listSort;
         } catch (_) {}
+        await loadDeptTypeOptions();
         await load();
       } catch (_) {}
     }
@@ -226,22 +264,36 @@
       p.set('sort_dir', 'asc');
       const fn = $('filterFunc').value.trim();
       const lv = $('filterLevel').value.trim();
+      const dept = $('filterDept').value.trim();
       if (fn) p.set('function_code', fn);
       if (lv) p.set('position_level', lv);
       return p.toString();
+    }
+
+    function rowMatchesFilters(row) {
+      const fn = $('filterFunc').value.trim();
+      const lv = $('filterLevel').value.trim();
+      const dept = $('filterDept').value.trim();
+      if (fn && row.function_code !== fn) return false;
+      if (lv && row.position_level !== lv) return false;
+      if (dept && row.primary_dept_type_code !== dept) return false;
+      return true;
     }
 
     async function load() {
       $('listErr').classList.add('hidden');
       try {
         const data = await api('GET', '/position-catalog?' + listQueryParams());
-        items = data.items || [];
+        let fetched = data.items || [];
+        items = fetched.filter(rowMatchesFilters);
         const dataAll = await api('GET', '/position-catalog?' + tplQ() + '&limit=500&offset=0&sort_by=sort_order&sort_dir=asc');
         allItems = dataAll.items || [];
         fillFilterSelect('filterFunc', [...new Set(allItems.map((r) => r.function_code).filter(Boolean))]);
+        fillFilterSelect('filterDept', [...new Set(allItems.map((r) => r.primary_dept_type_code).filter(Boolean))]);
         fillFilterSelect('filterLevel', [...new Set(allItems.map((r) => r.position_level).filter(Boolean))]);
-        const parts = ['Записей: ' + (data.total ?? items.length)];
+        const parts = ['Записей: ' + items.length];
         if ($('filterFunc').value) parts.push('функция: ' + $('filterFunc').value);
+        if ($('filterDept').value) parts.push('подразделение: ' + $('filterDept').value);
         if ($('filterLevel').value) parts.push('уровень: ' + $('filterLevel').value);
         $('listMeta').textContent = parts.join(' · ');
         const tb = $('tbody');
@@ -249,14 +301,24 @@
         for (const row of items) {
           const tr = document.createElement('tr');
           tr.innerHTML = '<td class="num">' + escapeHtml(String(row.sort_order ?? 0)) + '</td>' +
-            '<td><code>' + escapeHtml(row.position_code) + '</code></td><td>' + escapeHtml(row.position_name_ru) + '</td><td>' + escapeHtml(row.function_code) + '</td><td>' + escapeHtml(row.position_level) + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
+            '<td><code>' + escapeHtml(row.position_code) + '</code></td><td>' + escapeHtml(row.position_name_ru) + '</td><td>' + escapeHtml(row.position_name_en || '—') + '</td><td>' + escapeHtml(row.function_code) + '</td><td>' + escapeHtml(row.primary_dept_type_code || '—') + '</td><td>' + escapeHtml(row.position_level) + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
             '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.position_code) + '">Изменить</button>' +
             '<button type="button" class="btn btn-secondary btn-clone" data-code="' + escapeHtml(row.position_code) + '">Копировать</button>' +
+            '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + escapeHtml(row.position_code) + '" title="В другой шаблон">В шаблон</button>' +
             '<button type="button" class="btn btn-danger btn-del" data-code="' + escapeHtml(row.position_code) + '">Удалить</button></td>';
           tb.appendChild(tr);
         }
         tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.code));
         tb.querySelectorAll('.btn-clone').forEach((b) => b.onclick = () => cloneRow(b.dataset.code));
+        tb.querySelectorAll('.btn-copy-tpl').forEach((b) => b.onclick = () => {
+          CatalogCopy.open({
+            entity: 'position',
+            mode: 'global_to_global',
+            sourceTemplateCode: templateCode,
+            sourceCode: b.dataset.code,
+            onSuccess: () => load(),
+          });
+        });
         tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.code));
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -275,6 +337,7 @@
       $('fNameRu').value = '';
       $('fNameEn').value = '';
       $('fFunc').value = '';
+      syncDeptSelect('');
       syncLevelSelect('SPEC');
       $('fMgr').checked = false;
       $('fFamily').value = '';
@@ -296,6 +359,7 @@
       $('fNameRu').value = row.position_name_ru;
       $('fNameEn').value = row.position_name_en || '';
       $('fFunc').value = row.function_code;
+      syncDeptSelect(row.primary_dept_type_code || '');
       syncLevelSelect(row.position_level || 'SPEC');
       $('fMgr').checked = !!row.is_managerial;
       $('fFamily').value = row.position_family || '';
@@ -316,16 +380,24 @@
       load();
     };
     $('filterFunc').onchange = load;
+    $('filterDept').onchange = load;
     $('filterLevel').onchange = load;
     $('modalContent').addEventListener('mousedown', (e) => e.stopPropagation());
     $('modalContent').addEventListener('click', (e) => e.stopPropagation());
 
     $('btnSave').onclick = async () => {
       $('modalErr').classList.add('hidden');
+      const dept = $('fDept').value.trim();
+      if (!dept) {
+        $('modalErr').textContent = 'Укажите тип подразделения';
+        $('modalErr').classList.remove('hidden');
+        return;
+      }
       const body = {
         position_name_ru: $('fNameRu').value.trim(),
         position_name_en: $('fNameEn').value.trim() || null,
         function_code: $('fFunc').value.trim(),
+        primary_dept_type_code: dept,
         position_level: $('fLevel').value,
         is_managerial: $('fMgr').checked,
         position_family: $('fFamily').value.trim() || null,

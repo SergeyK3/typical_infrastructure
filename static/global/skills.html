@@ -8,7 +8,10 @@
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
   <style>
+    .row-actions { display: flex; gap: 0.3rem; flex-wrap: nowrap; }
+    .row-actions .btn { padding: 0.18rem 0.45rem; font-size: 0.75rem; white-space: nowrap; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .toolbar input, .toolbar select { padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
     .toolbar input { min-width: 260px; flex: 1 1 320px; }
@@ -73,6 +76,7 @@
                 <th class="num">Ранг</th>
                 <th>Код навыка</th>
                 <th>Навык</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -132,8 +136,25 @@
           '<td class="num">' + row.skill_rank + '</td>' +
           '<td><code>' + escapeHtml(row.skill_code || '') + '</code></td>' +
           '<td>' + escapeHtml(row.skill_title_ru || '') + '</td>' +
+          '<td class="row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-copy-skill" data-pos="' + escapeHtml(row.position_code) + '" data-dept="' + escapeHtml(row.department_code || '') + '" data-rank="' + row.skill_rank + '">В шаблон</button>' +
+          '</td>' +
         '</tr>'
       )).join('');
+      $('tbody').querySelectorAll('.btn-copy-skill').forEach((btn) => {
+        btn.onclick = () => {
+          if (!window.CatalogCopy) return;
+          CatalogCopy.open({
+            entity: 'skill',
+            mode: 'global_to_global',
+            sourceTemplateCode: templateCode(),
+            positionCode: btn.dataset.pos,
+            departmentCode: btn.dataset.dept,
+            skillRank: parseInt(btn.dataset.rank, 10) || 1,
+            onSuccess: () => load(),
+          });
+        };
+      });
     }
 
     async function load() {

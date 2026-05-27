@@ -7,6 +7,7 @@
   <title>Рабочее пространство — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css?v=ui-theme-20260522">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
   <style>
     :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
     .panel { display: none; }
@@ -20,7 +21,13 @@
     input.error { border-color: var(--error); }
     .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
     .modal.show { display: flex; }
-    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; max-height: 92vh; overflow: auto; }
+    .modal-content.modal-position-wide { max-width: 520px; }
+    .modal-content label.check-row {
+      display: flex; align-items: center; gap: 0.5rem; margin-top: 0.65rem; cursor: pointer;
+      font-size: 0.9rem; color: var(--text);
+    }
+    .modal-content label.check-row input[type=checkbox] { width: auto; max-width: none; margin: 0; flex-shrink: 0; }
     .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
     .org-tree { padding: 0; margin: 0; max-height: min(70vh, 720px); overflow: auto; }
     .org-tree .tree-item {
@@ -110,20 +117,31 @@
     .module-entry-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
     .client-select { min-width: 220px; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
     .badge-g { display: inline-block; padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; background: var(--accent-muted); color: var(--accent); white-space: nowrap; }
+    .url-flag {
+      display: inline-block; min-width: 2rem; text-align: center;
+      padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; font-weight: 500;
+      text-decoration: none;
+    }
+    .url-flag-yes { background: rgba(63,185,80,0.2); color: var(--success); }
+    .url-flag-yes:hover { background: rgba(63,185,80,0.32); text-decoration: underline; }
+    .url-flag-no { background: rgba(128,128,128,0.12); color: var(--text-muted); }
+    .td-url-flag { text-align: center; white-space: nowrap; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
     .cr-table th, .cr-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .cr-table th { color: var(--text-muted); font-weight: 500; }
     .cr-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table .td-name a { color: var(--accent); text-decoration: none; }
     .cr-table .td-name a:hover { text-decoration: underline; }
-    .cr-table th:nth-child(1), .cr-table td:nth-child(1) { width: 13%; }
-    .cr-table th:nth-child(2), .cr-table td:nth-child(2) { width: 20%; }
-    .cr-table th:nth-child(3), .cr-table td:nth-child(3) { width: 11%; }
-    .cr-table th:nth-child(4), .cr-table td:nth-child(4) { width: 6%; }
+    .cr-table th:nth-child(1), .cr-table td:nth-child(1) { width: 11%; }
+    .cr-table th:nth-child(2), .cr-table td:nth-child(2) { width: 17%; }
+    .cr-table th:nth-child(3), .cr-table td:nth-child(3) { width: 9%; }
+    .cr-table th:nth-child(4), .cr-table td:nth-child(4) { width: 5%; }
     .cr-table th:nth-child(5), .cr-table td:nth-child(5) { width: 4%; }
-    .cr-table th:nth-child(6), .cr-table td:nth-child(6) { width: 12%; }
-    .cr-table th:nth-child(7), .cr-table td:nth-child(7) { width: 11%; }
-    .cr-table th:nth-child(8), .cr-table td:nth-child(8) { width: 9rem; min-width: 9rem; max-width: 9rem; white-space: nowrap; }
+    .cr-table th:nth-child(6), .cr-table td:nth-child(6) { width: 10%; }
+    .cr-table th:nth-child(7), .cr-table td:nth-child(7) { width: 4%; }
+    .cr-table th:nth-child(8), .cr-table td:nth-child(8) { width: 4%; }
+    .cr-table th:nth-child(9), .cr-table td:nth-child(9) { width: 9%; }
+    .cr-table th:nth-child(10), .cr-table td:nth-child(10) { width: 13rem; min-width: 13rem; max-width: 13rem; white-space: nowrap; }
     .cr-table .row-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
     .cr-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
     .ws-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -132,6 +150,19 @@
     .ws-table .td-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ws-table .row-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
     .ws-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+    .local-skills-table { font-size: 0.82rem; }
+    .local-skills-table th, .local-skills-table td { padding: 0.32rem 0.35rem; }
+    .local-skills-table th:nth-child(1), .local-skills-table td:nth-child(1) { width: 8.5rem; max-width: 8.5rem; }
+    .local-skills-table th:nth-child(2), .local-skills-table td:nth-child(2) { width: 10rem; max-width: 10rem; }
+    .local-skills-table th:nth-child(3), .local-skills-table td:nth-child(3) { width: 2.4rem; max-width: 2.4rem; text-align: center; }
+    .local-skills-table th:nth-child(4), .local-skills-table td:nth-child(4) { width: auto; min-width: 0; }
+    .local-skills-table th:nth-child(5), .local-skills-table td:nth-child(5) {
+      width: 15.5rem; max-width: 15.5rem; min-width: 15.5rem;
+      padding-left: 0.2rem; padding-right: 0.2rem;
+    }
+    .local-skills-table .row-actions { gap: 0.2rem; }
+    .local-skills-table .row-actions .btn { padding: 0.14rem 0.32rem; font-size: 0.68rem; }
+    .local-skills-table code { font-size: 0.78rem; }
     .cr-th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
     .cr-th-filter select {
       margin-top: 0.35rem; width: 100%; min-width: 0; max-width: 100%;
@@ -240,7 +271,8 @@
       <h2>Локальные должности</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0;">Глобальные шаблоны — в <a id="linkRegulationsHint" href="/regulations">глобальном реестре</a> (верх сайдбара). Регламенты и KPI <strong>этой</strong> организации разделены на пункты <strong>«Локальные регламенты»</strong> и <strong>«Локальные KPI»</strong> в блоке «Справочники организации» слева.</p>
       <div class="org-actions">
-        <button class="btn btn-primary" id="btnAddPosition">+ Добавить должность</button>
+        <button class="btn btn-primary" id="btnCopyPosition">+ Скопировать</button>
+        <button class="btn btn-secondary" id="btnAddPosition">+ Добавить вручную</button>
         <button class="btn btn-secondary" id="btnDeployTemplatePos">Развернуть типовую оргструктуру</button>
         <a class="btn btn-secondary" id="exportPositionsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
@@ -255,7 +287,7 @@
         Глобальная страница <code>/regulations</code> — общесистемные шаблоны; эта вкладка — ваши редактируемые карточки.
       </p>
       <div class="org-actions" style="flex-wrap: wrap;">
-        <button type="button" class="btn btn-primary" id="btnCrCopy">+ Копировать из глобального реестра</button>
+        <button type="button" class="btn btn-primary" id="btnCrCopy">+ Скопировать</button>
         <input type="search" id="crSearch" placeholder="Поиск по коду, названию…" style="min-width: 200px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" autocomplete="off">
         <button type="button" class="btn btn-secondary" id="btnCrRefresh">Обновить</button>
         <a class="btn btn-secondary" id="exportClientRegsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
@@ -276,6 +308,8 @@
                 <th><label class="cr-th-filter">Тип подразделения<select id="crFilterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
                 <th>Вер.</th>
                 <th>Источник</th>
+                <th title="Ссылка на документ регламента (Google Doc и т.п.)">Регл.</th>
+                <th title="Папка с инструкциями (URL)">Инстр.</th>
                 <th><label class="cr-th-filter">Статус<select id="crFilterStatus" title="Фильтр по статусу">
                   <option value="">— все —</option>
                   <option value="draft">draft</option>
@@ -298,8 +332,11 @@
       <h2>Локальные KPI</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
         KPI организации разворачиваются из типовых KPI как часть локальных регламентов. Здесь показана отдельная выборка KPI без смешивания с карточками регламентов.
+        У KPI из регламента кнопка <strong>«Синхр.»</strong> подтягивает из глобального шаблона только <em>отсутствующие</em> KPI и инструкции; уже существующие не изменяются, устаревшие удаляются вручную.
       </p>
       <div class="org-actions">
+        <button type="button" class="btn btn-primary" id="btnLocalKpiCopy">+ Скопировать регламент</button>
+        <button type="button" class="btn btn-primary" id="btnLocalKpiAdd">+ Добавить KPI</button>
         <button type="button" class="btn btn-secondary" id="btnLocalKpiRefresh">Обновить</button>
       </div>
       <p id="localKpiMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
@@ -312,6 +349,8 @@
               <th style="width:12%;">Период</th>
               <th style="width:10%;">Вес</th>
               <th>Локальный регламент</th>
+              <th>Регламент</th>
+              <th style="width:9rem;"></th>
             </tr>
           </thead>
           <tbody id="localKpiTbody"></tbody>
@@ -326,26 +365,56 @@
         Навыки разворачиваются из типовой матрицы для тех должностей, которые есть в выбранной организации.
       </p>
       <div class="org-actions">
+        <button type="button" class="btn btn-primary" id="btnLocalSkillsCopy">+ Скопировать</button>
         <button type="button" class="btn btn-secondary" id="btnLocalSkillsRefresh">Обновить</button>
         <input type="search" id="localSkillsSearch" placeholder="Поиск по должности, коду или навыку" style="min-width: 240px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" autocomplete="off">
       </div>
       <p id="localSkillsMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
       <div style="overflow-x:auto;margin-top:0.75rem;">
-        <table class="ws-table" id="localSkillsTable">
+        <table class="ws-table local-skills-table" id="localSkillsTable">
           <thead>
             <tr>
-              <th style="width:16%;">Код должности</th>
-              <th style="width:26%;">Должность</th>
-              <th style="width:8%;">Ранг</th>
+              <th>Код</th>
+              <th>Должность</th>
+              <th>#</th>
               <th>Навык</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="localSkillsTbody"></tbody>
         </table>
+    </div>
+  </div>
+
+  <!-- Modal: редактирование строки локальной матрицы навыков -->
+  <div id="modalLocalSkill" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+      <h3 id="localSkillModalTitle">Изменить навык</h3>
+      <div class="err hidden" id="localSkillModalErr"></div>
+      <input type="hidden" id="localSkillEditId">
+      <label>Отделение (для выбора должности)</label>
+      <select id="localSkillOrgUnit" style="max-width:none;width:100%;">
+        <option value="">— все отделения —</option>
+      </select>
+      <label>Код должности</label>
+      <select id="localSkillPosition" style="max-width:none;width:100%;"></select>
+      <label>Тип подразделения (функция)</label>
+      <input type="text" id="localSkillDept" style="max-width:none;width:100%;" placeholder="HR, ACC, …">
+      <label>Ранг навыка</label>
+      <input type="number" min="1" step="1" id="localSkillRank" style="max-width:none;width:100%;">
+      <label>Навык</label>
+      <input type="text" id="localSkillTitle" readonly style="max-width:none;width:100%;opacity:0.85;">
+      <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;line-height:1.4;">
+        Формулировку навыка меняют в глобальном справочнике или через копию строки с последующей правкой ранга и привязки.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnLocalSkillSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="btnLocalSkillCancel">Отмена</button>
       </div>
     </div>
+  </div>
 
-    <!-- Modal: Assign employee to position -->
+  <!-- Modal: Assign employee to position -->
     <div id="modalAssignPosition" class="modal">
       <div class="modal-content" style="max-width: 480px;">
         <h3>Назначить сотрудника на должность</h3>
@@ -675,7 +744,7 @@
 
   <!-- Modal: Edit Position -->
   <div id="modalPositionEdit" class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-position-wide">
       <h3>Редактировать должность</h3>
       <div class="err hidden" id="modalPositionEditErr"></div>
       <input type="hidden" id="posEditId">
@@ -685,6 +754,23 @@
       <input type="text" id="posEditName">
       <label>Подразделение</label>
       <select id="posEditOrgUnit"></select>
+      <label>Код функции</label>
+      <input type="text" id="posEditFunc" placeholder="HR, SALES…">
+      <label>Уровень</label>
+      <select id="posEditLevel">
+        <option value="SPEC">SPEC — специалист</option>
+        <option value="LEAD">LEAD — лид / старший</option>
+        <option value="MGR">MGR — менеджер</option>
+        <option value="HEAD">HEAD — руководитель подразделения</option>
+        <option value="DEPUTY">DEPUTY — заместитель</option>
+        <option value="DIR">DIR — директор</option>
+      </select>
+      <label class="check-row"><input type="checkbox" id="posEditMgr"> Руководящая</label>
+      <label>Код типовой должности (каталог)</label>
+      <input type="text" id="posEditCatCode" placeholder="опционально">
+      <label>Грейд</label>
+      <input type="text" id="posEditGrade" placeholder="опционально">
+      <label class="check-row"><input type="checkbox" id="posEditActive" checked> Активна</label>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnPositionEditSave">Сохранить</button>
         <button class="btn btn-secondary" id="btnPositionEditCancel">Отмена</button>
@@ -694,7 +780,7 @@
 
   <!-- Modal: Add Position -->
   <div id="modalPosition" class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-position-wide">
       <h3>Добавить должность</h3>
       <div class="err hidden" id="modalPositionErr"></div>
       <label>Код</label>
@@ -703,6 +789,23 @@
       <input type="text" id="posName" placeholder="Разработчик">
       <label>Подразделение</label>
       <select id="posOrgUnit"></select>
+      <label>Код функции</label>
+      <input type="text" id="posFunc" placeholder="HR, SALES…">
+      <label>Уровень</label>
+      <select id="posLevel">
+        <option value="SPEC">SPEC — специалист</option>
+        <option value="LEAD">LEAD — лид / старший</option>
+        <option value="MGR">MGR — менеджер</option>
+        <option value="HEAD">HEAD — руководитель подразделения</option>
+        <option value="DEPUTY">DEPUTY — заместитель</option>
+        <option value="DIR">DIR — директор</option>
+      </select>
+      <label class="check-row"><input type="checkbox" id="posMgr"> Руководящая</label>
+      <label>Код типовой должности (каталог)</label>
+      <input type="text" id="posCatCode" placeholder="опционально">
+      <label>Грейд</label>
+      <input type="text" id="posGrade" placeholder="опционально">
+      <label class="check-row"><input type="checkbox" id="posActive" checked> Активна</label>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnPositionSave">Сохранить</button>
         <button class="btn btn-secondary" id="btnPositionCancel">Отмена</button>
@@ -820,6 +923,24 @@
     </div>
   </div>
 
+  <!-- Modal: копия должности из типового каталога -->
+  <div id="modalPosCopy" class="modal cr-modal-wide">
+    <div class="modal-content" style="max-width:520px;">
+      <h3>Скопировать должность из типового каталога</h3>
+      <p class="meta" style="margin-top:0;">Создаётся локальная штатная должность по записи глобального справочника.</p>
+      <label>Шаблон источника</label>
+      <select id="posCopyTemplate" style="width:100%;max-width:none;"></select>
+      <label>Должность из каталога</label>
+      <select id="posCopyCatalog" style="width:100%;max-width:none;"></select>
+      <label>Подразделение организации</label>
+      <select id="posCopyOrgUnit" style="width:100%;max-width:none;"></select>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnPosCopyDo">Скопировать</button>
+        <button type="button" class="btn btn-secondary" id="btnPosCopyCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: копия регламента из глобального реестра -->
   <div id="modalCrCopy" class="modal cr-modal-wide">
     <div class="modal-content">
@@ -862,6 +983,9 @@
       <textarea id="crEditCkp" rows="2" style="width:100%;max-width:none;"></textarea>
       <label>Ссылка на документ</label>
       <input type="url" id="crEditDoc" style="max-width:none;width:100%;">
+      <p class="meta" style="margin:0.35rem 0 0 0;font-size:0.82rem;line-height:1.4;border-left:3px solid var(--accent);padding-left:0.65rem;">
+        Если карточка скопирована из глобального шаблона, замените ссылку на документ и папку инструкций на <strong>локальные</strong> адреса вашей организации — глобальные URL не синхронизируются автоматически.
+      </p>
       <label>Папка инструкций (URL)</label>
       <input type="url" id="crEditFolder" style="max-width:none;width:100%;">
       <label>Статус</label>
@@ -884,6 +1008,44 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-primary" id="btnCrEditSave">Сохранить</button>
         <button type="button" class="btn btn-secondary" id="btnCrEditCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: локальный KPI без регламента -->
+  <div id="modalLocalKpi" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+      <h3 id="localKpiModalTitle">Локальный KPI</h3>
+      <div class="err hidden" id="localKpiModalErr"></div>
+      <input type="hidden" id="localKpiEditId">
+      <label>Код KPI</label>
+      <input type="text" id="localKpiCode" style="max-width:none;width:100%;" placeholder="REV_GROWTH">
+      <label>Целевое значение</label>
+      <input type="number" step="any" id="localKpiTarget" style="max-width:none;width:100%;">
+      <label>Период</label>
+      <select id="localKpiPeriod" style="max-width:none;width:100%;">
+        <option value="month">month</option>
+        <option value="quarter">quarter</option>
+        <option value="year">year</option>
+      </select>
+      <label>Вес</label>
+      <input type="number" step="any" id="localKpiWeight" style="max-width:none;width:100%;">
+      <label>Отделение (для выбора должности)</label>
+      <select id="localKpiOrgUnit" style="max-width:none;width:100%;">
+        <option value="">— все отделения —</option>
+      </select>
+      <label>Должность (необязательно)</label>
+      <select id="localKpiPosition" style="max-width:none;width:100%;">
+        <option value="">— не выбрано —</option>
+      </select>
+      <label>Заметки</label>
+      <textarea id="localKpiNotes" rows="2" style="width:100%;max-width:none;"></textarea>
+      <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;line-height:1.4;">
+        KPI без регламента — локальное дополнение организации. Связь с карточками регламентов при необходимости настраивается вручную.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="btnLocalKpiSave">Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="btnLocalKpiCancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -941,6 +1103,7 @@
     /** Текущая выборка на вкладке «Сотрудники» (с учётом фильтров). */
     let employeesTableCache = [];
     let localSkillRows = [];
+    let globalPositionCodesCache = new Set();
 
     function getClientId() {
       if (window.SidebarContext) return window.SidebarContext.readClientIdFromPath(window.location.pathname);
@@ -1515,6 +1678,14 @@
       return d.innerHTML;
     }
 
+    function renderRegulationUrlCell(url, openTitle, emptyTitle) {
+      const href = url && String(url).trim();
+      if (href) {
+        return '<td class="td-url-flag"><a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" class="url-flag url-flag-yes" title="' + escapeHtml(openTitle) + '">да</a></td>';
+      }
+      return '<td class="td-url-flag"><span class="url-flag url-flag-no" title="' + escapeHtml(emptyTitle) + '">нет</span></td>';
+    }
+
     function regulationsUrl() {
       return clientId ? '/regulations?from_client=' + encodeURIComponent(clientId) : '/regulations';
     }
@@ -1626,6 +1797,9 @@
 
     function selectedClientSnapshot() {
       return clientsList.find(c => c.id === clientId) || null;
+    }
+    function getCurrentClient() {
+      return selectedClientSnapshot();
     }
 
     function workspacePanels() {
@@ -2169,6 +2343,46 @@
     }
 
     // Positions
+    function syncPosLevelSelect(sel, level) {
+      const value = (level || 'SPEC').trim() || 'SPEC';
+      if (![...sel.options].some((o) => o.value === value)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        sel.appendChild(opt);
+      }
+      sel.value = value;
+    }
+
+    function positionExtraPayload(prefix) {
+      return {
+        function_code: document.getElementById(prefix + 'Func').value.trim() || null,
+        position_level: document.getElementById(prefix + 'Level').value,
+        is_managerial: document.getElementById(prefix + 'Mgr').checked,
+        position_catalog_code: document.getElementById(prefix + 'CatCode').value.trim() || null,
+        grade: document.getElementById(prefix + 'Grade').value.trim() || null,
+        is_active: document.getElementById(prefix + 'Active').checked,
+      };
+    }
+
+    function fillPositionExtraFields(prefix, row) {
+      document.getElementById(prefix + 'Func').value = row.function_code || '';
+      syncPosLevelSelect(document.getElementById(prefix + 'Level'), row.position_level || 'SPEC');
+      document.getElementById(prefix + 'Mgr').checked = !!row.is_managerial;
+      document.getElementById(prefix + 'CatCode').value = row.position_catalog_code || '';
+      document.getElementById(prefix + 'Grade').value = row.grade || '';
+      document.getElementById(prefix + 'Active').checked = row.is_active !== false;
+    }
+
+    function clearPositionExtraFields(prefix) {
+      document.getElementById(prefix + 'Func').value = '';
+      syncPosLevelSelect(document.getElementById(prefix + 'Level'), 'SPEC');
+      document.getElementById(prefix + 'Mgr').checked = false;
+      document.getElementById(prefix + 'CatCode').value = '';
+      document.getElementById(prefix + 'Grade').value = '';
+      document.getElementById(prefix + 'Active').checked = true;
+    }
+
     async function loadPositions() {
       await loadEmployeesForSelect();
       const el = document.getElementById('positionsList');
@@ -2201,6 +2415,7 @@
       if (!orgUnits.length) sel.innerHTML = '<option value="">Нет подразделений</option>';
       document.getElementById('posCode').value = '';
       document.getElementById('posName').value = '';
+      clearPositionExtraFields('pos');
       showErr(document.getElementById('modalPositionErr'), '');
       document.getElementById('modalPosition').classList.add('show');
     };
@@ -2215,7 +2430,10 @@
         await fetchApi('/positions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: clientId, org_unit_id: orgUnitId, code, name })
+          body: JSON.stringify(Object.assign(
+            { client_id: clientId, org_unit_id: orgUnitId, code, name },
+            positionExtraPayload('pos')
+          ))
         });
         document.getElementById('modalPosition').classList.remove('show');
         loadPositions();
@@ -2235,6 +2453,7 @@
       const sel = document.getElementById('posEditOrgUnit');
       sel.innerHTML = orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
       sel.value = p.org_unit_id;
+      fillPositionExtraFields('posEdit', p);
       showErr(document.getElementById('modalPositionEditErr'), '');
       document.getElementById('modalPositionEdit').classList.add('show');
     }
@@ -2250,7 +2469,10 @@
         await fetchApi('/positions/' + id, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, name, org_unit_id: orgUnitId })
+          body: JSON.stringify(Object.assign(
+            { code, name, org_unit_id: orgUnitId },
+            positionExtraPayload('posEdit')
+          ))
         });
         document.getElementById('modalPositionEdit').classList.remove('show');
         await loadPositionsForSelect();
@@ -2440,7 +2662,7 @@
       const meta = document.getElementById('localKpiMeta');
       if (!tbody) return;
       if (!clientId) {
-        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         if (meta) meta.classList.add('hidden');
         return;
       }
@@ -2453,30 +2675,194 @@
         const rows = [];
         details.filter(Boolean).forEach((reg) => {
           (reg.kpis || []).forEach((kpi) => {
-            rows.push({ reg, kpi });
+            rows.push({ kind: 'regulation', reg, kpi });
           });
         });
+        let standalone = [];
+        try {
+          const sk = await fetchApi('/client-kpis?client_id=' + encodeURIComponent(clientId) + '&limit=500');
+          standalone = sk.items || [];
+        } catch (_) {}
+        standalone.forEach((kpi) => rows.push({ kind: 'standalone', kpi }));
         if (meta) {
-          meta.textContent = 'Записей KPI: ' + rows.length;
+          meta.textContent = 'Записей KPI: ' + rows.length + ' (из регламентов: ' + (rows.length - standalone.length) + ', без регламента: ' + standalone.length + ')';
           meta.classList.remove('hidden');
         }
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Нет локальных KPI. Скопируйте или разверните локальные регламенты с KPI.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет локальных KPI. Скопируйте регламент с KPI или добавьте KPI без регламента.</td></tr>';
           return;
         }
-        tbody.innerHTML = rows.map(({ reg, kpi }) => (
-          '<tr>' +
+        tbody.innerHTML = rows.map(({ kind, reg, kpi }) => {
+          const isStandalone = kind === 'standalone';
+          const regLabel = isStandalone ? '—' : escapeHtml(reg.regulation_name || reg.regulation_code);
+          const regFlag = isStandalone ? 'нет' : 'да';
+          const actions = isStandalone
+            ? '<button type="button" class="btn btn-sm btn-secondary lkpi-edit" data-id="' + escapeHtml(kpi.id) + '">Изменить</button>' +
+              '<button type="button" class="btn btn-sm btn-danger lkpi-del" data-id="' + escapeHtml(kpi.id) + '">Удалить</button>'
+            : '<button type="button" class="btn btn-sm btn-secondary lkpi-open" data-id="' + escapeHtml(reg.id) + '">Открыть</button>' +
+              '<button type="button" class="btn btn-sm btn-secondary lkpi-sync" data-id="' + escapeHtml(reg.id) + '" title="Добавить из глобального шаблона только отсутствующие KPI и инструкции">Синхр.</button>';
+          return '<tr>' +
             '<td><code>' + escapeHtml(kpi.kpi_code) + '</code></td>' +
             '<td>' + escapeHtml(kpi.target_value == null ? '' : String(kpi.target_value)) + '</td>' +
             '<td>' + escapeHtml(kpi.period_type || '') + '</td>' +
             '<td>' + escapeHtml(kpi.weight == null ? '' : String(kpi.weight)) + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(reg.regulation_name || reg.regulation_code) + '</td>' +
-          '</tr>'
-        )).join('');
+            '<td class="td-ellipsis">' + regLabel + '</td>' +
+            '<td>' + regFlag + '</td>' +
+            '<td class="row-actions">' + actions + '</td>' +
+          '</tr>';
+        }).join('');
+        tbody.querySelectorAll('.lkpi-open').forEach((btn) => {
+          btn.onclick = () => openCrDetail(btn.dataset.id);
+        });
+        tbody.querySelectorAll('.lkpi-sync').forEach((btn) => {
+          btn.onclick = async () => {
+            const explain =
+              'Синхронизация с глобальным шаблоном:\n\n' +
+              '• добавляет только отсутствующие KPI и инструкции (по коду);\n' +
+              '• уже существующие записи не изменяются;\n' +
+              '• устаревшие KPI и инструкции удаляются вручную в карточке регламента.\n\n' +
+              'Продолжить?';
+            if (!confirm(explain)) return;
+            try {
+              const res = await fetchApi('/client-regulations/' + encodeURIComponent(btn.dataset.id) + '/sync-from-global', { method: 'POST' });
+              const kpis = res.kpis_added ?? 0;
+              const ins = res.instructions_added ?? 0;
+              if (kpis === 0 && ins === 0) {
+                alert(
+                  'Синхронизация завершена.\n\n' +
+                  'Новых KPI и инструкций не найдено — локальный регламент уже содержит все записи из глобального шаблона.\n' +
+                  'Существующие записи не изменялись.'
+                );
+              } else {
+                alert(
+                  'Синхронизация завершена.\n\n' +
+                  'Добавлено KPI: ' + kpis + ', инструкций: ' + ins + '.\n' +
+                  'Существующие записи не изменялись.'
+                );
+              }
+              await loadLocalKpis();
+            } catch (e) {
+              alert(e.message);
+            }
+          };
+        });
+        tbody.querySelectorAll('.lkpi-edit').forEach((btn) => {
+          btn.onclick = async () => openLocalKpiModal(btn.dataset.id, standalone);
+        });
+        tbody.querySelectorAll('.lkpi-del').forEach((btn) => {
+          btn.onclick = async () => {
+            if (!confirm('Удалить локальный KPI без регламента?')) return;
+            try {
+              await fetchApi('/client-kpis/' + encodeURIComponent(btn.dataset.id), { method: 'DELETE' });
+              await loadLocalKpis();
+            } catch (e) {
+              alert(e.message);
+            }
+          };
+        });
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
+
+    function fillLocalKpiPositionSelects(orgUnitId, positionCode) {
+      const ouSel = document.getElementById('localKpiOrgUnit');
+      const posSel = document.getElementById('localKpiPosition');
+      if (!ouSel || !posSel) return;
+      ouSel.innerHTML = '<option value="">— все отделения —</option>' +
+        orgUnits.map((u) =>
+          '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.code + ' — ' + u.name) + '</option>'
+        ).join('');
+      ouSel.value = orgUnitId || '';
+      const filtered = positionsCache.filter((p) => !ouSel.value || p.org_unit_id === ouSel.value);
+      posSel.innerHTML = '<option value="">— не выбрано —</option>' +
+        filtered.map((p) =>
+          '<option value="' + escapeHtml(p.code) + '">' + escapeHtml(p.name + ' (' + p.code + ')') + '</option>'
+        ).join('');
+      if (positionCode && [...posSel.options].some((o) => o.value === positionCode)) {
+        posSel.value = positionCode;
+      } else {
+        posSel.value = '';
+      }
+    }
+
+    async function openLocalKpiModal(editId, cachedRows) {
+      if (!orgUnits.length) await loadOrgTree();
+      await loadPositionsForSelect();
+      const modal = document.getElementById('modalLocalKpi');
+      const errEl = document.getElementById('localKpiModalErr');
+      showErr(errEl, '');
+      document.getElementById('localKpiEditId').value = editId || '';
+      document.getElementById('localKpiModalTitle').textContent = editId ? 'Изменить локальный KPI' : 'Новый KPI без регламента';
+      const codeEl = document.getElementById('localKpiCode');
+      codeEl.disabled = !!editId;
+      let positionCode = '';
+      if (editId && cachedRows) {
+        const row = cachedRows.find((x) => x.id === editId);
+        codeEl.value = row ? row.kpi_code : '';
+        document.getElementById('localKpiTarget').value = row && row.target_value != null ? String(row.target_value) : '';
+        document.getElementById('localKpiPeriod').value = row ? (row.period_type || 'month') : 'month';
+        document.getElementById('localKpiWeight').value = row && row.weight != null ? String(row.weight) : '';
+        positionCode = row ? (row.position_code || '') : '';
+        document.getElementById('localKpiNotes').value = row ? (row.notes || '') : '';
+      } else {
+        codeEl.value = '';
+        document.getElementById('localKpiTarget').value = '';
+        document.getElementById('localKpiPeriod').value = 'month';
+        document.getElementById('localKpiWeight').value = '';
+        document.getElementById('localKpiNotes').value = '';
+      }
+      let orgUnitId = '';
+      if (positionCode) {
+        const pos = positionsCache.find((p) => p.code === positionCode || p.position_catalog_code === positionCode);
+        if (pos) orgUnitId = pos.org_unit_id;
+      }
+      fillLocalKpiPositionSelects(orgUnitId, positionCode);
+      const ouSel = document.getElementById('localKpiOrgUnit');
+      ouSel.onchange = () => fillLocalKpiPositionSelects(ouSel.value, document.getElementById('localKpiPosition').value);
+      modal.classList.add('show');
+    }
+
+    document.getElementById('btnLocalKpiAdd').onclick = async () => {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      await openLocalKpiModal('', null);
+    };
+    document.getElementById('btnLocalKpiCancel').onclick = () => document.getElementById('modalLocalKpi').classList.remove('show');
+    document.getElementById('btnLocalKpiSave').onclick = async () => {
+      const errEl = document.getElementById('localKpiModalErr');
+      showErr(errEl, '');
+      const editId = document.getElementById('localKpiEditId').value.trim();
+      const code = document.getElementById('localKpiCode').value.trim();
+      if (!editId && !code) { showErr(errEl, 'Укажите код KPI'); return; }
+      const tv = document.getElementById('localKpiTarget').value.trim();
+      const wv = document.getElementById('localKpiWeight').value.trim();
+      const body = {
+        target_value: tv === '' ? null : Number(tv),
+        period_type: document.getElementById('localKpiPeriod').value,
+        weight: wv === '' ? null : Number(wv),
+        position_code: document.getElementById('localKpiPosition').value || null,
+        notes: document.getElementById('localKpiNotes').value.trim() || null,
+      };
+      try {
+        if (editId) {
+          await fetchApi('/client-kpis/' + encodeURIComponent(editId), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        } else {
+          await fetchApi('/client-kpis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({ client_id: clientId, kpi_code: code }, body)),
+          });
+        }
+        document.getElementById('modalLocalKpi').classList.remove('show');
+        await loadLocalKpis();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
 
     function parseLocalSkillsCsvLine(line) {
       const cells = [];
@@ -2514,6 +2900,123 @@
       });
     }
 
+    function localSkillApiUrl(rowId, suffix) {
+      return '/api/skill-assessment/catalog/competency-matrix/' + encodeURIComponent(rowId) + (suffix || '') +
+        '?client_id=' + encodeURIComponent(clientId);
+    }
+
+    async function localSkillApi(rowId, opts, suffix) {
+      const r = await fetch(localSkillApiUrl(rowId, suffix || ''), opts || {});
+      if (!r.ok) {
+        let msg = 'Ошибка ' + r.status;
+        try {
+          const j = await r.json();
+          if (j && j.detail) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+          else if (j && j.message) msg = j.message;
+        } catch (_) {}
+        throw new Error(msg);
+      }
+      if (r.status === 204) return null;
+      return r.json();
+    }
+
+    function catalogPositionOptions() {
+      const seen = new Set();
+      const out = [];
+      positionsCache.forEach((p) => {
+        const code = (p.position_catalog_code || p.code || '').trim();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        out.push({ code, name: p.name || code, org_unit_id: p.org_unit_id });
+      });
+      return out;
+    }
+
+    async function loadGlobalPositionCodesForClientTemplate() {
+      globalPositionCodesCache = new Set();
+      const client = getCurrentClient();
+      const tpl = (client && client.template_code) || 'default';
+      try {
+        const data = await fetchApi('/position-catalog?template_code=' + encodeURIComponent(tpl) + '&limit=500');
+        (data.items || []).forEach((p) => {
+          if (p.position_code) globalPositionCodesCache.add(p.position_code.trim());
+        });
+      } catch (_) {}
+      return tpl;
+    }
+
+    function openLocalSkillToGlobal(rowId) {
+      const row = localSkillRows.find((x) => x.row_id === rowId);
+      if (!row || !clientId) return;
+      const client = getCurrentClient();
+      const tpl = (client && client.template_code) || 'default';
+      const posCode = (row.position_code || '').trim();
+      if (!globalPositionCodesCache.has(posCode)) {
+        alert(
+          'Должность «' + posCode + '» отсутствует в глобальном справочнике должностей шаблона «' + tpl + '».\n\n' +
+          'Сначала добавьте должность в типовой справочник (/global/positions), затем повторите копирование навыка в шаблон.'
+        );
+        return;
+      }
+      if (!window.CatalogCopy) return;
+      CatalogCopy.open({
+        entity: 'skill',
+        mode: 'local_to_global',
+        clientId,
+        sourceMatrixRowId: rowId,
+        positionCode: posCode,
+        departmentCode: row.department_code || '',
+        skillRank: row.skill_rank || 1,
+        targetTemplateCode: tpl,
+        onSuccess: (res) => {
+          const created = res && res.created;
+          alert(created === false
+            ? 'Такая строка уже есть в глобальном справочнике навыков.'
+            : 'Навык добавлен в глобальный шаблон «' + tpl + '».');
+        },
+      });
+    }
+
+    function fillLocalSkillPositionSelects(orgUnitId, positionCode) {
+      const ouSel = document.getElementById('localSkillOrgUnit');
+      const posSel = document.getElementById('localSkillPosition');
+      if (!ouSel || !posSel) return;
+      ouSel.innerHTML = '<option value="">— все отделения —</option>' +
+        orgUnits.map((u) =>
+          '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.code + ' — ' + u.name) + '</option>'
+        ).join('');
+      ouSel.value = orgUnitId || '';
+      const options = catalogPositionOptions().filter((p) => !ouSel.value || p.org_unit_id === ouSel.value);
+      posSel.innerHTML = options.map((p) =>
+        '<option value="' + escapeHtml(p.code) + '">' + escapeHtml(p.name + ' (' + p.code + ')') + '</option>'
+      ).join('');
+      if (positionCode && [...posSel.options].some((o) => o.value === positionCode)) {
+        posSel.value = positionCode;
+      } else if (options.length) {
+        posSel.value = options[0].code;
+      }
+    }
+
+    async function openLocalSkillModal(rowId) {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      const row = localSkillRows.find((x) => x.row_id === rowId);
+      if (!row) return;
+      if (!orgUnits.length) await loadOrgTree();
+      await loadPositionsForSelect();
+      document.getElementById('localSkillEditId').value = rowId;
+      document.getElementById('localSkillDept').value = row.department_code || '';
+      document.getElementById('localSkillRank').value = row.skill_rank != null ? String(row.skill_rank) : '1';
+      document.getElementById('localSkillTitle').value = row.skill_title_ru || row.skill_name || '';
+      let orgUnitId = '';
+      const pos = positionsCache.find((p) => (p.position_catalog_code || p.code || '').trim() === row.position_code);
+      if (pos) orgUnitId = pos.org_unit_id;
+      fillLocalSkillPositionSelects(orgUnitId, row.position_code || '');
+      const ouSel = document.getElementById('localSkillOrgUnit');
+      ouSel.onchange = () => fillLocalSkillPositionSelects(ouSel.value, document.getElementById('localSkillPosition').value);
+      showErr(document.getElementById('localSkillModalErr'), '');
+      document.getElementById('modalLocalSkill').classList.add('show');
+    }
+
     function renderLocalSkills() {
       const tbody = document.getElementById('localSkillsTbody');
       const meta = document.getElementById('localSkillsMeta');
@@ -2530,38 +3033,91 @@
         meta.classList.remove('hidden');
       }
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="meta" style="padding:1rem;">Нет локальных навыков по текущим должностям или фильтру.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Нет локальных навыков. Нажмите «Скопировать» для загрузки типовой матрицы.</td></tr>';
         return;
       }
-      tbody.innerHTML = rows.map((row) => (
+      tbody.innerHTML = rows.map((row) => {
+        const posCode = row.position_code || '';
+        const posName = row.position_name_ru || posCode;
+        const skillTitle = row.skill_title_ru || row.skill_name || '';
+        return (
         '<tr>' +
-          '<td><code>' + escapeHtml(row.position_code || '') + '</code></td>' +
-          '<td class="td-ellipsis">' + escapeHtml(row.position_name_ru || '') + '</td>' +
-          '<td>' + escapeHtml(Number.isFinite(row.skill_rank) ? String(row.skill_rank) : '') + '</td>' +
-          '<td class="td-ellipsis">' + escapeHtml(row.skill_name || '') + '</td>' +
+          '<td class="td-ellipsis" title="' + escapeHtml(posCode) + '"><code>' + escapeHtml(posCode) + '</code></td>' +
+          '<td class="td-ellipsis" title="' + escapeHtml(posName) + '">' + escapeHtml(posName) + '</td>' +
+          '<td>' + escapeHtml(row.skill_rank != null ? String(row.skill_rank) : '') + '</td>' +
+          '<td class="td-ellipsis" title="' + escapeHtml(skillTitle) + '">' + escapeHtml(skillTitle) + '</td>' +
+          '<td class="row-actions">' +
+            (row.row_id
+              ? '<button type="button" class="btn btn-sm btn-secondary lskill-edit" data-id="' + escapeHtml(row.row_id) + '" title="Изменить">Изм.</button>' +
+                '<button type="button" class="btn btn-sm btn-secondary lskill-clone" data-id="' + escapeHtml(row.row_id) + '" title="Сделать копию">Копия</button>' +
+                '<button type="button" class="btn btn-sm btn-secondary lskill-global" data-id="' + escapeHtml(row.row_id) + '" title="Копировать в глобальный справочник навыков">В шаблон</button>' +
+                '<button type="button" class="btn btn-sm btn-danger lskill-del" data-id="' + escapeHtml(row.row_id) + '" title="Удалить">×</button>'
+              : '') +
+          '</td>' +
         '</tr>'
-      )).join('');
+        );
+      }).join('');
+      tbody.querySelectorAll('.lskill-edit').forEach((btn) => {
+        btn.onclick = () => openLocalSkillModal(btn.dataset.id);
+      });
+      tbody.querySelectorAll('.lskill-clone').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await localSkillApi(btn.dataset.id, { method: 'POST' }, '/clone');
+            await loadLocalSkills();
+          } catch (e) {
+            alert(e.message || 'Ошибка копирования');
+          }
+        };
+      });
+      tbody.querySelectorAll('.lskill-global').forEach((btn) => {
+        btn.onclick = () => openLocalSkillToGlobal(btn.dataset.id);
+      });
+      tbody.querySelectorAll('.lskill-del').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Удалить строку навыка из локальной матрицы?')) return;
+          try {
+            await localSkillApi(btn.dataset.id, { method: 'DELETE' });
+            await loadLocalSkills();
+          } catch (e) {
+            alert(e.message || 'Ошибка удаления');
+          }
+        };
+      });
     }
 
     async function loadLocalSkills() {
       const tbody = document.getElementById('localSkillsTbody');
       if (!tbody) return;
+      if (!clientId) {
+        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        return;
+      }
       try {
         await loadPositionsForSelect();
+        await loadGlobalPositionCodesForClientTemplate();
         const positionCodes = new Set(
           positionsCache.map((p) => (p.position_catalog_code || p.code || '').trim()).filter(Boolean)
         );
-        if (!positionCodes.size) {
-          localSkillRows = [];
-          renderLocalSkills();
-          return;
-        }
-        const r = await fetch('/static/global/position-skills-normalized.csv', { cache: 'no-store' });
-        if (!r.ok) throw new Error('Не удалось загрузить типовую матрицу навыков');
-        localSkillRows = parseLocalSkillsCsv(await r.text()).filter((row) => positionCodes.has(row.position_code));
+        const r = await fetch('/api/skill-assessment/catalog/competency-matrix?client_id=' + encodeURIComponent(clientId), { cache: 'no-store' });
+        if (!r.ok) throw new Error('Не удалось загрузить локальную матрицу навыков');
+        const matrix = await r.json();
+        const posNameByCode = Object.fromEntries(positionsCache.map((p) => [(p.position_catalog_code || p.code || '').trim(), p.name]));
+        localSkillRows = (matrix || [])
+          .filter((row) => !positionCodes.size || positionCodes.has(row.position_code))
+          .map((row) => ({
+            row_id: row.row_id,
+            position_code: row.position_code,
+            department_code: row.department_code,
+            position_name_ru: posNameByCode[row.position_code] || row.position_code,
+            skill_rank: row.skill_rank,
+            skill_code: row.skill_code,
+            skill_name: row.skill_title_ru,
+            skill_title_ru: row.skill_title_ru,
+          }));
         renderLocalSkills();
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="4" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
@@ -3195,6 +3751,37 @@
     document.getElementById('btnLocalKpiRefresh').onclick = loadLocalKpis;
     document.getElementById('btnLocalSkillsRefresh').onclick = loadLocalSkills;
     document.getElementById('localSkillsSearch').oninput = renderLocalSkills;
+    document.getElementById('btnLocalSkillCancel').onclick = () => document.getElementById('modalLocalSkill').classList.remove('show');
+    document.getElementById('btnLocalSkillSave').onclick = async () => {
+      const errEl = document.getElementById('localSkillModalErr');
+      showErr(errEl, '');
+      const rowId = document.getElementById('localSkillEditId').value.trim();
+      const positionCode = document.getElementById('localSkillPosition').value.trim();
+      const departmentCode = document.getElementById('localSkillDept').value.trim();
+      const rankRaw = document.getElementById('localSkillRank').value.trim();
+      if (!rowId || !positionCode || !departmentCode || !rankRaw) {
+        showErr(errEl, 'Заполните должность, тип подразделения и ранг');
+        return;
+      }
+      try {
+        await localSkillApi(rowId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position_code: positionCode,
+            department_code: departmentCode,
+            skill_rank: parseInt(rankRaw, 10) || 1,
+          }),
+        });
+        document.getElementById('modalLocalSkill').classList.remove('show');
+        await loadLocalSkills();
+      } catch (e) {
+        showErr(errEl, e.message);
+      }
+    };
+    document.getElementById('modalLocalSkill').addEventListener('click', (e) => {
+      if (e.target.id === 'modalLocalSkill') document.getElementById('modalLocalSkill').classList.remove('show');
+    });
 
     async function loadCrFilterOptions() {
       if (!clientId) return;
@@ -3254,6 +3841,23 @@
       tbody.querySelectorAll('.cr-open').forEach((b) => {
         b.addEventListener('click', () => openCrDetail(b.dataset.id));
       });
+      tbody.querySelectorAll('.cr-edit').forEach((b) => {
+        b.addEventListener('click', async () => {
+          await openCrDetail(b.dataset.id);
+          document.getElementById('btnCrDetailEdit').click();
+        });
+      });
+      tbody.querySelectorAll('.cr-to-global').forEach((b) => {
+        b.addEventListener('click', () => {
+          if (!window.CatalogCopy) return;
+          CatalogCopy.open({
+            entity: 'regulation',
+            mode: 'local_to_global',
+            sourceClientRegulationId: b.dataset.id,
+            onSuccess: () => alert('Регламент скопирован в глобальный шаблон'),
+          });
+        });
+      });
     }
 
     async function loadClientRegulations() {
@@ -3278,7 +3882,7 @@
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="meta" style="padding:1rem;">Нет регламентов организации по условиям. Нажмите «Копировать из глобального реестра» или измените фильтры.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="meta" style="padding:1rem;">Нет регламентов организации. Нажмите «Скопировать» или измените фильтры.</td></tr>';
           return;
         }
         tbody.innerHTML = items.map((r) => {
@@ -3295,13 +3899,19 @@
             '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
             '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
             '<td>' + src + '</td>' +
+            renderRegulationUrlCell(r.google_doc_url, 'Открыть регламент', 'Ссылка на регламент не указана') +
+            renderRegulationUrlCell(r.instructions_folder_url, 'Открыть папку инструкций', 'Папка инструкций не указана') +
             '<td class="td-status">' + statusHtml + '</td>' +
-            '<td class="row-actions"><button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + rid + '">Открыть</button></td>' +
+            '<td class="row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + rid + '">Открыть</button>' +
+            '<button type="button" class="btn btn-secondary btn-sm cr-edit" data-id="' + rid + '">Изменить</button>' +
+            '<button type="button" class="btn btn-secondary btn-sm cr-to-global" data-id="' + rid + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
+            '</td>' +
             '</tr>';
         }).join('');
         bindCrTableActions(tbody);
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="8" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
@@ -3363,6 +3973,79 @@
       document.getElementById('modalCrEdit').classList.remove('show');
       showErr(document.getElementById('crEditErr'), '');
     }
+
+    async function fillPosCopyCatalog(templateCode) {
+      const sel = document.getElementById('posCopyCatalog');
+      sel.innerHTML = '<option value="">— загрузка —</option>';
+      try {
+        const data = await fetchApi('/position-catalog?template_code=' + encodeURIComponent(templateCode) + '&limit=500');
+        sel.innerHTML = '<option value="">— выберите должность —</option>';
+        (data.items || []).forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.position_code;
+          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        sel.innerHTML = '<option value="">Ошибка</option>';
+      }
+    }
+
+    async function openPosCopyModal() {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      const client = getCurrentClient();
+      const tplSel = document.getElementById('posCopyTemplate');
+      const ouSel = document.getElementById('posCopyOrgUnit');
+      try {
+        const templates = await CatalogCopy.loadTemplates();
+        tplSel.innerHTML = templates.map((t) =>
+          '<option value="' + escapeHtml(t.code) + '">' + escapeHtml(t.code + ' — ' + t.name) + '</option>'
+        ).join('');
+        tplSel.value = (client && client.template_code) || 'default';
+        ouSel.innerHTML = orgUnits.map((u) =>
+          '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.code + ' — ' + u.name) + '</option>'
+        ).join('');
+        if (!orgUnits.length) ouSel.innerHTML = '<option value="">Нет подразделений</option>';
+        await fillPosCopyCatalog(tplSel.value);
+        tplSel.onchange = () => fillPosCopyCatalog(tplSel.value);
+        document.getElementById('modalPosCopy').classList.add('show');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    document.getElementById('btnCopyPosition').onclick = openPosCopyModal;
+    document.getElementById('btnPosCopyCancel').onclick = () => document.getElementById('modalPosCopy').classList.remove('show');
+    document.getElementById('btnPosCopyDo').onclick = async () => {
+      const code = document.getElementById('posCopyCatalog').value;
+      const orgUnitId = document.getElementById('posCopyOrgUnit').value;
+      const sourceTpl = document.getElementById('posCopyTemplate').value;
+      if (!code || !orgUnitId) { alert('Выберите должность и подразделение'); return; }
+      try {
+        await CatalogCopy.api('POST', '/catalog-copy/position', {
+          mode: 'global_to_local',
+          source_template_code: sourceTpl,
+          source_position_code: code,
+          client_id: clientId,
+          org_unit_id: orgUnitId,
+        });
+        document.getElementById('modalPosCopy').classList.remove('show');
+        await loadPositions();
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    document.getElementById('btnLocalKpiCopy').onclick = () => openCrCopyModal();
+    document.getElementById('btnLocalSkillsCopy').onclick = () => {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      CatalogCopy.open({
+        entity: 'skills',
+        mode: 'global_to_local',
+        clientId,
+        onSuccess: () => loadLocalSkills(),
+      });
+    };
 
     document.getElementById('btnCrCopy').onclick = openCrCopyModal;
     document.getElementById('btnCrCopyCancel').onclick = closeCrModals;

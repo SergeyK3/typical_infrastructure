@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -23,9 +24,9 @@
     .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 4%; }
     .data-table th:nth-child(8), .data-table td:nth-child(8) { width: 4%; }
     .data-table th:nth-child(9), .data-table td:nth-child(9) {
-      width: 11.5rem;
-      min-width: 11.5rem;
-      max-width: 11.5rem;
+      width: 14rem;
+      min-width: 14rem;
+      max-width: 14rem;
       white-space: nowrap;
       vertical-align: middle;
     }
@@ -277,10 +278,22 @@
             : '—';
           tr.innerHTML = '<td><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
             '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.kpi_code) + '">Изменить</button>' +
+            '<button type="button" class="btn btn-secondary btn-clone" data-code="' + escapeHtml(row.kpi_code) + '">Копировать</button>' +
+            '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + escapeHtml(row.kpi_code) + '" title="В другой шаблон">В шаблон</button>' +
             '<button type="button" class="btn btn-danger btn-del" data-code="' + escapeHtml(row.kpi_code) + '">Удалить</button></td>';
           tb.appendChild(tr);
         }
         tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.code));
+        tb.querySelectorAll('.btn-clone').forEach((b) => b.onclick = () => cloneRow(b.dataset.code));
+        tb.querySelectorAll('.btn-copy-tpl').forEach((b) => b.onclick = () => {
+          CatalogCopy.open({
+            entity: 'kpi',
+            mode: 'global_to_global',
+            sourceTemplateCode: templateCode,
+            sourceCode: b.dataset.code,
+            onSuccess: () => load(),
+          });
+        });
         tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.code));
       } catch (e) {
         $('listErr').textContent = e.message;
@@ -365,6 +378,18 @@
         $('modalErr').classList.remove('hidden');
       }
     };
+
+    async function cloneRow(code) {
+      $('listErr').classList.add('hidden');
+      try {
+        const res = await api('POST', '/kpi-templates/' + encodeURIComponent(code) + '/clone?' + tplParam());
+        alert('Создан KPI «' + res.kpi_name + '» (' + res.kpi_code + ').');
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message;
+        $('listErr').classList.remove('hidden');
+      }
+    }
 
     async function delRow(code) {
       if (!confirm('Удалить шаблон KPI?')) return;

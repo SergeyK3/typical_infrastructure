@@ -8,9 +8,19 @@
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
   <style>
     .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
+    .url-flag {
+      display: inline-block; min-width: 2rem; text-align: center;
+      padding: 0.12rem 0.45rem; font-size: 0.72rem; border-radius: 4px; font-weight: 500;
+      text-decoration: none;
+    }
+    .url-flag-yes { background: rgba(63,185,80,0.2); color: var(--success); }
+    .url-flag-yes:hover { background: rgba(63,185,80,0.32); text-decoration: underline; }
+    .url-flag-no { background: rgba(128,128,128,0.12); color: var(--text-muted); }
+    .td-url-flag { text-align: center; white-space: nowrap; }
     .filters-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .filters-toolbar .search-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; flex: 1 1 100%; }
     .filters-toolbar input[type="search"], .filters-toolbar input.search-input {
@@ -22,14 +32,17 @@
     .data-table td.td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table td.td-name a { color: var(--accent); text-decoration: none; }
     .data-table td.td-name a:hover { text-decoration: underline; }
-    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 13%; }
-    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 24%; }
-    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 11%; }
+    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 11%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table td:nth-child(1) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 21%; }
+    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 10%; }
     .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 6%; }
     .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 4%; }
-    .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 12%; }
-    .data-table th:nth-child(7), .data-table td:nth-child(7) {
-      width: 11.5rem; min-width: 11.5rem; max-width: 11.5rem; white-space: nowrap;
+    .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 4.5%; }
+    .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 4.5%; }
+    .data-table th:nth-child(8), .data-table td:nth-child(8) { width: 10%; }
+    .data-table th:nth-child(9), .data-table td:nth-child(9) {
+      width: 14rem; min-width: 14rem; max-width: 14rem; white-space: nowrap;
     }
     .td-status { font-size: 0.82rem; }
     .row-actions { display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
@@ -151,6 +164,7 @@
       <div class="content">
         <div class="toolbar-top">
           <button type="button" class="btn btn-primary" id="btnCreate">+ Создать регламент</button>
+          <button type="button" class="btn btn-secondary" id="btnGenerateText">Создать новый текстовый регламент</button>
           <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка с учётом поиска и фильтров в шапке таблицы">Скачать Excel</button>
         </div>
         <div class="filters-toolbar">
@@ -174,6 +188,8 @@
               <th><label class="th-filter">Должность<select id="filterPosition" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
               <th><label class="th-filter">Тип подразделения<select id="filterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
               <th>Вер.</th>
+              <th title="Ссылка на документ регламента (Google Doc и т.п.)">Регл.</th>
+              <th title="Папка с инструкциями (URL)">Инстр.</th>
               <th><label class="th-filter">Статус<select id="filterStatus" title="Фильтр по статусу">
                 <option value="">— все —</option>
                 <option value="draft">draft</option>
@@ -215,13 +231,16 @@
         <label>Код регламента *</label>
         <input type="text" id="f_regulation_code" maxlength="64" placeholder="REG_MY_POSITION_V1" title="Уникален в общесистемном реестре; перед вводом проверьте поиск на странице" />
         <p class="meta hidden" id="f_regulation_code_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;"></p>
-        <label>Код должности (справочник) *</label>
-        <select id="f_position_code"></select>
-        <label>Тип подразделения *</label>
-        <input type="text" id="f_dept_type_code" maxlength="32" placeholder="HR, SALES, IT" />
         <label>Версия *</label>
         <input type="text" id="f_version_no" maxlength="16" placeholder="1" />
       </div>
+      <div id="formFieldsSlot">
+        <label>Код должности (справочник) *</label>
+        <select id="f_position_code"></select>
+        <p class="meta hidden" id="f_position_code_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">При редактировании должность не меняется.</p>
+        <label>Тип подразделения *</label>
+        <select id="f_dept_type_code"><option value="">— выберите —</option></select>
+        <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Код отделения из типовой оргструктуры шаблона (ADM, HR, SALES и т.д.).</p>
       <label>Название *</label>
       <input type="text" id="f_regulation_name" maxlength="256" />
       <label>Цель (кратко)</label>
@@ -266,6 +285,33 @@
     </div>
   </div>
 
+  <div id="generateModal" class="modal">
+    <div class="modal-content wide">
+      <h3>Новый текстовый регламент</h3>
+      <p class="meta" style="margin: 0 0 0.75rem 0; line-height: 1.45;">
+        Система найдёт материалы в интернете, оформит DOCX по структуре типового регламента и предложит скачать черновик.
+        Перед публикацией проверьте текст и при необходимости загрузите документ в Google Drive.
+      </p>
+      <div class="err hidden" id="generateErr" style="color: var(--error); margin-bottom: 0.5rem;"></div>
+      <label for="gen_position_title">Название должности *</label>
+      <input type="text" id="gen_position_title" maxlength="256" placeholder="Например: Специалист по закупкам" autocomplete="off" />
+      <label for="gen_comment">Комментарий / дополнительный контекст</label>
+      <textarea id="gen_comment" maxlength="2000" placeholder="Отрасль, специфика компании, ключевые акценты для поиска…"></textarea>
+      <div id="generateResult" class="hidden section">
+        <div class="section-title">Готово</div>
+        <p id="generateResultText" class="meta" style="margin: 0;"></p>
+        <p style="margin: 0.75rem 0 0 0;">
+          <a id="generateDownloadLink" class="btn btn-secondary" href="#" download style="text-decoration:none;display:inline-block;">Скачать DOCX</a>
+          <button type="button" class="btn btn-primary" id="btnGenerateToForm" style="margin-left:0.5rem;">Создать карточку в реестре</button>
+        </p>
+      </div>
+      <div class="modal-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary" id="btnGenerateRun">Сгенерировать</button>
+        <button type="button" class="btn btn-secondary" id="btnGenerateCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
       const p = new URLSearchParams(location.search);
@@ -286,6 +332,93 @@
     let formMode = 'create'; // 'create' | 'edit'
     let editRegulationCode = '';
     let formClientsLoaded = false;
+    let formDeptTypeCodes = [];
+    let formPositionsCache = [];
+    let lastGeneratedDraft = null;
+
+    function showGenerateErr(msg) {
+      const el = document.getElementById('generateErr');
+      if (!msg) { el.textContent = ''; el.classList.add('hidden'); return; }
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function closeGenerateModal() {
+      document.getElementById('generateModal').classList.remove('show');
+      showGenerateErr('');
+    }
+
+    function openGenerateModal() {
+      lastGeneratedDraft = null;
+      document.getElementById('gen_position_title').value = '';
+      document.getElementById('gen_comment').value = '';
+      document.getElementById('generateResult').classList.add('hidden');
+      showGenerateErr('');
+      document.getElementById('generateModal').classList.add('show');
+      document.getElementById('gen_position_title').focus();
+    }
+
+    async function runGenerateFromWeb() {
+      showGenerateErr('');
+      const title = document.getElementById('gen_position_title').value.trim();
+      const comment = document.getElementById('gen_comment').value.trim();
+      if (!title) {
+        showGenerateErr('Укажите название должности.');
+        return;
+      }
+      const btn = document.getElementById('btnGenerateRun');
+      btn.disabled = true;
+      btn.textContent = 'Генерация…';
+      try {
+        const tpl = document.getElementById('filterTemplate').value || 'default';
+        const data = await fetchApi('/regulations/generate-from-web', {
+          method: 'POST',
+          body: JSON.stringify({
+            template_code: tpl,
+            position_title: title,
+            comment: comment || null,
+          }),
+        });
+        lastGeneratedDraft = data;
+        const res = document.getElementById('generateResult');
+        const src = (data.sources || []).length
+          ? ' Источники: ' + data.sources.slice(0, 3).map(u => '<a href="' + u + '" target="_blank" rel="noopener">ссылка</a>').join(', ')
+          : '';
+        document.getElementById('generateResultText').innerHTML =
+          'Код: <code>' + (data.regulation_code || '') + '</code>, должность: <code>' + (data.position_code || '') + '</code>.' + src;
+        const dl = document.getElementById('generateDownloadLink');
+        dl.href = data.download_url || '#';
+        res.classList.remove('hidden');
+      } catch (e) {
+        showGenerateErr(e.message || 'Ошибка генерации');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Сгенерировать';
+      }
+    }
+
+    async function openCreateFormFromGenerated() {
+      if (!lastGeneratedDraft) return;
+      const d = lastGeneratedDraft;
+      closeGenerateModal();
+      await openCreateForm();
+      document.getElementById('f_regulation_code').value = d.regulation_code || '';
+      document.getElementById('f_version_no').value = 'V1';
+      document.getElementById('f_regulation_name').value = d.regulation_name || '';
+      document.getElementById('f_goal_summary').value = d.goal_summary || '';
+      document.getElementById('f_ckp_short').value = d.ckp_short || '';
+      document.getElementById('f_ckp_full').value = d.ckp_full || '';
+      document.getElementById('f_notes').value = d.notes || '';
+      const posSel = document.getElementById('f_position_code');
+      const pcode = d.position_code || '';
+      if (pcode && ![...posSel.options].some(o => o.value === pcode)) {
+        const opt = document.createElement('option');
+        opt.value = pcode;
+        opt.textContent = (d.regulation_name || pcode) + ' (' + pcode + ')';
+        posSel.appendChild(opt);
+      }
+      if (pcode) posSel.value = pcode;
+    }
 
     function treeHasOrgCode(nodes, code) {
       if (!code) return false;
@@ -433,6 +566,14 @@
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    function renderRegulationUrlCell(url, openTitle, emptyTitle) {
+      const href = url && String(url).trim();
+      if (href) {
+        return '<td class="td-url-flag"><a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" class="url-flag url-flag-yes" title="' + escapeHtml(openTitle) + '">да</a></td>';
+      }
+      return '<td class="td-url-flag"><span class="url-flag url-flag-no" title="' + escapeHtml(emptyTitle) + '">нет</span></td>';
+    }
+
     async function loadRegulations() {
       const tbody = document.getElementById('tbody');
       const meta = document.getElementById('listMeta');
@@ -446,7 +587,7 @@
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет регламентов по выбранным фильтрам и поиску. Измените запрос или снимите часть условий.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет регламентов по выбранным фильтрам и поиску. Измените запрос или снимите часть условий.</td></tr>';
           return;
         }
         tbody.innerHTML = items.map((r) => {
@@ -461,9 +602,13 @@
             '<td><code>' + escapeHtml(r.position_code) + '</code></td>' +
             '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
             '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
+            renderRegulationUrlCell(r.google_doc_url, 'Открыть регламент', 'Ссылка на регламент не указана') +
+            renderRegulationUrlCell(r.instructions_folder_url, 'Открыть папку инструкций', 'Папка инструкций не указана') +
             '<td class="td-status">' + statusHtml + '</td>' +
             '<td class="row-actions">' +
             '<button type="button" class="btn btn-primary btn-edit" data-code="' + codeEsc + '">Изменить</button>' +
+            '<button type="button" class="btn btn-secondary btn-clone" data-code="' + codeEsc + '">Копировать</button>' +
+            '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + codeEsc + '" title="В другой шаблон">В шаблон</button>' +
             '<button type="button" class="btn btn-danger btn-del" data-code="' + codeEsc + '">Удалить</button>' +
             '</td></tr>';
         }).join('');
@@ -473,11 +618,27 @@
         tbody.querySelectorAll('.btn-edit').forEach((btn) => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); openEditForm(btn.dataset.code); });
         });
+        tbody.querySelectorAll('.btn-clone').forEach((btn) => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); cloneRegulation(btn.dataset.code); });
+        });
+        tbody.querySelectorAll('.btn-copy-tpl').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tpl = document.getElementById('filterTemplate').value || 'default';
+            CatalogCopy.open({
+              entity: 'regulation',
+              mode: 'global_to_global',
+              sourceTemplateCode: tpl,
+              sourceCode: btn.dataset.code,
+              onSuccess: () => loadRegulations(),
+            });
+          });
+        });
         tbody.querySelectorAll('.btn-del').forEach((btn) => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); deleteRegulation(btn.dataset.code); });
         });
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">Ошибка загрузки: ' + escapeHtml(e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">Ошибка загрузки: ' + escapeHtml(e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></td></tr>';
       }
     }
 
@@ -512,6 +673,23 @@
       document.getElementById('detailModal').classList.remove('show');
     }
 
+    async function cloneRegulation(code) {
+      const tpl = document.getElementById('filterTemplate').value || 'default';
+      try {
+        const res = await fetchApi(
+          '/regulations/' + encodeURIComponent(code) + '/clone?template_code=' + encodeURIComponent(tpl),
+          { method: 'POST' }
+        );
+        alert(
+          'Создан регламент «' + res.row.regulation_name + '» (' + res.row.regulation_code + '). ' +
+          'KPI: ' + res.kpis_created + ', инструкций: ' + res.instructions_created + '.'
+        );
+        await loadRegulations();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      }
+    }
+
     async function deleteRegulation(code) {
       if (!code || !confirm('Удалить регламент «' + code + '»? Связанные KPI и инструкции в этой карточке будут удалены.')) return;
       try {
@@ -529,20 +707,61 @@
       showFormErr('');
     }
 
+    async function loadDeptTypeOptionsForForm(keepValue) {
+      const tpl = document.getElementById('filterTemplate').value || 'default';
+      const sel = document.getElementById('f_dept_type_code');
+      const prev = keepValue !== undefined ? keepValue : sel.value;
+      try {
+        const data = await fetchApi('/template-org-units?template_code=' + encodeURIComponent(tpl) + '&limit=500&offset=0');
+        formDeptTypeCodes = [...new Set((data.items || [])
+          .filter((u) => u.unit_type === 'department')
+          .map((u) => u.code)
+          .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+      } catch (_) {
+        formDeptTypeCodes = [];
+      }
+      sel.innerHTML = '<option value="">— выберите —</option>';
+      formDeptTypeCodes.forEach((code) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = code;
+        sel.appendChild(opt);
+      });
+      if (prev && ![...sel.options].some((o) => o.value === prev)) {
+        const opt = document.createElement('option');
+        opt.value = prev;
+        opt.textContent = prev;
+        sel.appendChild(opt);
+      }
+      if (prev) sel.value = prev;
+    }
+
+    function syncDeptFromSelectedPosition() {
+      if (formMode !== 'create') return;
+      const pos = document.getElementById('f_position_code').value;
+      const row = formPositionsCache.find((p) => p.position_code === pos);
+      if (row && row.primary_dept_type_code) {
+        loadDeptTypeOptionsForForm(row.primary_dept_type_code);
+      }
+    }
+
     async function fillPositionSelect() {
       const sel = document.getElementById('f_position_code');
       const cur = sel.value;
       sel.innerHTML = '';
       try {
-        const positions = await fetchApi('/regulations/positions/list');
-        (positions || []).forEach(p => {
+        const tpl = document.getElementById('filterTemplate').value || 'default';
+        formPositionsCache = await fetchApi('/regulations/positions/list?template_code=' + encodeURIComponent(tpl)) || [];
+        formPositionsCache.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.position_code;
           opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
           sel.appendChild(opt);
         });
         if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
-      } catch (_) {}
+      } catch (_) {
+        formPositionsCache = [];
+      }
     }
 
     async function openCreateForm() {
@@ -550,6 +769,8 @@
       editRegulationCode = '';
       document.getElementById('formTitle').textContent = 'Новый регламент';
       document.getElementById('formFieldsCreate').style.display = 'block';
+      document.getElementById('f_position_code').disabled = false;
+      document.getElementById('f_position_code_hint').classList.add('hidden');
       showFormErr('');
       document.getElementById('f_regulation_code').value = '';
       const rh = document.getElementById('f_regulation_code_hint');
@@ -576,6 +797,8 @@
         await refreshOwnerOrgSelect('');
       }
       await fillPositionSelect();
+      await loadDeptTypeOptionsForForm('');
+      syncDeptFromSelectedPosition();
       document.getElementById('formModal').classList.add('show');
     }
 
@@ -584,9 +807,21 @@
       editRegulationCode = code;
       document.getElementById('formTitle').textContent = 'Изменить регламент';
       document.getElementById('formFieldsCreate').style.display = 'none';
+      document.getElementById('f_position_code').disabled = true;
+      document.getElementById('f_position_code_hint').classList.remove('hidden');
       showFormErr('');
       try {
         const r = await fetchApi('/regulations/' + encodeURIComponent(code));
+        await fillPositionSelect();
+        const posSel = document.getElementById('f_position_code');
+        if (r.position_code && ![...posSel.options].some((o) => o.value === r.position_code)) {
+          const opt = document.createElement('option');
+          opt.value = r.position_code;
+          opt.textContent = (r.position_code || '') + ' (сохранённый код)';
+          posSel.appendChild(opt);
+        }
+        posSel.value = r.position_code || '';
+        await loadDeptTypeOptionsForForm(r.dept_type_code || '');
         document.getElementById('f_regulation_name').value = r.regulation_name || '';
         document.getElementById('f_goal_summary').value = r.goal_summary || '';
         document.getElementById('f_ckp_short').value = r.ckp_short || '';
@@ -659,11 +894,17 @@
         }
       } else {
         const regulation_name = document.getElementById('f_regulation_name').value.trim();
+        const dept_type_code = document.getElementById('f_dept_type_code').value.trim();
         if (!regulation_name) {
           showFormErr('Укажите название регламента.');
           return;
         }
+        if (!dept_type_code) {
+          showFormErr('Укажите тип подразделения.');
+          return;
+        }
         const patch = {
+          dept_type_code,
           regulation_name,
           goal_summary: document.getElementById('f_goal_summary').value.trim() || null,
           ckp_short: document.getElementById('f_ckp_short').value.trim() || null,
@@ -684,11 +925,14 @@
           });
           closeForm();
           await loadRegulations();
+          await loadFilterOptions();
         } catch (e) {
           showFormErr(e.message);
         }
       }
     }
+
+    document.getElementById('f_position_code').addEventListener('change', syncDeptFromSelectedPosition);
 
     async function loadFilterOptions() {
       try {
@@ -700,9 +944,9 @@
           'default'
         );
         const tplQs = '?template_code=' + encodeURIComponent(tplVal);
-        const [positions, regs, templates] = await Promise.all([
+        const [positions, deptTypes, templates] = await Promise.all([
           fetchApi('/regulations/positions/list' + tplQs),
-          fetchApi('/regulations?limit=500&template_code=' + encodeURIComponent(tplVal)),
+          fetchApi('/regulations/dept-types/list' + tplQs),
           GTC.fetchEnterpriseTemplates(true),
         ]);
         tplSelect.innerHTML = (templates || []).map(t =>
@@ -723,12 +967,10 @@
           posSelect.appendChild(opt);
         });
         if (posVal && [...posSelect.options].some(o => o.value === posVal)) posSelect.value = posVal;
-        const deptSet = new Set();
-        (regs.items || []).forEach(r => deptSet.add(r.dept_type_code));
         const deptSelect = document.getElementById('filterDept');
         const deptVal = deptSelect.value;
         deptSelect.innerHTML = '<option value="">— все —</option>';
-        [...deptSet].sort().forEach(d => {
+        (deptTypes || []).forEach(d => {
           const opt = document.createElement('option');
           opt.value = d;
           opt.textContent = d;
@@ -818,10 +1060,17 @@
       document.getElementById('f_owner_unit_code_manual').value = '';
     };
     document.getElementById('btnCreate').onclick = () => { openCreateForm().catch(e => alert(e.message)); };
+    document.getElementById('btnGenerateText').onclick = openGenerateModal;
+    document.getElementById('btnGenerateRun').onclick = () => { runGenerateFromWeb().catch(e => showGenerateErr(e.message)); };
+    document.getElementById('btnGenerateCancel').onclick = closeGenerateModal;
+    document.getElementById('btnGenerateToForm').onclick = () => { openCreateFormFromGenerated().catch(e => alert(e.message)); };
+    document.getElementById('generateModal').addEventListener('click', (e) => {
+      if (e.target.id === 'generateModal') closeGenerateModal();
+    });
     document.getElementById('formBtnSave').onclick = saveForm;
     document.getElementById('formBtnCancel').onclick = closeForm;
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { closeDetail(); closeForm(); }
+      if (e.key === 'Escape') { closeDetail(); closeForm(); closeGenerateModal(); }
     });
 
     loadFilterOptions().then(loadRegulations);
