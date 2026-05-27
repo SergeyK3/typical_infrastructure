@@ -50,16 +50,6 @@ TOP20_POSITION_KPI_ROWS: list[tuple[str, str, list[tuple[str, str, str, str, flo
         ],
     ),
     (
-        "HR_MANAGER",
-        "HR-менеджер",
-        [
-            ("KPI_HR_TIME_TO_FILL", "Среднее время закрытия вакансии", "дней", "month", 45.0),
-            ("KPI_HR_OFFER_ACCEPT", "Принятие офферов", "%", "month", 80.0),
-            ("KPI_HR_INTERVIEW", "Соблюдение SLA этапов подбора", "%", "month", 90.0),
-            ("KPI_HR_RETENTION_PROB", "Удержание на испытательном сроке", "%", "quarter", 90.0),
-        ],
-    ),
-    (
         "HR_HEAD",
         "Руководитель отдела кадров",
         [
@@ -131,15 +121,6 @@ TOP20_POSITION_KPI_ROWS: list[tuple[str, str, list[tuple[str, str, str, str, flo
     (
         "ACC_ACCOUNTANT",
         "Бухгалтер",
-        [
-            ("KPI_ACC_CLOSE", "Закрытие месяца в регламентный срок", "%", "month", 100.0),
-            ("KPI_ACC_ERRORS", "Критические ошибки в проводках (обратимые)", "шт", "month", 0.0),
-            ("KPI_ACC_RECON", "Своевременность сверок с контрагентами", "%", "month", 98.0),
-        ],
-    ),
-    (
-        "ACC_MATERIAL_ACCOUNTANT",
-        "Бухгалтер по учёту материальных ценностей",
         [
             ("KPI_MAT_INV", "Расхождения по инвентаризации", "%", "quarter", 0.5),
             ("KPI_MAT_DOC", "Своевременность первички по ТМЦ", "%", "month", 98.0),

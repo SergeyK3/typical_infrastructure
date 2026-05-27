@@ -143,10 +143,10 @@ def test_dedup_removes_duplicate_positions(client):
             id=new_id32(),
             client_id=client_id,
             org_unit_id=ou.id,
-            code="HR_MANAGER_COPY",
-            name="HR-менеджер дубль",
+            code="HR_GENERALIST_COPY",
+            name="HR-генералист дубль",
             is_active=True,
-            position_catalog_code="HR_MANAGER",
+            position_catalog_code="HR_GENERALIST",
             is_detached=True,
         )
         db.add(pos2)
@@ -160,7 +160,7 @@ def test_dedup_removes_duplicate_positions(client):
             select(Position).where(
                 Position.client_id == client_id,
                 Position.org_unit_id == ou.id,
-                Position.position_catalog_code == "HR_MANAGER",
+                Position.position_catalog_code == "HR_GENERALIST",
             )
         ).all()
         assert len(remaining) == 1

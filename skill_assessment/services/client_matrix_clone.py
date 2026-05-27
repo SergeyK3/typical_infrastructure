@@ -48,13 +48,18 @@ def _uniq_code(base: str, suffix: str, max_len: int = 64) -> str:
     return s if len(s) <= max_len else f"{base[: max(1, max_len - 1 - len(suffix))]}_{suffix}"
 
 
-def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, Any]:
+def clone_global_matrices_to_client(
+    db: Session, client_id: str, source_template_code: str | None = None
+) -> dict[str, Any]:
     """
     Идемпотентно: блок компетенций и блок KPI клонируются независимо, если для клиента
     ещё нет соответствующей версии каталога.
 
     Перед клонированием поднимаем глобальный засев (если таблицы пустые).
     """
+    from app.template_bundle_clone import resolve_client_template_code
+
+    template_code = (source_template_code or resolve_client_template_code(db, client_id)).strip()
     ensure_competency_matrix_seed(db)
     ensure_kpi_matrix_seed(db)
     db.flush()
@@ -77,7 +82,7 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
     )
     if existing_cc > 0 and existing_kc > 0:
         _log.info("client_matrix_clone: каталоги уже есть для client_id=%s — пропуск", client_id)
-        return {"skipped": True, "reason": "already_present", "client_id": client_id}
+        return {"skipped": True, "reason": "already_present", "client_id": client_id, "template_code": template_code}
 
     suf = _client_suffix(client_id)
     do_comp = existing_cc == 0
@@ -88,11 +93,22 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
         select(CompetencyCatalogVersionRow)
         .where(
             CompetencyCatalogVersionRow.client_id.is_(None),
+            CompetencyCatalogVersionRow.template_code == template_code,
             CompetencyCatalogVersionRow.status == "active",
         )
         .order_by(CompetencyCatalogVersionRow.created_at.desc())
         .limit(1)
     )
+    if not glob_cv:
+        glob_cv = db.scalar(
+            select(CompetencyCatalogVersionRow)
+            .where(
+                CompetencyCatalogVersionRow.client_id.is_(None),
+                CompetencyCatalogVersionRow.template_code == template_code,
+            )
+            .order_by(CompetencyCatalogVersionRow.created_at.desc())
+            .limit(1)
+        )
     comp_stats: dict[str, int] = {"versions": 0, "skill_definitions": 0, "matrix_rows": 0}
     if do_comp and glob_cv:
         new_vid = str(uuid.uuid4())
@@ -101,8 +117,9 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
             CompetencyCatalogVersionRow(
                 id=new_vid,
                 client_id=client_id,
+                template_code=template_code,
                 version_code=new_vcode,
-                title=glob_cv.title + " (копия для организации)",
+                title=(glob_cv.title or "Матрица компетенций") + " (копия для организации)",
                 status="active",
                 effective_from=glob_cv.effective_from,
                 effective_to=glob_cv.effective_to,
@@ -127,6 +144,7 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
                 CompetencySkillDefinitionRow(
                     id=nid,
                     client_id=client_id,
+                    template_code=sd.template_code or template_code,
                     skill_code=new_sc,
                     title_ru=sd.title_ru,
                     description=sd.description,
@@ -152,7 +170,10 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
             )
             comp_stats["matrix_rows"] += 1
     elif do_comp:
-        _log.warning("client_matrix_clone: нет глобальной версии компетенций — пропуск клонирования навыков")
+        _log.warning(
+            "client_matrix_clone: нет глобальной версии компетенций для template=%s — пропуск",
+            template_code,
+        )
 
     # --- KPI ---
     glob_kv = db.scalar(
@@ -235,6 +256,7 @@ def clone_global_matrices_to_client(db: Session, client_id: str) -> dict[str, An
     return {
         "skipped": not (comp_stats["versions"] or kpi_stats["versions"]),
         "client_id": client_id,
+        "template_code": template_code,
         "competency": comp_stats,
         "kpi": kpi_stats,
     }

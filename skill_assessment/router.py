@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -11,7 +12,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -655,6 +656,45 @@ def patch_catalog_competency_matrix_row(
         raise HTTPException(status_code=409, detail="competency_matrix_row_conflict")
     db.refresh(row)
     return catalog_views_svc.competency_matrix_row_to_dict(row)
+
+
+@router.post("/catalog/competency-matrix/{row_id}/clone", include_in_schema=True)
+def clone_catalog_competency_matrix_row(
+    row_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    client_id: Annotated[
+        str,
+        Query(min_length=1, description="Организация — владелец локальной матрицы"),
+    ],
+) -> dict[str, Any]:
+    """Копия строки матрицы навыков в локальном каталоге (следующий свободный ранг)."""
+    cid = client_id.strip()
+    row = _ensure_client_competency_row(db, row_id, cid)
+    max_rank = db.scalar(
+        select(func.max(CompetencyMatrixRow.skill_rank)).where(
+            CompetencyMatrixRow.version_id == row.version_id,
+            CompetencyMatrixRow.position_code == row.position_code,
+            CompetencyMatrixRow.department_code == row.department_code,
+        )
+    )
+    new_rank = int(max_rank or row.skill_rank) + 1
+    new_row = CompetencyMatrixRow(
+        id=str(uuid.uuid4()),
+        version_id=row.version_id,
+        position_code=row.position_code,
+        department_code=row.department_code,
+        skill_definition_id=row.skill_definition_id,
+        skill_rank=new_rank,
+        is_active=row.is_active,
+    )
+    db.add(new_row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="competency_matrix_row_conflict")
+    db.refresh(new_row)
+    return catalog_views_svc.competency_matrix_row_to_dict(new_row)
 
 
 @router.delete("/catalog/competency-matrix/{row_id}", status_code=204, include_in_schema=True)
