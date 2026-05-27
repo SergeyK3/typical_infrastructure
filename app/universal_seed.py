@@ -273,8 +273,8 @@ def merge_position_regulations_from_client_xlsx(db: Session) -> int:
     return updated
 
 
-def _reg_kpi_id(regulation_code: str, kpi_code: str) -> str:
-    return uuid5(NAMESPACE_URL, f"seed:reg_kpi:{regulation_code}:{kpi_code}").hex
+def _reg_kpi_id(template_code: str, regulation_code: str, kpi_code: str) -> str:
+    return uuid5(NAMESPACE_URL, f"seed:reg_kpi:{template_code}:{regulation_code}:{kpi_code}").hex
 
 
 def link_regulation_kpis_from_templates(db: Session) -> int:
@@ -303,7 +303,8 @@ def link_regulation_kpis_from_templates(db: Session) -> int:
                 continue
             db.add(
                 RegulationKpi(
-                    id=_reg_kpi_id(reg.regulation_code, t.kpi_code),
+                    id=_reg_kpi_id(reg.template_code, reg.regulation_code, t.kpi_code),
+                    template_code=reg.template_code,
                     regulation_code=reg.regulation_code,
                     kpi_code=t.kpi_code,
                     target_value=t.default_target,

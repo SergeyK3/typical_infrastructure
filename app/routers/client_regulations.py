@@ -3,8 +3,7 @@ r"""Клиентские копии регламентов должностей 
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -296,9 +295,9 @@ def create_client_regulation(
     return _load_detail(db, rid)
 
 
-@router.post("/copy-from-global", response_model=ClientPositionRegulationDetailOut, status_code=201)
+@router.post("/copy-from-global", response_model=ClientPositionRegulationDetailOut)
 def copy_regulation_from_global(
-    body: ClientPositionRegulationCopyFromGlobal, db: Session = Depends(get_db)
+    body: ClientPositionRegulationCopyFromGlobal, response: Response, db: Session = Depends(get_db)
 ) -> ClientPositionRegulationDetailOut:
     _assert_client(db, body.client_id)
     tpl_code = resolve_client_template_code(db, body.client_id)
@@ -311,14 +310,26 @@ def copy_regulation_from_global(
     if not glob:
         raise HTTPException(status_code=404, detail="global_regulation_not_found")
     target_code = (body.regulation_code or body.global_regulation_code).strip()
-    dup = db.scalar(
+    existing = db.scalar(
         select(ClientPositionRegulation).where(
             ClientPositionRegulation.client_id == body.client_id,
-            ClientPositionRegulation.regulation_code == target_code,
+            ClientPositionRegulation.global_regulation_code == body.global_regulation_code,
         )
     )
-    if dup:
-        raise HTTPException(status_code=409, detail="client_regulation_code_exists")
+    if not existing:
+        existing = db.scalar(
+            select(ClientPositionRegulation).where(
+                ClientPositionRegulation.client_id == body.client_id,
+                ClientPositionRegulation.regulation_code == target_code,
+            )
+        )
+    if existing:
+        from app.client_catalog_sync import sync_client_regulation_children_from_global
+
+        sync_client_regulation_children_from_global(db, existing.id)
+        db.commit()
+        response.status_code = 200
+        return _load_detail(db, existing.id)
     rid = new_id32()
     obj = ClientPositionRegulation(
         id=rid,
@@ -382,7 +393,17 @@ def copy_regulation_from_global(
         )
     db.commit()
     db.refresh(obj)
+    response.status_code = 201
     return _load_detail(db, rid)
+
+
+@router.post("/{regulation_id}/sync-from-global")
+def sync_client_regulation_from_global(regulation_id: str, db: Session = Depends(get_db)) -> dict:
+    from app.client_catalog_sync import sync_client_regulation_children_from_global
+
+    kpis, instructions = sync_client_regulation_children_from_global(db, regulation_id)
+    db.commit()
+    return {"kpis_added": kpis, "instructions_added": instructions}
 
 
 @router.patch("/{regulation_id}", response_model=ClientPositionRegulationDetailOut)

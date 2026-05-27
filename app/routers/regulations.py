@@ -3,10 +3,11 @@ r"""API для справочника регламентов должносте�
 
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -19,14 +20,19 @@ from app.models import (
     PositionRegulation,
     RegulationInstruction,
     RegulationKpi,
+    TemplateOrgUnitRow,
 )
 from app.template_constants import DEFAULT_TEMPLATE_CODE
+from app.catalog_copy_ops import clone_regulation
 from app.schemas import (
     ListEnvelope,
     PositionRegulationCreate,
     PositionRegulationDetailOut,
     PositionRegulationOut,
     PositionRegulationPatch,
+    RegulationCloneOut,
+    RegulationFromWebIn,
+    RegulationFromWebOut,
     RegulationInstructionOut,
     RegulationKpiOut,
 )
@@ -101,6 +107,25 @@ def list_regulations(
 
 
 # Статические маршруты — до {regulation_code}, иначе "kpi-templates" и "positions" матчатся как regulation_code
+@router.get("/dept-types/list", response_model=list[str])
+def list_dept_types_for_regulations(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> list[str]:
+    """Коды типов подразделений, встречающиеся в регламентах шаблона (для фильтра в UI)."""
+    rows = db.scalars(
+        select(PositionRegulation.dept_type_code)
+        .where(
+            PositionRegulation.template_code == template_code,
+            PositionRegulation.dept_type_code.isnot(None),
+            PositionRegulation.dept_type_code != "",
+        )
+        .distinct()
+        .order_by(PositionRegulation.dept_type_code.asc())
+    ).all()
+    return list(rows)
+
+
 @router.get("/kpi-templates/list", response_model=list[dict])
 def list_kpi_templates(
     template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
@@ -172,6 +197,65 @@ def list_positions_for_regulation(
             }
         )
     return out
+
+
+@router.post("/generate-from-web", response_model=RegulationFromWebOut)
+def generate_regulation_from_web(body: RegulationFromWebIn) -> RegulationFromWebOut:
+    """Сгенерировать DOCX-регламент по названию должности (поиск в интернете + шаблон)."""
+    from app.services.regulation_from_web import (
+        analyze_template_structure,
+        generate_regulation_from_web as _generate,
+        resolve_template_docx,
+    )
+
+    title = body.position_title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="position_title_required")
+    try:
+        path, draft = _generate(title, body.comment, template_code=body.template_code)
+        template_info = analyze_template_structure(resolve_template_docx())
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="regulation_template_docx_not_found") from None
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"regulation_generation_failed: {exc}") from exc
+
+    return RegulationFromWebOut(
+        template_code=body.template_code,
+        regulation_code=draft.regulation_code,
+        position_code=draft.position_code,
+        regulation_name=draft.regulation_name,
+        goal_summary=draft.goal_summary or None,
+        ckp_short=draft.ckp_short or None,
+        ckp_full=draft.ckp_full or None,
+        docx_filename=path.name,
+        download_url=f"/api/regulations/generated/{path.name}",
+        sources=draft.sources,
+        notes=draft.notes,
+        template_info=template_info,
+    )
+
+
+@router.get("/generated/{filename}")
+def download_generated_regulation(filename: str) -> FileResponse:
+    """Скачать сгенерированный DOCX (только из каталога generated/)."""
+    import re
+    from app.services.regulation_from_web import GENERATED_DIR
+
+    safe = Path(filename).name
+    if not re.fullmatch(r"Регламент_[\w\-]+_[0-9a-f]{8}\.docx", safe):
+        raise HTTPException(status_code=400, detail="invalid_filename")
+    path = (GENERATED_DIR / safe).resolve()
+    try:
+        path.relative_to(GENERATED_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="file_not_found") from None
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="file_not_found")
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=safe,
+    )
 
 
 @router.get("/export/excel")
@@ -314,6 +398,47 @@ def create_regulation(body: PositionRegulationCreate, db: Session = Depends(get_
     return PositionRegulationOut.model_validate(obj)
 
 
+def _ensure_dept_type_code(db: Session, template_code: str, dept_type_code: str) -> None:
+    code = dept_type_code.strip()
+    if not code:
+        raise HTTPException(status_code=422, detail="invalid_dept_type_code")
+    ok = db.scalar(
+        select(func.count())
+        .select_from(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == template_code,
+            TemplateOrgUnitRow.code == code,
+            TemplateOrgUnitRow.unit_type == "department",
+        )
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="dept_type_not_found")
+
+
+@router.post("/{regulation_code}/clone", response_model=RegulationCloneOut, status_code=201)
+def clone_regulation_row(
+    regulation_code: str,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> RegulationCloneOut:
+    obj = db.scalar(
+        select(PositionRegulation).where(
+            PositionRegulation.template_code == template_code,
+            PositionRegulation.regulation_code == regulation_code,
+        )
+    )
+    if not obj:
+        raise HTTPException(status_code=404, detail="regulation_not_found")
+    result = clone_regulation(db, obj)
+    db.commit()
+    db.refresh(result.row)
+    return RegulationCloneOut(
+        row=PositionRegulationOut.model_validate(result.row),
+        kpis_created=result.kpis_created,
+        instructions_created=result.instructions_created,
+    )
+
+
 @router.patch("/{regulation_code}", response_model=PositionRegulationOut)
 def patch_regulation(
     regulation_code: str, body: PositionRegulationPatch, db: Session = Depends(get_db)
@@ -321,7 +446,12 @@ def patch_regulation(
     obj = db.scalar(select(PositionRegulation).where(PositionRegulation.regulation_code == regulation_code))
     if not obj:
         raise HTTPException(status_code=404, detail="regulation_not_found")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    dept = data.pop("dept_type_code", None)
+    if dept is not None:
+        _ensure_dept_type_code(db, obj.template_code, dept)
+        obj.dept_type_code = dept.strip()
+    for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)

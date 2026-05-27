@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.position_name_en import DEFAULT_POSITION_NAME_EN
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
@@ -43,14 +45,14 @@ DEFAULT_ORG_UNITS: list[dict] = [
 
 # Должности для onboarding/enterprise_templates (совместимость; deploy-template использует position_catalog из БД)
 DEFAULT_POSITIONS: list[dict] = [
-    {"code": "ADM_DIRECTOR", "name": "Директор", "org_unit_code": "ADM", "grade": None, "is_active": True},
-    {"code": "ADM_SYS_ADMIN", "name": "Системный администратор", "org_unit_code": "ADM", "grade": None, "is_active": True},
-    {"code": "HR_MANAGER", "name": "HR-менеджер", "org_unit_code": "HR", "grade": None, "is_active": True},
-    {"code": "ACC_ACCOUNTANT", "name": "Бухгалтер", "org_unit_code": "ACC", "grade": None, "is_active": True},
-    {"code": "MKT_MANAGER", "name": "Маркетолог", "org_unit_code": "MKT", "grade": None, "is_active": True},
-    {"code": "SALES_MANAGER", "name": "Менеджер по продажам", "org_unit_code": "SALES", "grade": None, "is_active": True},
-    {"code": "PROD_SUPERVISOR", "name": "Начальник производства", "org_unit_code": "PROD", "grade": None, "is_active": True},
-    {"code": "QUAL_HEAD", "name": "Начальник ОКК", "org_unit_code": "QUAL", "grade": None, "is_active": True},
+    {"code": "ADM_DIRECTOR", "name": "Директор", "name_en": DEFAULT_POSITION_NAME_EN["ADM_DIRECTOR"], "org_unit_code": "ADM", "grade": None, "is_active": True},
+    {"code": "ADM_SYS_ADMIN", "name": "Системный администратор", "name_en": DEFAULT_POSITION_NAME_EN["ADM_SYS_ADMIN"], "org_unit_code": "ADM", "grade": None, "is_active": True},
+    {"code": "HR_GENERALIST", "name": "HR-генералист", "name_en": DEFAULT_POSITION_NAME_EN["HR_GENERALIST"], "org_unit_code": "HR", "grade": None, "is_active": True},
+    {"code": "ACC_ACCOUNTANT", "name": "Бухгалтер", "name_en": DEFAULT_POSITION_NAME_EN["ACC_ACCOUNTANT"], "org_unit_code": "ACC", "grade": None, "is_active": True},
+    {"code": "MKT_MANAGER", "name": "Маркетолог", "name_en": DEFAULT_POSITION_NAME_EN["MKT_MANAGER"], "org_unit_code": "MKT", "grade": None, "is_active": True},
+    {"code": "SALES_MANAGER", "name": "Менеджер по продажам", "name_en": DEFAULT_POSITION_NAME_EN["SALES_MANAGER"], "org_unit_code": "SALES", "grade": None, "is_active": True},
+    {"code": "PROD_SUPERVISOR", "name": "Начальник производства", "name_en": DEFAULT_POSITION_NAME_EN["PROD_SUPERVISOR"], "org_unit_code": "PROD", "grade": None, "is_active": True},
+    {"code": "QUAL_HEAD", "name": "Начальник ОКК", "name_en": DEFAULT_POSITION_NAME_EN["QUAL_HEAD"], "org_unit_code": "QUAL", "grade": None, "is_active": True},
 ]
 
 # Код отделения для администратора при onboarding
@@ -109,6 +111,7 @@ def list_positions_from_position_catalog(db: "Session", template_code: str = DEF
             {
                 "code": catalog.position_code,
                 "name": catalog.position_name_ru,
+                "name_en": catalog.position_name_en,
                 "org_unit_code": link.dept_type_code,
                 "grade": None,
                 "is_active": True,

@@ -20,6 +20,7 @@ from app.models import (
     RegulationKpi,
     TemplateOrgUnitRow,
 )
+from app.org_unit_ops import format_org_unit_name
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.utils import new_id32
 

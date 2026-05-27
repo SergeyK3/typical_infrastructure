@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.org_structures import DEFAULT_ORG_UNITS
 from app.org_unit_ops import format_org_unit_name
+from app.position_name_en import DEFAULT_POSITION_NAME_EN, position_name_en_for
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.utils import new_id32
 
@@ -47,52 +48,61 @@ TEMPLATE_SEEDS: list[dict] = [
     }
 ]
 
+def _position_catalog_seed(
+    position_code: str,
+    position_name_ru: str,
+    function_code: str,
+    position_level: str,
+    is_managerial: bool,
+) -> dict:
+    return {
+        "position_code": position_code,
+        "position_name_ru": position_name_ru,
+        "position_name_en": DEFAULT_POSITION_NAME_EN.get(position_code),
+        "function_code": function_code,
+        "position_level": position_level,
+        "is_managerial": is_managerial,
+    }
+
+
 # Справочник типовых должностей (формат [FUNCTION]_[ROLE])
 POSITION_CATALOG_SEEDS: list[dict] = [
-    {"position_code": "ADM_DIRECTOR", "position_name_ru": "Директор", "function_code": "ADM", "position_level": "DIR", "is_managerial": True},
-    {
-        "position_code": "ADM_ZAMADM",
-        "position_name_ru": "Заместитель директора по административным вопросам",
-        "function_code": "ADM",
-        "position_level": "HEAD",
-        "is_managerial": True,
-    },
-    {"position_code": "ADM_SYS_ADMIN", "position_name_ru": "Системный администратор", "function_code": "ADM", "position_level": "SPEC", "is_managerial": False},
-    {
-        "position_code": "INFO_SYSTEM_SUPPORT",
-        "position_name_ru": "Специалист по поддержке информационных систем",
-        "function_code": "ADM",
-        "position_level": "SPEC",
-        "is_managerial": False,
-    },
-    {"position_code": "HR_MANAGER", "position_name_ru": "HR-менеджер", "function_code": "HR", "position_level": "MGR", "is_managerial": True},
-    {"position_code": "HR_HEAD", "position_name_ru": "Руководитель отдела кадров", "function_code": "HR", "position_level": "HEAD", "is_managerial": True},
-    {"position_code": "HR_RECRUITER", "position_name_ru": "Рекрутер", "function_code": "HR", "position_level": "SPEC", "is_managerial": False},
-    {"position_code": "HR_GENERALIST", "position_name_ru": "HR-генералист", "function_code": "HR", "position_level": "SPEC", "is_managerial": False},
-    {"position_code": "MKT_MANAGER", "position_name_ru": "Маркетолог", "function_code": "MKT", "position_level": "MGR", "is_managerial": True},
-    {"position_code": "LEADGEN_SPECIALIST", "position_name_ru": "Специалист по лидогенерации", "function_code": "LEAD", "position_level": "SPEC", "is_managerial": False},
-    {"position_code": "SALES_MANAGER", "position_name_ru": "Менеджер по продажам", "function_code": "SALES", "position_level": "MGR", "is_managerial": True},
-    {"position_code": "SALES_TEAM_LEAD", "position_name_ru": "Руководитель отдела продаж", "function_code": "SALES", "position_level": "HEAD", "is_managerial": True},
-    {"position_code": "ACC_ACCOUNTANT", "position_name_ru": "Бухгалтер", "function_code": "ACC", "position_level": "SPEC", "is_managerial": False},
-    {
-        "position_code": "ACC_MATERIAL_ACCOUNTANT",
-        "position_name_ru": "Бухгалтер по учёту материальных ценностей",
-        "function_code": "ACC",
-        "position_level": "SPEC",
-        "is_managerial": False,
-    },
-    {"position_code": "ACC_CHIEF_ACCOUNTANT", "position_name_ru": "Главный бухгалтер", "function_code": "ACC", "position_level": "HEAD", "is_managerial": True},
-    {"position_code": "PROD_SUPERVISOR", "position_name_ru": "Начальник производства", "function_code": "PROD", "position_level": "HEAD", "is_managerial": True},
-    {
-        "position_code": "PROD_TECH_DIR",
-        "position_name_ru": "Заместитель директора по производству (технический директор)",
-        "function_code": "PROD",
-        "position_level": "HEAD",
-        "is_managerial": True,
-    },
-    {"position_code": "QUAL_SPECIALIST", "position_name_ru": "Специалист по контролю качества", "function_code": "QUAL", "position_level": "SPEC", "is_managerial": False},
-    {"position_code": "QUAL_HEAD", "position_name_ru": "Начальник ОКК", "function_code": "QUAL", "position_level": "HEAD", "is_managerial": True},
-    {"position_code": "PR_SPECIALIST", "position_name_ru": "Специалист по связям с общественностью", "function_code": "PR", "position_level": "SPEC", "is_managerial": False},
+    _position_catalog_seed("ADM_DIRECTOR", "Директор", "ADM", "DIR", True),
+    _position_catalog_seed(
+        "ADM_ZAMADM",
+        "Заместитель директора по административным вопросам",
+        "ADM",
+        "HEAD",
+        True,
+    ),
+    _position_catalog_seed("ADM_SYS_ADMIN", "Системный администратор", "ADM", "SPEC", False),
+    _position_catalog_seed(
+        "INFO_SYSTEM_SUPPORT",
+        "Специалист по поддержке информационных систем",
+        "ADM",
+        "SPEC",
+        False,
+    ),
+    _position_catalog_seed("HR_HEAD", "Руководитель отдела кадров", "HR", "HEAD", True),
+    _position_catalog_seed("HR_RECRUITER", "Рекрутер", "HR", "SPEC", False),
+    _position_catalog_seed("HR_GENERALIST", "HR-генералист", "HR", "SPEC", False),
+    _position_catalog_seed("MKT_MANAGER", "Маркетолог", "MKT", "MGR", True),
+    _position_catalog_seed("LEADGEN_SPECIALIST", "Специалист по лидогенерации", "LEAD", "SPEC", False),
+    _position_catalog_seed("SALES_MANAGER", "Менеджер по продажам", "SALES", "MGR", True),
+    _position_catalog_seed("SALES_TEAM_LEAD", "Руководитель отдела продаж", "SALES", "HEAD", True),
+    _position_catalog_seed("ACC_ACCOUNTANT", "Бухгалтер", "ACC", "SPEC", False),
+    _position_catalog_seed("ACC_CHIEF_ACCOUNTANT", "Главный бухгалтер", "ACC", "HEAD", True),
+    _position_catalog_seed("PROD_SUPERVISOR", "Начальник производства", "PROD", "HEAD", True),
+    _position_catalog_seed(
+        "PROD_TECH_DIR",
+        "Заместитель директора по производству (технический директор)",
+        "PROD",
+        "HEAD",
+        True,
+    ),
+    _position_catalog_seed("QUAL_SPECIALIST", "Специалист по контролю качества", "QUAL", "SPEC", False),
+    _position_catalog_seed("QUAL_HEAD", "Начальник ОКК", "QUAL", "HEAD", True),
+    _position_catalog_seed("PR_SPECIALIST", "Специалист по связям с общественностью", "PR", "SPEC", False),
 ]
 
 # Связь должность ↔ тип подразделения (dept_type_code = код отделения)
@@ -101,7 +111,6 @@ POSITION_DEPT_TYPE_SEEDS: list[tuple[str, str, bool]] = [
     ("ADM_ZAMADM", "ADM", True),
     ("ADM_SYS_ADMIN", "ADM", True),
     ("INFO_SYSTEM_SUPPORT", "ADM", True),
-    ("HR_MANAGER", "HR", True),
     ("HR_HEAD", "HR", True),
     ("HR_RECRUITER", "HR", True),
     ("HR_GENERALIST", "HR", True),
@@ -110,7 +119,6 @@ POSITION_DEPT_TYPE_SEEDS: list[tuple[str, str, bool]] = [
     ("SALES_MANAGER", "SALES", True),
     ("SALES_TEAM_LEAD", "SALES", True),
     ("ACC_ACCOUNTANT", "ACC", True),
-    ("ACC_MATERIAL_ACCOUNTANT", "ACC", True),
     ("ACC_CHIEF_ACCOUNTANT", "ACC", True),
     ("PROD_SUPERVISOR", "PROD", True),
     ("PROD_TECH_DIR", "PROD", True),
@@ -348,19 +356,25 @@ def seed_regulations(db: Session) -> int:
 
 def seed_position_catalog(db: Session) -> int:
     """Seed position catalog and position-dept-type links."""
-    existing_codes = {
-        (r.template_code, r.position_code) for r in db.scalars(select(PositionCatalog)).all()
+    existing_rows = {
+        (r.template_code, r.position_code): r for r in db.scalars(select(PositionCatalog)).all()
     }
     created = 0
     for p in POSITION_CATALOG_SEEDS:
         key = (DEFAULT_TEMPLATE_CODE, p["position_code"])
-        if key in existing_codes:
+        existing = existing_rows.get(key)
+        if existing:
+            en = (p.get("position_name_en") or "").strip()
+            if en and not (existing.position_name_en or "").strip():
+                existing.position_name_en = en
+                created += 1
             continue
         db.add(
             PositionCatalog(
                 template_code=DEFAULT_TEMPLATE_CODE,
                 position_code=p["position_code"],
                 position_name_ru=p["position_name_ru"],
+                position_name_en=p.get("position_name_en"),
                 function_code=p["function_code"],
                 position_level=p["position_level"],
                 is_managerial=p["is_managerial"],
@@ -368,6 +382,11 @@ def seed_position_catalog(db: Session) -> int:
             )
         )
         created += 1
+    for row in existing_rows.values():
+        en = position_name_en_for(row.template_code, row.position_code)
+        if en and not (row.position_name_en or "").strip():
+            row.position_name_en = en
+            created += 1
     if created:
         db.flush()
     existing_links = {
@@ -436,31 +455,61 @@ def seed_clients(db: Session) -> int:
     return created
 
 
-def seed_template_org_units(db: Session) -> int:
-    """Перенос встроенной типовой оргструктуры в БД (шаблон default)."""
-    n = db.scalar(
-        select(func.count()).select_from(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == "default")
+def _template_org_unit_row(template_code: str, spec: dict) -> TemplateOrgUnitRow:
+    return TemplateOrgUnitRow(
+        id=new_id32(),
+        template_code=template_code,
+        code=spec["code"],
+        name=format_org_unit_name(spec["name"], spec["unit_type"]),
+        parent_code=spec.get("parent_code"),
+        unit_type=spec["unit_type"],
+        sort_order=int(spec.get("sort_order", 0)),
+        log_group=spec.get("log_group"),
     )
-    if n and n > 0:
-        return 0
-    created = 0
-    for spec in DEFAULT_ORG_UNITS:
-        db.add(
-            TemplateOrgUnitRow(
-                id=new_id32(),
-                template_code="default",
-                code=spec["code"],
-                name=format_org_unit_name(spec["name"], spec["unit_type"]),
-                parent_code=spec.get("parent_code"),
-                unit_type=spec["unit_type"],
-                sort_order=int(spec.get("sort_order", 0)),
-                log_group=spec.get("log_group"),
-            )
-        )
-        created += 1
-    if created:
+
+
+def seed_template_org_units(db: Session) -> int:
+    """Перенос встроенной типовой оргструктуры в БД (шаблон default).
+
+    При первом запуске создаёт все узлы. Если шаблон уже есть — дозаполняет
+    отсутствующие узлы и выравнивает parent_code по ``DEFAULT_ORG_UNITS``
+    (например SALES / LEAD и секции под ними).
+    """
+    template_code = DEFAULT_TEMPLATE_CODE
+    existing = {
+        r.code: r
+        for r in db.scalars(
+            select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == template_code)
+        ).all()
+    }
+    changed = 0
+    if not existing:
+        for spec in DEFAULT_ORG_UNITS:
+            db.add(_template_org_unit_row(template_code, spec))
+            changed += 1
+    else:
+        for spec in DEFAULT_ORG_UNITS:
+            row = existing.get(spec["code"])
+            if row is None:
+                db.add(_template_org_unit_row(template_code, spec))
+                changed += 1
+                continue
+            expected_parent = spec.get("parent_code")
+            if row.parent_code != expected_parent:
+                row.parent_code = expected_parent
+                changed += 1
+            expected_sort = int(spec.get("sort_order", 0))
+            if row.sort_order != expected_sort:
+                row.sort_order = expected_sort
+                changed += 1
+            formatted_name = format_org_unit_name(spec["name"], spec["unit_type"])
+            if row.name != formatted_name:
+                row.name = formatted_name
+                changed += 1
+        # Удалённые из DEFAULT_ORG_UNITS узлы в БД не трогаем — могут быть правки пользователя.
+    if changed:
         db.commit()
-    return created
+    return changed
 
 
 def seed_all(db: Session) -> dict[str, int]:
