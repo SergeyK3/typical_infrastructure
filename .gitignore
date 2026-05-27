@@ -39,3 +39,7 @@ logs/
 
 keys/
 *.json
+
+# Локальные копии регламентов (Google Drive / DOCX), не версионировать
+docs/regulations/
+
