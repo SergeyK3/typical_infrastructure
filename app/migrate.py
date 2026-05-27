@@ -1046,6 +1046,63 @@ def migrate_normalize_position_dept_links() -> None:
         db.close()
 
 
+def migrate_client_standalone_kpis() -> None:
+    if _table_exists("client_standalone_kpis"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE client_standalone_kpis (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    client_id TEXT NOT NULL,
+                    kpi_code TEXT NOT NULL,
+                    target_value REAL NULL,
+                    period_type TEXT NOT NULL DEFAULT 'month',
+                    weight REAL NULL,
+                    is_required INTEGER NOT NULL DEFAULT 1,
+                    position_code TEXT NULL,
+                    notes TEXT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_client_standalone_kpis_client_code "
+                "ON client_standalone_kpis (client_id, kpi_code)"
+            )
+        )
+        conn.commit()
+
+
+def migrate_backfill_position_name_en() -> None:
+    """Заполнить position_name_en в каталоге должностей (default, hosp)."""
+    if not _table_exists("position_catalog"):
+        return
+    from app.db import SessionLocal
+    from app.models import PositionCatalog
+    from app.position_name_en import position_name_en_for
+    from sqlalchemy import select
+
+    db = SessionLocal()
+    try:
+        changed = False
+        for row in db.scalars(select(PositionCatalog)).all():
+            if (row.position_name_en or "").strip():
+                continue
+            en = position_name_en_for(row.template_code, row.position_code)
+            if en:
+                row.position_name_en = en
+                changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -1068,3 +1125,5 @@ def run_migrations() -> None:
     migrate_position_catalog_sort_order()
     migrate_org_unit_name_casing()
     migrate_normalize_position_dept_links()
+    migrate_client_standalone_kpis()
+    migrate_backfill_position_name_en()

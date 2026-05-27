@@ -12,6 +12,7 @@ from app.excel_export import xlsx_file_response
 from app.models import KpiTemplate, PositionCatalog, PositionDeptType
 from app.schemas import KpiTemplateCreate, KpiTemplateOut, KpiTemplatePatch, ListEnvelope
 
+from app.catalog_copy_ops import clone_kpi_template
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 
 router = APIRouter(prefix="/kpi-templates", tags=["kpi_templates"])
@@ -67,6 +68,19 @@ def list_department_type_codes_for_kpi_filter(
     db: Session = Depends(get_db),
 ) -> list[str]:
     """Коды типов подразделений (отделений) для фильтра списка KPI-шаблонов."""
+    from app.models import PositionRegulation
+
+    reg_depts = db.scalars(
+        select(PositionRegulation.dept_type_code)
+        .where(
+            PositionRegulation.template_code == template_code,
+            PositionRegulation.dept_type_code.isnot(None),
+            PositionRegulation.dept_type_code != "",
+        )
+        .distinct()
+    ).all()
+    if reg_depts:
+        return sorted(set(reg_depts))
     rows = db.scalars(
         select(PositionDeptType.dept_type_code)
         .where(PositionDeptType.template_code == template_code)
@@ -212,6 +226,21 @@ def create_kpi_template(
     db.commit()
     db.refresh(obj)
     return _enrich_template_out(db, obj)
+
+
+@router.post("/{kpi_code}/clone", response_model=KpiTemplateOut, status_code=201)
+def clone_kpi_template_row(
+    kpi_code: str,
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> KpiTemplateOut:
+    obj = _get_kpi(db, template_code, kpi_code)
+    if not obj:
+        raise HTTPException(status_code=404, detail="kpi_template_not_found")
+    row = clone_kpi_template(db, obj)
+    db.commit()
+    db.refresh(row)
+    return _enrich_template_out(db, row)
 
 
 @router.patch("/{kpi_code}", response_model=KpiTemplateOut)

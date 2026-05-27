@@ -165,6 +165,7 @@ class PositionCatalogBase(BaseModel):
 
 class PositionCatalogOut(PositionCatalogBase):
     model_config = ConfigDict(from_attributes=True)
+    primary_dept_type_code: str | None = None
 
 
 class PositionDeptTypeOut(BaseModel):
@@ -177,7 +178,11 @@ class PositionDeptTypeOut(BaseModel):
 class PositionCatalogCreate(PositionCatalogBase):
     """Создание строки глобального справочника типовых должностей."""
 
-    pass
+    primary_dept_type_code: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Основной тип подразделения (код отделения в типовой оргструктуре)",
+    )
 
 
 class PositionCatalogPatch(BaseModel):
@@ -192,6 +197,7 @@ class PositionCatalogPatch(BaseModel):
     default_regulation_code: str | None = None
     notes: str | None = None
     sort_order: int | None = None
+    primary_dept_type_code: str | None = Field(default=None, max_length=32)
 
 
 class PositionCatalogCloneOut(BaseModel):
@@ -621,6 +627,7 @@ class PositionRegulationCreate(PositionRegulationBase):
 
 
 class PositionRegulationPatch(BaseModel):
+    dept_type_code: str | None = Field(default=None, max_length=32)
     regulation_name: str | None = None
     goal_summary: str | None = None
     ckp_short: str | None = None
@@ -647,6 +654,33 @@ class PositionRegulationDetailOut(PositionRegulationOut):
 
     kpis: list[RegulationKpiOut] = Field(default_factory=list)
     instructions: list[RegulationInstructionOut] = Field(default_factory=list)
+
+
+class RegulationCloneOut(BaseModel):
+    row: PositionRegulationOut
+    kpis_created: int
+    instructions_created: int
+
+
+class RegulationFromWebIn(BaseModel):
+    template_code: str = Field(default="default", min_length=1, max_length=64)
+    position_title: str = Field(min_length=2, max_length=256)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class RegulationFromWebOut(BaseModel):
+    template_code: str
+    regulation_code: str
+    position_code: str
+    regulation_name: str
+    goal_summary: str | None = None
+    ckp_short: str | None = None
+    ckp_full: str | None = None
+    docx_filename: str
+    download_url: str
+    sources: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    template_info: dict | None = None
 
 
 # --- Клиентские копии регламентов ---
@@ -688,6 +722,41 @@ class ClientRegulationInstructionOut(BaseModel):
     instruction_url: str | None
     is_required: bool
     sort_order: int
+
+
+class ClientStandaloneKpiCreate(BaseModel):
+    client_id: str
+    kpi_code: str = Field(min_length=1, max_length=64)
+    target_value: float | None = None
+    period_type: str = "month"
+    weight: float | None = None
+    is_required: bool = True
+    position_code: str | None = Field(default=None, max_length=64)
+    notes: str | None = Field(default=None, max_length=512)
+
+
+class ClientStandaloneKpiPatch(BaseModel):
+    target_value: float | None = None
+    period_type: str | None = None
+    weight: float | None = None
+    is_required: bool | None = None
+    position_code: str | None = Field(default=None, max_length=64)
+    notes: str | None = Field(default=None, max_length=512)
+
+
+class ClientStandaloneKpiOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    client_id: str
+    kpi_code: str
+    target_value: float | None
+    period_type: str
+    weight: float | None
+    is_required: bool
+    position_code: str | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class ClientPositionRegulationBase(BaseModel):
@@ -771,4 +840,48 @@ class OrgUnitFromTemplateNode(BaseModel):
     client_id: str
     template_unit_code: str
     template_code: str = "default"
+
+
+class CatalogCopyRegulationIn(BaseModel):
+    mode: str = Field(description="global_to_global | global_to_local | local_to_global")
+    source_template_code: str = "default"
+    target_template_code: str | None = None
+    client_id: str | None = None
+    source_regulation_code: str | None = Field(default=None, max_length=64)
+    source_client_regulation_id: str | None = Field(default=None, max_length=32)
+    target_regulation_code: str | None = Field(default=None, max_length=64)
+
+
+class CatalogCopyPositionIn(BaseModel):
+    mode: str = Field(description="global_to_global | global_to_local")
+    source_template_code: str = "default"
+    target_template_code: str | None = None
+    client_id: str | None = None
+    org_unit_id: str | None = None
+    source_position_code: str = Field(min_length=1, max_length=64)
+    target_position_code: str | None = Field(default=None, max_length=64)
+
+
+class CatalogCopyKpiIn(BaseModel):
+    mode: str = Field(description="global_to_global")
+    source_template_code: str = "default"
+    target_template_code: str = Field(min_length=1, max_length=64)
+    source_kpi_code: str = Field(min_length=1, max_length=64)
+    target_kpi_code: str | None = Field(default=None, max_length=64)
+
+
+class CatalogCopySkillsIn(BaseModel):
+    client_id: str
+    source_template_code: str = "default"
+
+
+class CatalogCopySkillIn(BaseModel):
+    mode: str = Field(default="global_to_global", description="global_to_global | local_to_global")
+    source_template_code: str = "default"
+    target_template_code: str = Field(min_length=1, max_length=64)
+    client_id: str | None = None
+    source_matrix_row_id: str | None = None
+    position_code: str = Field(min_length=1, max_length=64)
+    department_code: str = Field(min_length=1, max_length=32)
+    skill_rank: int = Field(ge=1, le=99)
 

@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import PositionCatalog, PositionDeptType
-from app.position_catalog_ops import clone_position_catalog, rename_position_catalog_code
+from app.position_catalog_ops import (
+    clone_position_catalog,
+    get_primary_dept_type_code,
+    rename_position_catalog_code,
+    set_primary_dept_type,
+)
 from app.schemas import (
     ListEnvelope,
     PositionCatalogCloneOut,
@@ -42,6 +47,17 @@ def _get_catalog(db: Session, template_code: str, position_code: str) -> Positio
     return db.get(PositionCatalog, (template_code, position_code))
 
 
+def _catalog_out(db: Session, row: PositionCatalog) -> PositionCatalogOut:
+    base = PositionCatalogOut.model_validate(row)
+    return base.model_copy(
+        update={
+            "primary_dept_type_code": get_primary_dept_type_code(
+                db, row.template_code, row.position_code
+            ),
+        }
+    )
+
+
 @router.get("", response_model=ListEnvelope[PositionCatalogOut])
 def list_position_catalog(
     template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
@@ -65,7 +81,7 @@ def list_position_catalog(
     order = _catalog_order(sort_by, sort_dir)
     rows = db.scalars(q.order_by(*order).limit(limit).offset(offset)).all()
     return ListEnvelope[PositionCatalogOut](
-        items=[PositionCatalogOut.model_validate(r) for r in rows],
+        items=[_catalog_out(db, r) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -137,11 +153,15 @@ def create_position_catalog(
     tpl = body.template_code or DEFAULT_TEMPLATE_CODE
     if _get_catalog(db, tpl, body.position_code):
         raise HTTPException(status_code=409, detail="position_code_exists")
-    obj = PositionCatalog(**body.model_dump())
+    data = body.model_dump(exclude={"primary_dept_type_code"})
+    obj = PositionCatalog(**data)
     db.add(obj)
+    db.flush()
+    if body.primary_dept_type_code:
+        set_primary_dept_type(db, tpl, obj.position_code, body.primary_dept_type_code)
     db.commit()
     db.refresh(obj)
-    return PositionCatalogOut.model_validate(obj)
+    return _catalog_out(db, obj)
 
 
 @router.get("/{position_code}", response_model=PositionCatalogOut)
@@ -153,7 +173,7 @@ def get_position_catalog(
     obj = _get_catalog(db, template_code, position_code)
     if not obj:
         raise HTTPException(status_code=404, detail="position_catalog_not_found")
-    return PositionCatalogOut.model_validate(obj)
+    return _catalog_out(db, obj)
 
 
 @router.post("/{position_code}/clone", response_model=PositionCatalogCloneOut, status_code=201)
@@ -169,7 +189,7 @@ def clone_position_catalog_row(
     db.commit()
     db.refresh(result.row)
     return PositionCatalogCloneOut(
-        row=PositionCatalogOut.model_validate(result.row),
+        row=_catalog_out(db, result.row),
         dept_links_created=result.dept_links_created,
         regulations_created=result.regulations_created,
         kpi_templates_created=result.kpi_templates_created,
@@ -189,13 +209,16 @@ def patch_position_catalog(
         raise HTTPException(status_code=404, detail="position_catalog_not_found")
     data = body.model_dump(exclude_unset=True)
     new_code = data.pop("position_code", None)
+    primary_dept = data.pop("primary_dept_type_code", None)
     if new_code is not None and new_code.strip() != obj.position_code:
         obj = rename_position_catalog_code(db, obj, new_code)
     for k, v in data.items():
         setattr(obj, k, v)
+    if primary_dept is not None:
+        set_primary_dept_type(db, obj.template_code, obj.position_code, primary_dept)
     db.commit()
     db.refresh(obj)
-    return PositionCatalogOut.model_validate(obj)
+    return _catalog_out(db, obj)
 
 
 @router.delete("/{position_code}", status_code=204)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -19,6 +19,7 @@ from app.models import (
     PositionRegulation,
     RegulationInstruction,
     RegulationKpi,
+    TemplateOrgUnitRow,
 )
 from app.utils import new_id32
 
@@ -27,6 +28,63 @@ try:
 except ImportError:
     CompetencyCatalogVersionRow = None  # type: ignore
     CompetencyMatrixRow = None  # type: ignore
+
+
+def get_primary_dept_type_code(db: Session, template_code: str, position_code: str) -> str | None:
+    return db.scalar(
+        select(PositionDeptType.dept_type_code).where(
+            PositionDeptType.template_code == template_code,
+            PositionDeptType.position_code == position_code,
+            PositionDeptType.is_primary == True,
+        ).limit(1)
+    )
+
+
+def set_primary_dept_type(
+    db: Session,
+    template_code: str,
+    position_code: str,
+    dept_type_code: str,
+) -> None:
+    code = dept_type_code.strip()
+    if not code:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_dept_type_code", "message": "Тип подразделения не может быть пустым."},
+        )
+    dept_ok = db.scalar(
+        select(func.count())
+        .select_from(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == template_code,
+            TemplateOrgUnitRow.code == code,
+            TemplateOrgUnitRow.unit_type == "department",
+        )
+    )
+    if not dept_ok:
+        raise HTTPException(status_code=400, detail="dept_type_not_found")
+
+    links = list(
+        db.scalars(
+            select(PositionDeptType).where(
+                PositionDeptType.template_code == template_code,
+                PositionDeptType.position_code == position_code,
+            )
+        ).all()
+    )
+    target = next((link for link in links if link.dept_type_code == code), None)
+    if target is None:
+        target = PositionDeptType(
+            template_code=template_code,
+            position_code=position_code,
+            dept_type_code=code,
+            is_primary=True,
+        )
+        db.add(target)
+    for link in links:
+        link.is_primary = link.dept_type_code == code
+    if target not in links:
+        target.is_primary = True
 
 
 def _unique_code(existing: set[str], base: str) -> str:

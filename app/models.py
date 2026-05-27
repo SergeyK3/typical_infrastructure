@@ -353,6 +353,23 @@ class ClientRegulationKpi(Base):
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class ClientStandaloneKpi(Base, TimestampMixin):
+    """Локальный KPI организации без привязки к карточке регламента."""
+
+    __tablename__ = "client_standalone_kpis"
+    __table_args__ = (Index("ix_client_standalone_kpis_client_code", "client_id", "kpi_code", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    kpi_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    period_type: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
+    weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    position_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
 class ClientRegulationInstruction(Base):
     """Инструкции клиентской копии регламента."""
 

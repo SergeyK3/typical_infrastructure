@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -206,6 +207,84 @@ def _sync_missing_regulation_children(
             )
             existing_ins.add(ins.instruction_code.strip())
             instructions_added += 1
+    return kpis_added, instructions_added
+
+
+def sync_client_regulation_children_from_global(
+    db: Session, client_regulation_id: str
+) -> tuple[int, int]:
+    """Добавить отсутствующие KPI и инструкции в одну клиентскую карточку из глобального шаблона."""
+    client_reg = db.get(ClientPositionRegulation, client_regulation_id)
+    if not client_reg:
+        raise HTTPException(status_code=404, detail="client_regulation_not_found")
+    template_code = resolve_client_template_code(db, client_reg.client_id)
+    glob_code = (client_reg.global_regulation_code or client_reg.regulation_code).strip()
+    glob = db.scalar(
+        select(PositionRegulation).where(
+            PositionRegulation.template_code == template_code,
+            PositionRegulation.regulation_code == glob_code,
+        )
+    )
+    if not glob:
+        raise HTTPException(status_code=404, detail="global_regulation_not_found")
+    kpis_added = 0
+    instructions_added = 0
+    existing_kpi = {
+        k.kpi_code.strip()
+        for k in db.scalars(
+            select(ClientRegulationKpi).where(ClientRegulationKpi.client_regulation_id == client_regulation_id)
+        ).all()
+    }
+    for k in db.scalars(
+        select(RegulationKpi).where(
+            RegulationKpi.template_code == template_code,
+            RegulationKpi.regulation_code == glob.regulation_code,
+        )
+    ).all():
+        if k.kpi_code.strip() in existing_kpi:
+            continue
+        db.add(
+            ClientRegulationKpi(
+                id=new_id32(),
+                client_regulation_id=client_regulation_id,
+                kpi_code=k.kpi_code,
+                target_value=k.target_value,
+                period_type=k.period_type,
+                weight=k.weight,
+                is_required=k.is_required,
+            )
+        )
+        kpis_added += 1
+    existing_ins = {
+        i.instruction_code.strip()
+        for i in db.scalars(
+            select(ClientRegulationInstruction).where(
+                ClientRegulationInstruction.client_regulation_id == client_regulation_id
+            )
+        ).all()
+    }
+    for ins in db.scalars(
+        select(RegulationInstruction)
+        .where(
+            RegulationInstruction.template_code == template_code,
+            RegulationInstruction.regulation_code == glob.regulation_code,
+        )
+        .order_by(RegulationInstruction.sort_order)
+    ).all():
+        if ins.instruction_code.strip() in existing_ins:
+            continue
+        db.add(
+            ClientRegulationInstruction(
+                id=new_id32(),
+                client_regulation_id=client_regulation_id,
+                instruction_code=ins.instruction_code,
+                instruction_name=ins.instruction_name,
+                instruction_url=ins.instruction_url,
+                is_required=ins.is_required,
+                sort_order=ins.sort_order,
+            )
+        )
+        instructions_added += 1
     return kpis_added, instructions_added
 
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.routers.accounts import router as accounts_router
+from app.routers.catalog_copy import router as catalog_copy_router
+from app.routers.client_kpis import router as client_kpis_router
 from app.routers.client_regulations import router as client_regulations_router
 from app.routers.clients import router as clients_router
 from app.routers.enterprise_templates import router as enterprise_templates_router
@@ -23,6 +25,8 @@ from app.routers.users import router as users_router
 router = APIRouter()
 
 router.include_router(accounts_router)
+router.include_router(catalog_copy_router)
+router.include_router(client_kpis_router)
 router.include_router(client_regulations_router)
 router.include_router(clients_router)
 router.include_router(enterprise_templates_router)
