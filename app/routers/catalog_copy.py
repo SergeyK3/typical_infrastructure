@@ -12,8 +12,11 @@ from app.competency_copy_ops import (
 )
 from app.catalog_copy_ops import (
     clone_skills_matrix_global_to_local,
+    copy_kpi_local_to_global,
     copy_kpi_template_global_to_global,
+    copy_org_unit_local_to_global,
     copy_position_catalog_global_to_global,
+    copy_position_local_to_global,
     copy_regulation_global_to_global,
     copy_regulation_global_to_local,
     copy_regulation_local_to_global,
@@ -22,6 +25,7 @@ from app.db import get_db
 from app.models import OrgUnit, Position, PositionCatalog
 from app.schemas import (
     CatalogCopyKpiIn,
+    CatalogCopyOrgUnitIn,
     CatalogCopyPositionIn,
     CatalogCopyRegulationIn,
     CatalogCopySkillIn,
@@ -30,6 +34,7 @@ from app.schemas import (
     PositionCatalogOut,
     PositionOut,
     PositionRegulationOut,
+    TemplateOrgUnitOut,
 )
 from app.template_bundle_clone import resolve_client_template_code
 from app.utils import new_id32
@@ -94,8 +99,8 @@ def copy_regulation(body: CatalogCopyRegulationIn, db: Session = Depends(get_db)
 def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
     mode = body.mode.strip()
     if mode == "global_to_global":
-        if not body.target_template_code:
-            raise HTTPException(status_code=422, detail="target_template_code_required")
+        if not body.target_template_code or not body.source_position_code:
+            raise HTTPException(status_code=422, detail="target_template_code_and_source_position_code_required")
         result = copy_position_catalog_global_to_global(
             db,
             body.source_template_code,
@@ -115,6 +120,8 @@ def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
     if mode == "global_to_local":
         if not body.client_id or not body.org_unit_id:
             raise HTTPException(status_code=422, detail="client_id_and_org_unit_id_required")
+        if not body.source_position_code:
+            raise HTTPException(status_code=422, detail="source_position_code_required")
         tpl = resolve_client_template_code(db, body.client_id)
         cat = db.get(PositionCatalog, (tpl, body.source_position_code))
         if not cat or not cat.is_active:
@@ -152,13 +159,76 @@ def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(obj)
         return {"position": PositionOut.model_validate(obj)}
+    if mode == "local_to_global":
+        if not body.client_id or not body.source_position_id:
+            raise HTTPException(status_code=422, detail="client_id_and_source_position_id_required")
+        tpl = body.target_template_code or resolve_client_template_code(db, body.client_id.strip())
+        if not tpl:
+            raise HTTPException(status_code=422, detail="target_template_code_required")
+        result = copy_position_local_to_global(
+            db,
+            body.client_id.strip(),
+            body.source_position_id.strip(),
+            tpl,
+            body.target_position_code,
+        )
+        db.commit()
+        db.refresh(result.row)
+        return {
+            "position": PositionCatalogOut.model_validate(result.row),
+            "created": result.created,
+            "dept_links_created": result.dept_links_created,
+        }
     raise HTTPException(status_code=422, detail="invalid_copy_mode")
 
 
-@router.post("/kpi", response_model=KpiTemplateOut, status_code=201)
+@router.post("/org-unit", status_code=201)
+def copy_org_unit(body: CatalogCopyOrgUnitIn, db: Session = Depends(get_db)):
+    tpl = body.target_template_code or resolve_client_template_code(db, body.client_id.strip())
+    if not tpl:
+        raise HTTPException(status_code=422, detail="target_template_code_required")
+    result = copy_org_unit_local_to_global(
+        db,
+        body.client_id.strip(),
+        body.source_org_unit_id.strip(),
+        tpl,
+        body.target_code,
+    )
+    db.commit()
+    db.refresh(result.row)
+    return {
+        "row": TemplateOrgUnitOut.model_validate(result.row),
+        "created": result.created,
+    }
+
+
+@router.post("/kpi", status_code=201)
 def copy_kpi(body: CatalogCopyKpiIn, db: Session = Depends(get_db)):
-    if body.mode.strip() != "global_to_global":
+    mode = body.mode.strip()
+    if mode == "local_to_global":
+        if not body.client_id:
+            raise HTTPException(status_code=422, detail="client_id_required")
+        tpl = body.target_template_code or resolve_client_template_code(db, body.client_id.strip())
+        if not tpl:
+            raise HTTPException(status_code=422, detail="target_template_code_required")
+        result = copy_kpi_local_to_global(
+            db,
+            client_id=body.client_id.strip(),
+            target_template_code=tpl,
+            source_client_regulation_kpi_id=body.source_client_regulation_kpi_id,
+            source_client_standalone_kpi_id=body.source_client_standalone_kpi_id,
+            target_kpi_code=body.target_kpi_code,
+        )
+        db.commit()
+        db.refresh(result.row)
+        return {
+            "created": result.created,
+            "kpi": KpiTemplateOut.model_validate(result.row),
+        }
+    if mode != "global_to_global":
         raise HTTPException(status_code=422, detail="invalid_copy_mode")
+    if not body.target_template_code or not body.source_kpi_code:
+        raise HTTPException(status_code=422, detail="target_template_code_and_source_kpi_code_required")
     result = copy_kpi_template_global_to_global(
         db,
         body.source_template_code,

@@ -34,18 +34,18 @@
     { id: 'globalCatalogs.overview', label: 'Обзор', level: 'platform', groupId: 'globalCatalogs', href: '/global', order: 10 },
     { id: 'globalCatalogs.templateOrg', label: 'Типовая оргструктура', level: 'platform', groupId: 'globalCatalogs', href: '/global/template-org', order: 20 },
     { id: 'globalCatalogs.positions', label: 'Типовые должности', level: 'platform', groupId: 'globalCatalogs', href: '/global/positions', order: 30 },
-    { id: 'globalCatalogs.skills', label: 'Типовые навыки', level: 'platform', groupId: 'globalCatalogs', href: '/global/skills', order: 40 },
-    { id: 'globalCatalogs.kpi', label: 'Типовые KPI', level: 'platform', groupId: 'globalCatalogs', href: '/global/kpi', order: 50 },
     {
       id: 'globalCatalogs.regulations',
       label: 'Типовые регламенты',
       level: 'platform',
       groupId: 'globalCatalogs',
       href: regulationsHref,
-      order: 60,
+      order: 40,
       elementId: 'topNavRegulations',
       title: 'Общесистемный нормативный реестр',
     },
+    { id: 'globalCatalogs.kpi', label: 'Типовые KPI', level: 'platform', groupId: 'globalCatalogs', href: '/global/kpi', order: 50 },
+    { id: 'globalCatalogs.skills', label: 'Типовые навыки', level: 'platform', groupId: 'globalCatalogs', href: '/global/skills', order: 60 },
     { id: 'developerTools.api', label: 'API', level: 'platform', groupId: 'globalCatalogs', href: '/docs', order: 70, className: 'api-link' },
   ];
 

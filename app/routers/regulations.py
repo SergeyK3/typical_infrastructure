@@ -371,7 +371,38 @@ def create_regulation(body: PositionRegulationCreate, db: Session = Depends(get_
         )
     )
     if existing:
-        raise HTTPException(status_code=409, detail="regulation_code_already_exists")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "regulation_code_already_exists",
+                "message": (
+                    f"Код регламента «{body.regulation_code}» уже занят в шаблоне "
+                    f"«{body.template_code}» (карточка «{existing.regulation_name}»). "
+                    "Задайте другой код или откройте существующую запись."
+                ),
+            },
+        )
+    slot = db.scalar(
+        select(PositionRegulation).where(
+            PositionRegulation.template_code == body.template_code,
+            PositionRegulation.position_code == body.position_code,
+            PositionRegulation.dept_type_code == body.dept_type_code,
+            PositionRegulation.version_no == body.version_no,
+        )
+    )
+    if slot:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "regulation_slot_already_exists",
+                "message": (
+                    f"Для должности «{body.position_code}», типа подразделения «{body.dept_type_code}» "
+                    f"и версии «{body.version_no}» регламент уже есть "
+                    f"(код «{slot.regulation_code}», «{slot.regulation_name}»). "
+                    "Измените версию или откройте существующую карточку."
+                ),
+            },
+        )
     obj = PositionRegulation(
         id=body.id or _id("regulation", body.regulation_code),
         template_code=body.template_code,

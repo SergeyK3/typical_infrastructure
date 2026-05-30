@@ -14,7 +14,10 @@ from app.models import (
     ClientPositionRegulation,
     ClientRegulationInstruction,
     ClientRegulationKpi,
+    ClientStandaloneKpi,
     KpiTemplate,
+    OrgUnit,
+    Position,
     PositionCatalog,
     PositionDeptType,
     PositionRegulation,
@@ -22,6 +25,7 @@ from app.models import (
     RegulationKpi,
     TemplateOrgUnitRow,
 )
+from app.org_unit_ops import PROTECTED_ORG_CODES, format_org_unit_name, normalize_template_log_group
 from app.position_catalog_ops import PositionCatalogCloneResult, _unique_code, clone_position_catalog
 from app.template_bundle_clone import resolve_client_template_code
 from app.utils import new_id32
@@ -667,6 +671,221 @@ def copy_kpi_template_global_to_global(
         default_target=src.default_target,
         is_active=src.is_active,
         position_code=src.position_code,
+    )
+    db.add(row)
+    db.flush()
+    return KpiTemplateCopyResult(row=row, created=True)
+
+
+@dataclass
+class TemplateOrgUnitCopyResult:
+    row: TemplateOrgUnitRow
+    created: bool
+
+
+@dataclass
+class PositionLocalToGlobalResult:
+    row: PositionCatalog
+    created: bool
+    dept_links_created: int
+
+
+def _ensure_template_parent_exists(db: Session, template_code: str, parent_code: str | None) -> None:
+    if not parent_code:
+        return
+    ok = db.scalar(
+        select(func.count())
+        .select_from(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == template_code,
+            TemplateOrgUnitRow.code == parent_code,
+        )
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "template_org_parent_not_found",
+                "message": f"Родительский узел «{parent_code}» отсутствует в целевом шаблоне — скопируйте его сначала.",
+            },
+        )
+
+
+def copy_org_unit_local_to_global(
+    db: Session,
+    client_id: str,
+    source_org_unit_id: str,
+    target_template_code: str,
+    target_code: str | None = None,
+) -> TemplateOrgUnitCopyResult:
+    ou = db.get(OrgUnit, source_org_unit_id)
+    if not ou or ou.client_id != client_id:
+        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    if ou.code in PROTECTED_ORG_CODES:
+        raise HTTPException(status_code=400, detail="org_unit_copy_not_allowed")
+
+    code = (target_code or ou.code).strip()
+    existing = db.scalar(
+        select(TemplateOrgUnitRow).where(
+            TemplateOrgUnitRow.template_code == target_template_code,
+            TemplateOrgUnitRow.code == code,
+        )
+    )
+    if existing:
+        return TemplateOrgUnitCopyResult(row=existing, created=False)
+
+    parent_code: str | None = None
+    if ou.parent_id:
+        parent = db.get(OrgUnit, ou.parent_id)
+        if parent:
+            parent_code = parent.code
+    _ensure_template_parent_exists(db, target_template_code, parent_code)
+
+    row = TemplateOrgUnitRow(
+        id=new_id32(),
+        template_code=target_template_code,
+        code=code,
+        name=format_org_unit_name(ou.name, ou.unit_type),
+        parent_code=parent_code,
+        unit_type=ou.unit_type,
+        sort_order=ou.sort_order,
+        log_group=normalize_template_log_group(ou.unit_type, ou.code if ou.unit_type == "department" else None),
+    )
+    db.add(row)
+    db.flush()
+    return TemplateOrgUnitCopyResult(row=row, created=True)
+
+
+def _dept_type_hint_for_position(db: Session, pos: Position) -> str:
+    ou = db.get(OrgUnit, pos.org_unit_id)
+    if not ou:
+        return (pos.function_code or "").strip()
+    if ou.unit_type == "department":
+        return ou.code
+    if ou.parent_id:
+        parent = db.get(OrgUnit, ou.parent_id)
+        if parent and parent.unit_type == "department":
+            return parent.code
+    return (pos.function_code or ou.code or "").strip()
+
+
+def copy_position_local_to_global(
+    db: Session,
+    client_id: str,
+    source_position_id: str,
+    target_template_code: str,
+    target_position_code: str | None = None,
+) -> PositionLocalToGlobalResult:
+    pos = db.get(Position, source_position_id)
+    if not pos or pos.client_id != client_id:
+        raise HTTPException(status_code=404, detail="position_not_found")
+
+    new_code = (target_position_code or pos.position_catalog_code or pos.code).strip()
+    existing = db.get(PositionCatalog, (target_template_code, new_code))
+    if existing:
+        return PositionLocalToGlobalResult(row=existing, created=False, dept_links_created=0)
+
+    dept_hint = _dept_type_hint_for_position(db, pos)
+    function_code = (pos.function_code or dept_hint or DEFAULT_FALLBACK_DEPT).strip()
+    dept_type = resolve_dept_type_for_target(db, target_template_code, dept_hint or function_code)
+
+    row = PositionCatalog(
+        template_code=target_template_code,
+        position_code=new_code,
+        position_name_ru=pos.name,
+        position_name_en=None,
+        function_code=function_code,
+        position_level=pos.position_level or "SPEC",
+        is_managerial=bool(pos.is_managerial) if pos.is_managerial is not None else False,
+        position_family=None,
+        is_active=pos.is_active,
+        default_regulation_code=None,
+        notes=None,
+        sort_order=0,
+    )
+    db.add(row)
+    db.flush()
+
+    dept_links_created = 0
+    if not db.get(PositionDeptType, (target_template_code, new_code, dept_type)):
+        db.add(
+            PositionDeptType(
+                template_code=target_template_code,
+                position_code=new_code,
+                dept_type_code=dept_type,
+                is_primary=True,
+            )
+        )
+        dept_links_created = 1
+
+    return PositionLocalToGlobalResult(row=row, created=True, dept_links_created=dept_links_created)
+
+
+def copy_kpi_local_to_global(
+    db: Session,
+    *,
+    client_id: str,
+    target_template_code: str,
+    source_client_regulation_kpi_id: str | None = None,
+    source_client_standalone_kpi_id: str | None = None,
+    target_kpi_code: str | None = None,
+) -> KpiTemplateCopyResult:
+    kpi_code: str | None = None
+    target_value: float | None = None
+    period_type = "month"
+    position_code: str | None = None
+
+    if source_client_regulation_kpi_id:
+        ck = db.get(ClientRegulationKpi, source_client_regulation_kpi_id)
+        if not ck:
+            raise HTTPException(status_code=404, detail="client_regulation_kpi_not_found")
+        cr = db.get(ClientPositionRegulation, ck.client_regulation_id)
+        if not cr or cr.client_id != client_id:
+            raise HTTPException(status_code=400, detail="client_regulation_kpi_not_for_client")
+        kpi_code = ck.kpi_code
+        target_value = ck.target_value
+        period_type = ck.period_type
+        position_code = cr.position_code
+    elif source_client_standalone_kpi_id:
+        sk = db.get(ClientStandaloneKpi, source_client_standalone_kpi_id)
+        if not sk or sk.client_id != client_id:
+            raise HTTPException(status_code=404, detail="client_standalone_kpi_not_found")
+        kpi_code = sk.kpi_code
+        target_value = sk.target_value
+        period_type = sk.period_type
+        position_code = sk.position_code
+    else:
+        raise HTTPException(status_code=422, detail="kpi_source_required")
+
+    final_code = (target_kpi_code or kpi_code or "").strip()
+    existing = db.get(KpiTemplate, (target_template_code, final_code))
+    if existing:
+        return KpiTemplateCopyResult(row=existing, created=False)
+
+    client_tpl = resolve_client_template_code(db, client_id)
+    meta = db.get(KpiTemplate, (client_tpl, kpi_code))
+    if not meta:
+        meta = db.scalar(select(KpiTemplate).where(KpiTemplate.kpi_code == kpi_code).limit(1))
+
+    if position_code and not db.get(PositionCatalog, (target_template_code, position_code)):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "position_not_in_target_template",
+                "message": f"Должность «{position_code}» отсутствует в глобальном справочнике шаблона «{target_template_code}».",
+            },
+        )
+
+    row = KpiTemplate(
+        template_code=target_template_code,
+        kpi_code=final_code,
+        kpi_name=meta.kpi_name if meta else final_code,
+        unit=meta.unit if meta else "%",
+        period_type=period_type or (meta.period_type if meta else "month"),
+        formula_or_rule=meta.formula_or_rule if meta else None,
+        default_target=target_value if target_value is not None else (meta.default_target if meta else None),
+        is_active=True,
+        position_code=position_code,
     )
     db.add(row)
     db.flush()

@@ -663,13 +663,13 @@ def clone_catalog_competency_matrix_row(
     row_id: str,
     db: Annotated[Session, Depends(get_db)],
     client_id: Annotated[
-        str,
-        Query(min_length=1, description="Организация — владелец локальной матрицы"),
-    ],
+        str | None,
+        Query(description="Организация — владелец локальной матрицы; без параметра — глобальный каталог"),
+    ] = None,
 ) -> dict[str, Any]:
-    """Копия строки матрицы навыков в локальном каталоге (следующий свободный ранг)."""
-    cid = client_id.strip()
-    row = _ensure_client_competency_row(db, row_id, cid)
+    """Копия строки матрицы навыков (следующий свободный ранг в той же версии каталога)."""
+    cid = (client_id or "").strip() or None
+    row = _ensure_client_competency_row(db, row_id, cid) if cid else _ensure_global_competency_row(db, row_id)
     max_rank = db.scalar(
         select(func.max(CompetencyMatrixRow.skill_rank)).where(
             CompetencyMatrixRow.version_id == row.version_id,

@@ -12,7 +12,15 @@ from app.excel_export import xlsx_file_response
 from app.models import Client, OrgUnit, Position, PositionCatalog
 from app.template_bundle_clone import resolve_client_template_code
 from app.template_constants import DEFAULT_TEMPLATE_CODE
-from app.schemas import ListEnvelope, PositionCreate, PositionFromCatalog, PositionOut, PositionPatch
+from app.position_catalog_ops import _unique_code
+from app.schemas import (
+    ListEnvelope,
+    PositionCloneIn,
+    PositionCreate,
+    PositionFromCatalog,
+    PositionOut,
+    PositionPatch,
+)
 from app.utils import new_id32
 
 router = APIRouter(prefix="/positions", tags=["positions"])
@@ -162,6 +170,54 @@ def create_position(payload: PositionCreate, db: Session = Depends(get_db)) -> P
         position_level=payload.position_level,
         is_managerial=payload.is_managerial,
         is_detached=payload.is_detached,
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return PositionOut.model_validate(obj)
+
+
+@router.post("/{position_id}/clone", response_model=PositionOut, status_code=201)
+def clone_position(
+    position_id: str,
+    body: PositionCloneIn,
+    db: Session = Depends(get_db),
+) -> PositionOut:
+    source = db.get(Position, position_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="position_not_found")
+
+    org_unit_id = body.target_org_unit_id if body.target_org_unit_id is not None else source.org_unit_id
+    _assert_org_unit(db, source.client_id, org_unit_id)
+
+    existing_codes = set(
+        db.scalars(
+            select(Position.code).where(
+                Position.client_id == source.client_id,
+                Position.org_unit_id == org_unit_id,
+            )
+        ).all()
+    )
+    code = (body.new_code or _unique_code(existing_codes, source.code)).strip()
+    if not code:
+        raise HTTPException(status_code=422, detail="validation_error")
+    if code in existing_codes:
+        raise HTTPException(status_code=409, detail="position_code_already_exists")
+
+    copy_name = source.name if body.name_suffix in source.name else f"{source.name} ({body.name_suffix})"
+    obj = Position(
+        id=new_id32(),
+        client_id=source.client_id,
+        org_unit_id=org_unit_id,
+        code=code,
+        name=copy_name,
+        grade=source.grade,
+        is_active=source.is_active,
+        position_catalog_code=source.position_catalog_code,
+        function_code=source.function_code,
+        position_level=source.position_level,
+        is_managerial=source.is_managerial,
+        is_detached=True,
     )
     db.add(obj)
     db.commit()

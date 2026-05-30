@@ -15,9 +15,19 @@
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .toolbar input, .toolbar select { padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
     .toolbar input { min-width: 260px; flex: 1 1 320px; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+    .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .data-table th { color: var(--text-muted); font-weight: 500; }
+    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 2.5rem; }
+    .data-table th:nth-child(6), .data-table td:nth-child(6) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 22rem; min-width: 22rem; white-space: nowrap; }
+    .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
+    .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; }
+    .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); box-sizing: border-box; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
     .num { text-align: right; white-space: nowrap; }
     .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
@@ -36,9 +46,9 @@
         <a href="/global" class="sidebar-item">Обзор</a>
         <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
         <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/global/skills" class="sidebar-item active">Типовые навыки</a>
-        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
         <a href="/regulations" class="sidebar-item">Типовые регламенты</a>
+        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
+        <a href="/global/skills" class="sidebar-item active">Типовые навыки</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
       </div>
       <div class="sidebar-bottom">
@@ -86,17 +96,93 @@
     </main>
   </div>
 
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Изменить навык</h3>
+      <div id="modalErr" class="err hidden"></div>
+      <input type="hidden" id="fRowId">
+      <label>Код должности</label>
+      <select id="fPosition"></select>
+      <label>Тип подразделения (функция)</label>
+      <input type="text" id="fDept" placeholder="ACC, HR, …">
+      <label>Ранг навыка</label>
+      <input type="number" min="1" step="1" id="fRank">
+      <label>Навык</label>
+      <input type="text" id="fTitle" readonly style="opacity:0.85;">
+      <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;">Формулировка навыка привязана к коду навыка; для другой формулировки создайте копию строки и измените привязку.</p>
+      <label><input type="checkbox" id="fActive" checked> Активен</label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancel">Отмена</button>
+        <button type="button" class="btn btn-primary" id="btnSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     let rows = [];
-    let rowNum = 1;
+    let positionsCatalog = [];
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    function errText(j, fallback) {
+      if (j && j.detail) return typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+      if (j && j.error) return j.error.message || j.error.code || fallback;
+      return fallback;
+    }
+
+    async function skillApi(rowId, opts, suffix) {
+      const url = '/api/skill-assessment/catalog/competency-matrix/' + encodeURIComponent(rowId) + (suffix || '');
+      const r = await fetch(url, opts || {});
+      const text = await r.text();
+      let j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok) throw new Error(errText(j, text || r.statusText));
+      if (r.status === 204) return null;
+      return j;
+    }
+
     function templateCode() {
       return $('filterTemplate').value || 'default';
+    }
+
+    async function loadPositionsCatalog() {
+      try {
+        const r = await fetch('/api/position-catalog?template_code=' + encodeURIComponent(templateCode()) + '&limit=500', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        positionsCatalog = data.items || [];
+      } catch (_) {
+        positionsCatalog = [];
+      }
+    }
+
+    function fillPositionSelect(selectEl, selectedCode) {
+      const seen = new Set();
+      const options = [];
+      positionsCatalog.forEach((p) => {
+        const code = (p.position_code || '').trim();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        options.push({ code, label: (p.position_name_ru ? p.position_name_ru + ' (' + code + ')' : code) });
+      });
+      rows.forEach((row) => {
+        const code = (row.position_code || '').trim();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        options.push({ code, label: code });
+      });
+      options.sort((a, b) => a.code.localeCompare(b.code, 'ru'));
+      selectEl.innerHTML = options.map((o) =>
+        '<option value="' + escapeHtml(o.code) + '">' + escapeHtml(o.label) + '</option>'
+      ).join('');
+      if (selectedCode && [...selectEl.options].some((o) => o.value === selectedCode)) {
+        selectEl.value = selectedCode;
+      } else if (options.length) {
+        selectEl.value = options[0].code;
+      }
     }
 
     async function initPage() {
@@ -117,6 +203,48 @@
       select.value = current;
     }
 
+    function openEdit(rowId) {
+      const row = rows.find((x) => x.row_id === rowId);
+      if (!row) return;
+      $('modalTitle').textContent = 'Изменить навык';
+      $('modalErr').classList.add('hidden');
+      $('fRowId').value = rowId;
+      fillPositionSelect($('fPosition'), row.position_code || '');
+      $('fDept').value = row.department_code || '';
+      $('fRank').value = row.skill_rank != null ? String(row.skill_rank) : '1';
+      $('fTitle').value = row.skill_title_ru || '';
+      $('fActive').checked = row.is_active !== false;
+      $('modal').classList.add('show');
+    }
+
+    function closeModal() {
+      $('modal').classList.remove('show');
+    }
+
+    async function cloneRow(rowId) {
+      $('listErr').classList.add('hidden');
+      try {
+        const res = await skillApi(rowId, { method: 'POST' }, '/clone');
+        alert('Добавлена копия навыка «' + (res.skill_title_ru || res.skill_code) + '» (ранг ' + res.skill_rank + ').');
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message || String(e);
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
+    async function delRow(rowId) {
+      if (!confirm('Удалить строку из типовой матрицы навыков?')) return;
+      $('listErr').classList.add('hidden');
+      try {
+        await skillApi(rowId, { method: 'DELETE' });
+        await load();
+      } catch (e) {
+        $('listErr').textContent = e.message || String(e);
+        $('listErr').classList.remove('hidden');
+      }
+    }
+
     function render() {
       const q = $('filterText').value.trim().toLowerCase();
       const pos = $('filterPosition').value;
@@ -128,19 +256,36 @@
         );
       });
       $('listMeta').textContent = 'Записей: ' + filtered.length + ' из ' + rows.length + ' · шаблон ' + templateCode();
-      $('tbody').innerHTML = filtered.map((row, idx) => (
+      $('tbody').innerHTML = filtered.map((row, idx) => {
+        const rowId = row.row_id || '';
+        return (
         '<tr>' +
           '<td class="num">' + (idx + 1) + '</td>' +
           '<td><code>' + escapeHtml(row.position_code) + '</code></td>' +
           '<td><code>' + escapeHtml(row.department_code || '') + '</code></td>' +
           '<td class="num">' + row.skill_rank + '</td>' +
           '<td><code>' + escapeHtml(row.skill_code || '') + '</code></td>' +
-          '<td>' + escapeHtml(row.skill_title_ru || '') + '</td>' +
+          '<td title="' + escapeHtml(row.skill_title_ru || '') + '">' + escapeHtml(row.skill_title_ru || '') + '</td>' +
           '<td class="row-actions">' +
-            '<button type="button" class="btn btn-secondary btn-copy-skill" data-pos="' + escapeHtml(row.position_code) + '" data-dept="' + escapeHtml(row.department_code || '') + '" data-rank="' + row.skill_rank + '">В шаблон</button>' +
+            (rowId
+              ? '<button type="button" class="btn btn-secondary btn-edit" data-id="' + escapeHtml(rowId) + '">Изменить</button>' +
+                '<button type="button" class="btn btn-secondary btn-clone" data-id="' + escapeHtml(rowId) + '">Копировать</button>' +
+                '<button type="button" class="btn btn-secondary btn-copy-skill" data-pos="' + escapeHtml(row.position_code) + '" data-dept="' + escapeHtml(row.department_code || '') + '" data-rank="' + row.skill_rank + '" title="В другой шаблон">В шаблон</button>' +
+                '<button type="button" class="btn btn-danger btn-del" data-id="' + escapeHtml(rowId) + '">Удалить</button>'
+              : '') +
           '</td>' +
         '</tr>'
-      )).join('');
+        );
+      }).join('');
+      $('tbody').querySelectorAll('.btn-edit').forEach((btn) => {
+        btn.onclick = () => openEdit(btn.dataset.id);
+      });
+      $('tbody').querySelectorAll('.btn-clone').forEach((btn) => {
+        btn.onclick = () => cloneRow(btn.dataset.id);
+      });
+      $('tbody').querySelectorAll('.btn-del').forEach((btn) => {
+        btn.onclick = () => delRow(btn.dataset.id);
+      });
       $('tbody').querySelectorAll('.btn-copy-skill').forEach((btn) => {
         btn.onclick = () => {
           if (!window.CatalogCopy) return;
@@ -162,6 +307,7 @@
       try {
         const tpl = templateCode();
         $('btnExportExcel').href = '/api/skill-assessment/catalog/competency-matrix/export/excel?template_code=' + encodeURIComponent(tpl);
+        await loadPositionsCatalog();
         const r = await fetch('/api/skill-assessment/catalog/competency-matrix?template_code=' + encodeURIComponent(tpl), { cache: 'no-store' });
         if (!r.ok) throw new Error('Не удалось загрузить матрицу навыков (HTTP ' + r.status + ')');
         rows = await r.json();
@@ -176,6 +322,37 @@
     $('btnReload').onclick = load;
     $('filterText').oninput = render;
     $('filterPosition').onchange = render;
+    $('btnCancel').onclick = closeModal;
+    $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+    $('btnSave').onclick = async () => {
+      $('modalErr').classList.add('hidden');
+      const rowId = $('fRowId').value.trim();
+      const positionCode = $('fPosition').value.trim();
+      const departmentCode = $('fDept').value.trim();
+      const rankRaw = $('fRank').value.trim();
+      if (!rowId || !positionCode || !departmentCode || !rankRaw) {
+        $('modalErr').textContent = 'Заполните должность, тип подразделения и ранг';
+        $('modalErr').classList.remove('hidden');
+        return;
+      }
+      try {
+        await skillApi(rowId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position_code: positionCode,
+            department_code: departmentCode,
+            skill_rank: parseInt(rankRaw, 10) || 1,
+            is_active: $('fActive').checked,
+          }),
+        });
+        closeModal();
+        await load();
+      } catch (e) {
+        $('modalErr').textContent = e.message || String(e);
+        $('modalErr').classList.remove('hidden');
+      }
+    };
     initPage();
   </script>
 </body>

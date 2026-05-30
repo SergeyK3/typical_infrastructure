@@ -141,6 +141,12 @@ class PositionPatch(BaseModel):
     is_detached: bool | None = None
 
 
+class PositionCloneIn(BaseModel):
+    name_suffix: str = Field(default="Копия", max_length=64)
+    new_code: str | None = Field(default=None, max_length=64)
+    target_org_unit_id: str | None = None
+
+
 class PositionOut(PositionBase):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -853,21 +859,32 @@ class CatalogCopyRegulationIn(BaseModel):
 
 
 class CatalogCopyPositionIn(BaseModel):
-    mode: str = Field(description="global_to_global | global_to_local")
+    mode: str = Field(description="global_to_global | global_to_local | local_to_global")
     source_template_code: str = "default"
     target_template_code: str | None = None
     client_id: str | None = None
     org_unit_id: str | None = None
-    source_position_code: str = Field(min_length=1, max_length=64)
+    source_position_code: str | None = Field(default=None, max_length=64)
+    source_position_id: str | None = Field(default=None, max_length=32)
     target_position_code: str | None = Field(default=None, max_length=64)
 
 
 class CatalogCopyKpiIn(BaseModel):
-    mode: str = Field(description="global_to_global")
+    mode: str = Field(description="global_to_global | local_to_global")
     source_template_code: str = "default"
-    target_template_code: str = Field(min_length=1, max_length=64)
-    source_kpi_code: str = Field(min_length=1, max_length=64)
+    target_template_code: str | None = None
+    client_id: str | None = None
+    source_kpi_code: str | None = Field(default=None, max_length=64)
     target_kpi_code: str | None = Field(default=None, max_length=64)
+    source_client_regulation_kpi_id: str | None = Field(default=None, max_length=32)
+    source_client_standalone_kpi_id: str | None = Field(default=None, max_length=32)
+
+
+class CatalogCopyOrgUnitIn(BaseModel):
+    client_id: str
+    source_org_unit_id: str = Field(min_length=1, max_length=32)
+    target_template_code: str | None = None
+    target_code: str | None = Field(default=None, max_length=64)
 
 
 class CatalogCopySkillsIn(BaseModel):

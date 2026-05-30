@@ -44,8 +44,12 @@
     return unitType === 'department' || unitType === 'section';
   }
 
-  function buildOrgMenuItems(n) {
+  function buildOrgMenuItems(n, opts) {
+    opts = opts || {};
     const menuItems = [];
+    if (opts.toGlobal && n.code !== 'company') {
+      menuItems.push({ action: 'to-global', label: 'В глоб. шаблон' });
+    }
     if (n.unit_type === 'department') {
       menuItems.push({ action: 'add-section', label: 'Создать секцию' });
       menuItems.push({ action: 'clone', label: 'Копировать' });
@@ -60,8 +64,8 @@
     return menuItems;
   }
 
-  function renderOrgMenuHtml(n) {
-    return buildOrgMenuItems(n)
+  function renderOrgMenuHtml(n, opts) {
+    return buildOrgMenuItems(n, opts)
       .map(function (m) {
         return (
           '<button type="button" class="org-ctx-item' +
@@ -78,17 +82,24 @@
       .join('');
   }
 
-  function renderOrgActionsCell(n) {
-    if (!buildOrgMenuItems(n).length) return '<span class="meta">—</span>';
+  function renderOrgActionsCell(n, opts) {
+    opts = opts || {};
+    if (!buildOrgMenuItems(n, opts).length) return '<span class="meta">—</span>';
+    const inlineGlobal = opts.toGlobal && n.code !== 'company'
+      ? '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="to-global" data-id="' +
+        escapeHtml(n.id) +
+        '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>'
+      : '';
     return (
       '<span class="org-row-actions">' +
+      inlineGlobal +
       '<button type="button" class="btn btn-sm btn-secondary org-menu-btn" data-id="' +
       escapeHtml(n.id) +
       '" title="Действия">⋯</button>' +
       '<div class="org-ctx-menu hidden" data-for="' +
       escapeHtml(n.id) +
       '">' +
-      renderOrgMenuHtml(n) +
+      renderOrgMenuHtml(n, opts) +
       '</div></span>'
     );
   }
@@ -119,36 +130,21 @@
     return list;
   }
 
-  function renderOrgTableActionsCell(n) {
-    if (n.code === 'company') return '<span class="meta">—</span>';
-    const id = escapeHtml(n.id);
-    const parts = [
-      '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="rename" data-id="' +
-        id +
-        '" title="Изменить">Изм.</button>',
-    ];
-    if (n.unit_type === 'department') {
-      parts.push(
-        '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="clone" data-id="' +
-          id +
-          '" title="Копировать отделение">Коп.</button>'
-      );
-    }
-    parts.push(
-      '<button type="button" class="btn btn-sm btn-danger org-act-btn" data-action="delete" data-id="' +
-        id +
-        '" title="Удалить">Уд.</button>'
-    );
-    return '<span class="org-table-actions">' + parts.join('') + '</span>';
-  }
-
-  function renderOrgTableActionsCell(n) {
+  function renderOrgTableActionsCell(n, opts) {
+    opts = opts || {};
     const parts = [];
     if (n.code !== 'company') {
       parts.push(
         '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="rename" data-id="' +
           escapeHtml(n.id) +
           '" title="Изменить">Изм.</button>'
+      );
+    }
+    if (opts.toGlobal && n.code !== 'company') {
+      parts.push(
+        '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="to-global" data-id="' +
+          escapeHtml(n.id) +
+          '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>'
       );
     }
     if (n.unit_type === 'department' || n.unit_type === 'section') {
@@ -236,7 +232,7 @@
           escapeHtml(String(n.sort_order != null ? n.sort_order : 0)) +
           '</td>' +
           '<td class="td-actions">' +
-          renderOrgTableActionsCell(n) +
+          renderOrgTableActionsCell(n, opts) +
           '</td></tr>'
         );
       })
@@ -277,7 +273,7 @@
             (supportsLogGroup(n.unit_type) && n.log_group
               ? ' <span class="unit-type" title="Логическая группа">[' + escapeHtml(n.log_group) + ']</span>'
               : '') + extraBadges(n);
-          const menuHtml = renderOrgMenuHtml(n);
+          const menuHtml = renderOrgMenuHtml(n, opts);
           const row =
             '<div class="tree-row">' +
             '<span class="code">' +
@@ -289,7 +285,7 @@
             ')</span>' +
             badges +
             '<span class="card-actions">' +
-            renderOrgActionsCell(n) +
+            renderOrgActionsCell(n, opts) +
             '</span></div>';
           return (
             '<div class="tree-item" data-unit-id="' +

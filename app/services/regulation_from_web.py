@@ -1,4 +1,8 @@
-"""Генерация текстового регламента (DOCX) по названию должности с опорой на интернет и шаблон."""
+"""Генерация текстового регламента (DOCX) по названию должности с опорой на интернет и шаблон.
+
+Структура DOCX берётся из эталонного регламента «Заведующий госпитальным отделением»
+(HEAD_DEPT), а не из произвольного первого файла в каталоге.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +21,12 @@ from docx import Document
 ROOT = Path(__file__).resolve().parents[2]
 DOC_DIR = ROOT / "docs" / "regulations"
 GENERATED_DIR = DOC_DIR / "generated"
-TEMPLATE_CANDIDATES = (
-    DOC_DIR / "Регламент_Специалист_по_связям_с_общественностью_PR_SPECIALIST.docx",
-    DOC_DIR / "gdrive_default" / "Регламент_HR_менеджер_HR_MANAGER.docx",
+# Эталон структуры DOCX для генерации новых регламентов (ММЦ / hosp).
+REGULATION_DOCX_TEMPLATE_BASENAME = "Регламент_Заведующий_госпитальным_отделением_HEAD_DEPT.docx"
+REGULATION_DOCX_TEMPLATE_SEARCH_DIRS = (
+    DOC_DIR / "gdrive_hosp",
+    DOC_DIR,
+    DOC_DIR / "gdrive_default",
 )
 
 SKIP_HEADINGS = (
@@ -95,16 +102,23 @@ class RegulationDraft:
 
 
 def resolve_template_docx() -> Path:
-    for path in TEMPLATE_CANDIDATES:
+    """Вернуть DOCX-образец: регламент заведующего госпитальным отделением (HEAD_DEPT)."""
+    for folder in REGULATION_DOCX_TEMPLATE_SEARCH_DIRS:
+        path = folder / REGULATION_DOCX_TEMPLATE_BASENAME
         if path.is_file():
             return path
-    gdrive = sorted((DOC_DIR / "gdrive_default").glob("*.docx"))
-    if gdrive:
-        return gdrive[0]
-    local = sorted(DOC_DIR.glob("*.docx"))
-    if local:
-        return local[0]
-    raise FileNotFoundError("regulation_template_docx_not_found")
+    # Допускаем небольшие вариации имени файла (суффикс _v2 и т.п.).
+    stem = REGULATION_DOCX_TEMPLATE_BASENAME.removesuffix(".docx")
+    for folder in REGULATION_DOCX_TEMPLATE_SEARCH_DIRS:
+        if not folder.is_dir():
+            continue
+        matches = sorted(folder.glob(f"{stem}*.docx"))
+        if matches:
+            return matches[0]
+    raise FileNotFoundError(
+        "regulation_template_docx_not_found: "
+        f"{REGULATION_DOCX_TEMPLATE_BASENAME} (ожидается в docs/regulations/gdrive_hosp/)"
+    )
 
 
 def slug_position_code(title: str) -> str:

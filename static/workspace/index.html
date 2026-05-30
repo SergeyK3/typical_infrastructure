@@ -7,7 +7,7 @@
   <title>Рабочее пространство — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css?v=ui-theme-20260522">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-5"></script>
   <style>
     :root { --accent: #7c3aed; --accent-hover: #8b5cf6; }
     .panel { display: none; }
@@ -66,7 +66,7 @@
     .org-data-table th:nth-child(3), .org-data-table td:nth-child(3) { width: 11%; }
     .org-data-table th:nth-child(4), .org-data-table td:nth-child(4) { width: 10%; }
     .org-data-table th:nth-child(5), .org-data-table td:nth-child(5) { width: 10%; }
-    .org-data-table th:nth-child(7), .org-data-table td:nth-child(7) { width: 8.5rem; min-width: 8.5rem; }
+    .org-data-table th:nth-child(7), .org-data-table td:nth-child(7) { width: 14rem; min-width: 14rem; }
     .org-data-table .td-code code, .org-data-table .td-parent code { color: var(--accent); font-size: 0.85em; }
     .org-data-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .org-data-table .org-ou-name--department { font-weight: 700; }
@@ -132,15 +132,18 @@
     .cr-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table .td-name a { color: var(--accent); text-decoration: none; }
     .cr-table .td-name a:hover { text-decoration: underline; }
-    .cr-table th:nth-child(1), .cr-table td:nth-child(1) { width: 11%; }
-    .cr-table th:nth-child(2), .cr-table td:nth-child(2) { width: 17%; }
-    .cr-table th:nth-child(3), .cr-table td:nth-child(3) { width: 9%; }
-    .cr-table th:nth-child(4), .cr-table td:nth-child(4) { width: 5%; }
+    .cr-table th:nth-child(1), .cr-table td:nth-child(1) { width: 11%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-table td:nth-child(1) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .cr-table th:nth-child(2), .cr-table td:nth-child(2) { width: 17%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-table th:nth-child(3), .cr-table td:nth-child(3) { width: 9%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-table td:nth-child(3) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .cr-table th:nth-child(4), .cr-table td:nth-child(4) { width: 5%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table th:nth-child(5), .cr-table td:nth-child(5) { width: 4%; }
-    .cr-table th:nth-child(6), .cr-table td:nth-child(6) { width: 10%; }
+    .cr-table th:nth-child(6), .cr-table td:nth-child(6) { width: 10%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-table td:nth-child(6) .badge-g { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; box-sizing: border-box; }
     .cr-table th:nth-child(7), .cr-table td:nth-child(7) { width: 4%; }
     .cr-table th:nth-child(8), .cr-table td:nth-child(8) { width: 4%; }
-    .cr-table th:nth-child(9), .cr-table td:nth-child(9) { width: 9%; }
+    .cr-table th:nth-child(9), .cr-table td:nth-child(9) { width: 9%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table th:nth-child(10), .cr-table td:nth-child(10) { width: 13rem; min-width: 13rem; max-width: 13rem; white-space: nowrap; }
     .cr-table .row-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
     .cr-table .row-actions .btn { padding: 0.2rem 0.45rem; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
@@ -1073,7 +1076,7 @@
 
   <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
-  <script src="/static/shared/org-tree.js?v=org-tree-20260526"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-to-global-20260530"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -1802,6 +1805,31 @@
       return selectedClientSnapshot();
     }
 
+    function clientTemplateCode() {
+      const client = getCurrentClient();
+      return (client && client.template_code) || 'default';
+    }
+
+    function openLocalToGlobalCopy(cfg) {
+      if (!clientId) { alert('Выберите организацию'); return; }
+      if (!window.CatalogCopy) return;
+      const tpl = clientTemplateCode();
+      CatalogCopy.open(Object.assign({
+        mode: 'local_to_global',
+        clientId,
+        clientTemplateCode: tpl,
+        targetTemplateCode: tpl,
+      }, cfg));
+    }
+
+    function onLocalToGlobalSuccess(res, entityLabel) {
+      const tpl = clientTemplateCode();
+      const created = res && res.created !== false;
+      alert(created
+        ? (entityLabel || 'Запись') + ' добавлена в глобальный шаблон «' + tpl + '».'
+        : 'Такая запись уже есть в глобальном справочнике шаблона «' + tpl + '».');
+    }
+
     function workspacePanels() {
       const content = document.querySelector('.content');
       return content ? content.querySelectorAll(':scope > .panel') : [];
@@ -1964,6 +1992,7 @@
       }
       return OrgTreeShared.renderOrgTreeHtml({
         nodes: nodes,
+        toGlobal: true,
         extraBadges: function () { return ''; },
       });
     }
@@ -2025,6 +2054,16 @@
         document.getElementById('orgType').value = 'section';
         showErr(document.getElementById('modalOrgErr'), '');
         document.getElementById('modalOrg').classList.add('show');
+        return;
+      }
+      if (action === 'to-global') {
+        openLocalToGlobalCopy({
+          entity: 'orgUnit',
+          sourceOrgUnitId: full.id,
+          orgUnitCode: full.code,
+          orgUnitType: full.unit_type,
+          onSuccess: (res) => onLocalToGlobalSuccess(res, 'Подразделение'),
+        });
         return;
       }
       if (action === 'clone') {
@@ -2129,7 +2168,7 @@
         ? OrgTreeShared.sortOrgTableRows(orgFlatRows, orgTableSort)
         : orgFlatRows;
       mount.innerHTML = window.OrgTreeShared
-        ? OrgTreeShared.renderOrgTableHtml({ rows: rows })
+        ? OrgTreeShared.renderOrgTableHtml({ rows: rows, toGlobal: true })
         : '<p class="meta">Нет модуля org-tree</p>';
       if (window.OrgTreeShared) {
         OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-table-wrap'), handleOrgTreeAction);
@@ -2399,10 +2438,39 @@
             const ou = orgUnits.find(x => x.id === p.org_unit_id);
             const emp = employeesAllCache.find(x => x.position_id === p.id);
             const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
-            return '<tr><td>' + p.code + '</td><td>' + p.name + '</td><td>' + (ou ? ou.code : p.org_unit_id) + '</td><td>' + empName + '</td><td class="row-actions"><button class="btn btn-sm btn-primary" data-assign-pos="' + p.id + '">Назначить</button><button class="btn btn-sm btn-secondary" data-edit-pos="' + p.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-pos="' + p.id + '">Удалить</button></td></tr>';
+            return '<tr><td>' + p.code + '</td><td>' + p.name + '</td><td>' + (ou ? ou.code : p.org_unit_id) + '</td><td>' + empName + '</td><td class="row-actions"><button class="btn btn-sm btn-primary" data-assign-pos="' + p.id + '">Назначить</button><button class="btn btn-sm btn-secondary" data-edit-pos="' + p.id + '">Изменить</button><button class="btn btn-sm btn-secondary" data-clone-pos="' + p.id + '" title="Сделать копию">Копир.</button><button class="btn btn-sm btn-secondary" data-to-global-pos="' + p.id + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button><button class="btn btn-sm btn-danger" data-del-pos="' + p.id + '">Удалить</button></td></tr>';
           }).join('') + '</tbody></table>';
         el.querySelectorAll('[data-assign-pos]').forEach(btn => { btn.onclick = () => openAssignModal(btn.dataset.assignPos); });
         el.querySelectorAll('[data-edit-pos]').forEach(btn => { btn.onclick = () => openEditPosition(btn.dataset.editPos); });
+        el.querySelectorAll('[data-clone-pos]').forEach((btn) => {
+          btn.onclick = async () => {
+            try {
+              const res = await fetchApi('/positions/' + encodeURIComponent(btn.dataset.clonePos) + '/clone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name_suffix: 'Копия' }),
+              });
+              await loadPositionsForSelect();
+              await loadPositions();
+              showWorkspaceToast('Создана должность «' + res.name + '» (' + res.code + ')', 'success');
+            } catch (e) {
+              showWorkspaceToast(e.message, 'error');
+            }
+          };
+        });
+        el.querySelectorAll('[data-to-global-pos]').forEach((btn) => {
+          btn.onclick = () => {
+            const p = positionsCache.find((x) => x.id === btn.dataset.toGlobalPos);
+            if (!p) return;
+            openLocalToGlobalCopy({
+              entity: 'position',
+              sourcePositionId: p.id,
+              sourceCode: p.code,
+              sourceName: p.name,
+              onSuccess: (res) => onLocalToGlobalSuccess(res, 'Должность'),
+            });
+          };
+        });
         el.querySelectorAll('[data-del-pos]').forEach(btn => { btn.onclick = () => deletePosition(btn.dataset.delPos); });
       } catch (e) {
         el.innerHTML = '<p class="err">' + e.message + '</p>';
@@ -2698,8 +2766,10 @@
           const regFlag = isStandalone ? 'нет' : 'да';
           const actions = isStandalone
             ? '<button type="button" class="btn btn-sm btn-secondary lkpi-edit" data-id="' + escapeHtml(kpi.id) + '">Изменить</button>' +
+              '<button type="button" class="btn btn-sm btn-secondary lkpi-global" data-standalone-id="' + escapeHtml(kpi.id) + '" data-kpi-code="' + escapeHtml(kpi.kpi_code) + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
               '<button type="button" class="btn btn-sm btn-danger lkpi-del" data-id="' + escapeHtml(kpi.id) + '">Удалить</button>'
             : '<button type="button" class="btn btn-sm btn-secondary lkpi-open" data-id="' + escapeHtml(reg.id) + '">Открыть</button>' +
+              '<button type="button" class="btn btn-sm btn-secondary lkpi-global" data-kpi-id="' + escapeHtml(kpi.id) + '" data-kpi-code="' + escapeHtml(kpi.kpi_code) + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
               '<button type="button" class="btn btn-sm btn-secondary lkpi-sync" data-id="' + escapeHtml(reg.id) + '" title="Добавить из глобального шаблона только отсутствующие KPI и инструкции">Синхр.</button>';
           return '<tr>' +
             '<td><code>' + escapeHtml(kpi.kpi_code) + '</code></td>' +
@@ -2748,6 +2818,15 @@
         });
         tbody.querySelectorAll('.lkpi-edit').forEach((btn) => {
           btn.onclick = async () => openLocalKpiModal(btn.dataset.id, standalone);
+        });
+        tbody.querySelectorAll('.lkpi-global').forEach((btn) => {
+          btn.onclick = () => openLocalToGlobalCopy({
+            entity: 'kpi',
+            sourceCode: btn.dataset.kpiCode,
+            sourceClientRegulationKpiId: btn.dataset.kpiId || undefined,
+            sourceClientStandaloneKpiId: btn.dataset.standaloneId || undefined,
+            onSuccess: (res) => onLocalToGlobalSuccess(res, 'KPI'),
+          });
         });
         tbody.querySelectorAll('.lkpi-del').forEach((btn) => {
           btn.onclick = async () => {
@@ -2967,13 +3046,9 @@
         positionCode: posCode,
         departmentCode: row.department_code || '',
         skillRank: row.skill_rank || 1,
+        clientTemplateCode: tpl,
         targetTemplateCode: tpl,
-        onSuccess: (res) => {
-          const created = res && res.created;
-          alert(created === false
-            ? 'Такая строка уже есть в глобальном справочнике навыков.'
-            : 'Навык добавлен в глобальный шаблон «' + tpl + '».');
-        },
+        onSuccess: (res) => onLocalToGlobalSuccess(res, 'Навык'),
       });
     }
 
@@ -3849,12 +3924,10 @@
       });
       tbody.querySelectorAll('.cr-to-global').forEach((b) => {
         b.addEventListener('click', () => {
-          if (!window.CatalogCopy) return;
-          CatalogCopy.open({
+          openLocalToGlobalCopy({
             entity: 'regulation',
-            mode: 'local_to_global',
             sourceClientRegulationId: b.dataset.id,
-            onSuccess: () => alert('Регламент скопирован в глобальный шаблон'),
+            onSuccess: (res) => onLocalToGlobalSuccess(res, 'Регламент'),
           });
         });
       });
@@ -3893,12 +3966,12 @@
           const statusHtml = escapeHtml(r.status || '') +
             (r.is_current ? ' <span class="badge-g" style="background:rgba(63,185,80,0.2);color:var(--success);">действующий</span>' : '');
           return '<tr>' +
-            '<td><code>' + escapeHtml(r.regulation_code) + '</code></td>' +
-            '<td class="td-name"><a href="#" class="cr-open-link" data-id="' + rid + '">' + escapeHtml(r.regulation_name) + '</a></td>' +
-            '<td><code>' + escapeHtml(r.position_code) + '</code></td>' +
+            '<td title="' + escapeHtml(r.regulation_code) + '"><code>' + escapeHtml(r.regulation_code) + '</code></td>' +
+            '<td class="td-name" title="' + escapeHtml(r.regulation_name) + '"><a href="#" class="cr-open-link" data-id="' + rid + '">' + escapeHtml(r.regulation_name) + '</a></td>' +
+            '<td title="' + escapeHtml(r.position_code) + '"><code>' + escapeHtml(r.position_code) + '</code></td>' +
             '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
             '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
-            '<td>' + src + '</td>' +
+            '<td title="' + escapeHtml(r.global_regulation_code || '') + '">' + src + '</td>' +
             renderRegulationUrlCell(r.google_doc_url, 'Открыть регламент', 'Ссылка на регламент не указана') +
             renderRegulationUrlCell(r.instructions_folder_url, 'Открыть папку инструкций', 'Папка инструкций не указана') +
             '<td class="td-status">' + statusHtml + '</td>' +

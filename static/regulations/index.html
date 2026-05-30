@@ -34,8 +34,9 @@
     .data-table td.td-name a:hover { text-decoration: underline; }
     .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 11%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table td:nth-child(1) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 21%; }
-    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 10%; }
+    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 21%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 10%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table td:nth-child(3) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
     .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 6%; }
     .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 4%; }
     .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 4.5%; }
@@ -131,9 +132,9 @@
         <a href="/global" class="sidebar-item">Обзор</a>
         <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
         <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
-        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
         <a href="/regulations" class="sidebar-item active">Типовые регламенты</a>
+        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
+        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
       </div>
         <div class="sidebar-bottom">
@@ -166,6 +167,11 @@
           <button type="button" class="btn btn-primary" id="btnCreate">+ Создать регламент</button>
           <button type="button" class="btn btn-secondary" id="btnGenerateText">Создать новый текстовый регламент</button>
           <button type="button" class="btn btn-secondary" id="btnExportXlsx" title="Выгрузка с учётом поиска и фильтров в шапке таблицы">Скачать Excel</button>
+        </div>
+        <div id="generatedDraftBanner" class="hidden" style="margin: 0 0 1rem 0; padding: 0.65rem 0.85rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg); display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+          <span class="meta" id="generatedDraftBannerText" style="margin: 0; flex: 1 1 240px; line-height: 1.45;"></span>
+          <a id="generatedDraftBannerLink" class="btn btn-secondary btn-sm" href="#" download style="text-decoration: none;">Скачать черновик DOCX</a>
+          <button type="button" class="btn btn-secondary btn-sm" id="generatedDraftBannerDismiss" title="Скрыть напоминание">Скрыть</button>
         </div>
         <div class="filters-toolbar">
           <div class="search-row">
@@ -227,6 +233,10 @@
     <div class="modal-content wide">
       <h3 id="formTitle">Регламент</h3>
       <div class="err hidden" id="formErr" style="color: var(--error); margin-bottom: 0.5rem;"></div>
+      <div id="formGeneratedDraftBar" class="hidden" style="margin-bottom: 0.75rem; padding: 0.65rem 0.85rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg);">
+        <p class="meta" id="formGeneratedDraftMeta" style="margin: 0 0 0.5rem 0; line-height: 1.45;">Черновик DOCX сгенерирован — можно скачать до или после сохранения карточки в реестре.</p>
+        <a id="formGeneratedDownloadLink" class="btn btn-secondary btn-sm" href="#" download style="text-decoration: none; display: inline-block;">Скачать черновик DOCX</a>
+      </div>
       <div id="formFieldsCreate">
         <label>Код регламента *</label>
         <input type="text" id="f_regulation_code" maxlength="64" placeholder="REG_MY_POSITION_V1" title="Уникален в общесистемном реестре; перед вводом проверьте поиск на странице" />
@@ -236,8 +246,21 @@
       </div>
       <div id="formFieldsSlot">
         <label>Код должности (справочник) *</label>
-        <select id="f_position_code"></select>
-        <p class="meta hidden" id="f_position_code_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">При редактировании должность не меняется.</p>
+        <select id="f_position_code_pick" title="Подставить код из типового справочника должностей">
+          <option value="">— выбрать из справочника —</option>
+        </select>
+        <input type="text" id="f_position_code" maxlength="64" placeholder="Например: PROC_BUYER" autocomplete="off" style="margin-top: 0.35rem;" />
+        <p class="meta" id="f_position_code_create_hint" style="margin: 0.35rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
+          Выберите должность из списка или введите короткий код вручную (латиница, до 48 символов).
+          <strong>До сохранения</strong> код можно исправить здесь. После сохранения карточки он фиксируется —
+          для смены заведите должность в <a id="f_position_catalog_link" href="/global/positions">типовых должностях</a>
+          или обратитесь к администратору платформы.
+        </p>
+        <p class="meta hidden" id="f_position_code_hint" style="margin: 0.35rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
+          Код должности в сохранённой карточке не редактируется. Исправление — через
+          <a id="f_position_catalog_link_edit" href="/global/positions">справочник типовых должностей</a>
+          (переименование кода) или создание новой карточки регламента с правильной должностью.
+        </p>
         <label>Тип подразделения *</label>
         <select id="f_dept_type_code"><option value="">— выберите —</option></select>
         <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Код отделения из типовой оргструктуры шаблона (ADM, HR, SALES и т.д.).</p>
@@ -278,6 +301,7 @@
       </div>
       <label>Заметки</label>
       <textarea id="f_notes" maxlength="512"></textarea>
+      </div>
       <div class="modal-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button type="button" class="btn btn-primary" id="formBtnSave">Сохранить</button>
         <button type="button" class="btn btn-secondary" id="formBtnCancel">Отмена</button>
@@ -289,7 +313,8 @@
     <div class="modal-content wide">
       <h3>Новый текстовый регламент</h3>
       <p class="meta" style="margin: 0 0 0.75rem 0; line-height: 1.45;">
-        Система найдёт материалы в интернете, оформит DOCX по структуре типового регламента и предложит скачать черновик.
+        Система найдёт материалы в интернете, оформит DOCX по структуре эталонного регламента
+        «Заведующий госпитальным отделением» (HEAD_DEPT) и предложит скачать черновик.
         Перед публикацией проверьте текст и при необходимости загрузите документ в Google Drive.
       </p>
       <div class="err hidden" id="generateErr" style="color: var(--error); margin-bottom: 0.5rem;"></div>
@@ -348,8 +373,58 @@
       showGenerateErr('');
     }
 
-    function openGenerateModal() {
+    function clearGeneratedDraftUi() {
       lastGeneratedDraft = null;
+      syncGeneratedDraftUi();
+    }
+
+    function syncGeneratedDraftUi() {
+      syncFormGeneratedDraftBar();
+      const banner = document.getElementById('generatedDraftBanner');
+      const bannerText = document.getElementById('generatedDraftBannerText');
+      const bannerLink = document.getElementById('generatedDraftBannerLink');
+      if (!banner || !bannerLink) return;
+      const d = lastGeneratedDraft;
+      if (d && d.download_url) {
+        banner.classList.remove('hidden');
+        bannerLink.href = d.download_url;
+        const fname = d.docx_filename || '';
+        if (bannerText) {
+          bannerText.textContent = fname
+            ? 'Последний черновик: ' + fname + ' (на диске: docs/regulations/generated/). Карточку можно сохранить и скачать DOCX отдельно.'
+            : 'Черновик DOCX готов — скачайте файл или продолжите редактирование карточки.';
+        }
+      } else {
+        banner.classList.add('hidden');
+        bannerLink.href = '#';
+        if (bannerText) bannerText.textContent = '';
+      }
+    }
+
+    function syncFormGeneratedDraftBar() {
+      const bar = document.getElementById('formGeneratedDraftBar');
+      if (!bar) return;
+      const d = lastGeneratedDraft;
+      const link = document.getElementById('formGeneratedDownloadLink');
+      const meta = document.getElementById('formGeneratedDraftMeta');
+      if (d && d.download_url && link) {
+        bar.classList.remove('hidden');
+        link.href = d.download_url;
+        const fname = d.docx_filename || '';
+        if (meta) {
+          meta.textContent = fname
+            ? 'Черновик DOCX сохранён на сервере (docs/regulations/generated/' + fname + '). Ссылка действует, пока файл не удалён с диска.'
+            : 'Черновик DOCX доступен для скачивания — можно сохранить карточку и скачать документ независимо.';
+        }
+      } else {
+        bar.classList.add('hidden');
+        if (link) link.href = '#';
+      }
+    }
+
+    function openGenerateModal() {
+      closeForm();
+      clearGeneratedDraftUi();
       document.getElementById('gen_position_title').value = '';
       document.getElementById('gen_comment').value = '';
       document.getElementById('generateResult').classList.add('hidden');
@@ -380,12 +455,16 @@
           }),
         });
         lastGeneratedDraft = data;
+        syncGeneratedDraftUi();
         const res = document.getElementById('generateResult');
         const src = (data.sources || []).length
           ? ' Источники: ' + data.sources.slice(0, 3).map(u => '<a href="' + u + '" target="_blank" rel="noopener">ссылка</a>').join(', ')
           : '';
         document.getElementById('generateResultText').innerHTML =
-          'Код: <code>' + (data.regulation_code || '') + '</code>, должность: <code>' + (data.position_code || '') + '</code>.' + src;
+          'Код: <code>' + (data.regulation_code || '') + '</code>, должность: <code>' + (data.position_code || '') + '</code>.' + src +
+          (data.docx_filename
+            ? '<br><span class="meta">Файл: <code>docs/regulations/generated/' + escapeHtml(data.docx_filename) + '</code></span>'
+            : '');
         const dl = document.getElementById('generateDownloadLink');
         dl.href = data.download_url || '#';
         res.classList.remove('hidden');
@@ -401,7 +480,7 @@
       if (!lastGeneratedDraft) return;
       const d = lastGeneratedDraft;
       closeGenerateModal();
-      await openCreateForm();
+      await openCreateForm({ preserveGeneratedDraft: true });
       document.getElementById('f_regulation_code').value = d.regulation_code || '';
       document.getElementById('f_version_no').value = 'V1';
       document.getElementById('f_regulation_name').value = d.regulation_name || '';
@@ -409,15 +488,15 @@
       document.getElementById('f_ckp_short').value = d.ckp_short || '';
       document.getElementById('f_ckp_full').value = d.ckp_full || '';
       document.getElementById('f_notes').value = d.notes || '';
-      const posSel = document.getElementById('f_position_code');
       const pcode = d.position_code || '';
-      if (pcode && ![...posSel.options].some(o => o.value === pcode)) {
-        const opt = document.createElement('option');
-        opt.value = pcode;
-        opt.textContent = (d.regulation_name || pcode) + ' (' + pcode + ')';
-        posSel.appendChild(opt);
+      if (pcode) {
+        document.getElementById('f_position_code').value = pcode;
+        syncDeptFromSelectedPosition();
+        await suggestRegulationCodeForPosition(pcode, true);
+      } else if (d.regulation_code) {
+        document.getElementById('f_regulation_code').value = d.regulation_code;
       }
-      if (pcode) posSel.value = pcode;
+      syncGeneratedDraftUi();
     }
 
     function treeHasOrgCode(nodes, code) {
@@ -513,6 +592,17 @@
     }
     syncOwnerOrgBlockVisibility();
 
+    function parseApiError(text, status) {
+      try {
+        const j = JSON.parse(text);
+        if (j.error && j.error.message) return j.error.message;
+        if (typeof j.detail === 'object' && j.detail && j.detail.message) return j.detail.message;
+        if (typeof j.detail === 'string') return j.detail;
+        if (j.message) return j.message;
+      } catch (_) {}
+      return String(status);
+    }
+
     async function fetchApi(path, opts = {}) {
       const headers = { ...opts.headers };
       if (opts.body && typeof opts.body === 'string' && !headers['Content-Type']) {
@@ -525,9 +615,7 @@
       });
       const text = await r.text();
       if (!r.ok) {
-        let msg = String(r.status);
-        try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch (_) {}
-        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        throw new Error(parseApiError(text, r.status));
       }
       if (r.status === 204 || !text) return null;
       return JSON.parse(text);
@@ -537,6 +625,62 @@
       const el = document.getElementById('formErr');
       el.textContent = msg || '';
       el.classList.toggle('hidden', !msg);
+    }
+
+    function currentTemplateCode() {
+      return document.getElementById('filterTemplate').value || 'default';
+    }
+
+    async function validateCreateRegulation(body) {
+      const data = await fetchApi(
+        '/regulations?template_code=' + encodeURIComponent(body.template_code) + '&limit=500'
+      );
+      const items = data.items || [];
+      const dupCode = items.find(
+        (r) => String(r.regulation_code).toLowerCase() === body.regulation_code.toLowerCase()
+      );
+      if (dupCode) {
+        throw new Error(
+          'Код регламента «' + body.regulation_code + '» уже занят в шаблоне «' + body.template_code +
+          '»: «' + dupCode.regulation_name + '». Задайте другой код или откройте существующую карточку.'
+        );
+      }
+      const dupSlot = items.find(
+        (r) =>
+          r.position_code === body.position_code &&
+          r.dept_type_code === body.dept_type_code &&
+          String(r.version_no) === body.version_no
+      );
+      if (dupSlot) {
+        throw new Error(
+          'Для должности «' + body.position_code + '», подразделения «' + body.dept_type_code +
+          '» и версии «' + body.version_no + '» регламент уже есть (код «' + dupSlot.regulation_code +
+          '»). Измените версию или откройте существующую карточку.'
+        );
+      }
+    }
+
+    async function suggestRegulationCodeForPosition(positionCode, force) {
+      const pos = (positionCode || '').trim().toUpperCase();
+      if (!pos || formMode !== 'create') return;
+      const codeEl = document.getElementById('f_regulation_code');
+      const cur = codeEl.value.trim().toUpperCase();
+      if (!force && cur && !/^REG_[A-Z0-9_]+_V\d+$/.test(cur)) return;
+      const tpl = currentTemplateCode();
+      const data = await fetchApi('/regulations?template_code=' + encodeURIComponent(tpl) + '&limit=500');
+      const codes = new Set((data.items || []).map((r) => String(r.regulation_code).toUpperCase()));
+      let ver = 1;
+      let candidate = 'REG_' + pos + '_V' + ver;
+      while (codes.has(candidate)) {
+        ver += 1;
+        candidate = 'REG_' + pos + '_V' + ver;
+      }
+      document.getElementById('f_regulation_code').value = candidate;
+      const hint = document.getElementById('f_regulation_code_hint');
+      if (hint && ver > 1) {
+        hint.textContent = 'Код «REG_' + pos + '_V1» уже занят в шаблоне «' + tpl + '» — подставлен «' + candidate + '».';
+        hint.classList.remove('hidden');
+      }
     }
 
     function regulationFilterBaseParams() {
@@ -736,19 +880,44 @@
       if (prev) sel.value = prev;
     }
 
+    function syncPositionCatalogLinks() {
+      const tpl = document.getElementById('filterTemplate').value || 'default';
+      const href = (window.GlobalTemplateContext && GlobalTemplateContext.withTemplateQuery)
+        ? GlobalTemplateContext.withTemplateQuery('/global/positions', tpl)
+        : '/global/positions';
+      ['f_position_catalog_link', 'f_position_catalog_link_edit'].forEach((id) => {
+        const a = document.getElementById(id);
+        if (a) a.href = href;
+      });
+    }
+
+    function setPositionCodeFormMode(mode) {
+      const isCreate = mode === 'create';
+      const pick = document.getElementById('f_position_code_pick');
+      const input = document.getElementById('f_position_code');
+      const createHint = document.getElementById('f_position_code_create_hint');
+      const editHint = document.getElementById('f_position_code_hint');
+      if (pick) pick.classList.toggle('hidden', !isCreate);
+      if (createHint) createHint.classList.toggle('hidden', !isCreate);
+      if (editHint) editHint.classList.toggle('hidden', isCreate);
+      if (input) input.readOnly = !isCreate;
+      syncPositionCatalogLinks();
+    }
+
     function syncDeptFromSelectedPosition() {
       if (formMode !== 'create') return;
-      const pos = document.getElementById('f_position_code').value;
+      const pos = document.getElementById('f_position_code').value.trim();
       const row = formPositionsCache.find((p) => p.position_code === pos);
       if (row && row.primary_dept_type_code) {
         loadDeptTypeOptionsForForm(row.primary_dept_type_code);
       }
     }
 
-    async function fillPositionSelect() {
-      const sel = document.getElementById('f_position_code');
-      const cur = sel.value;
-      sel.innerHTML = '';
+    async function fillPositionCodePick() {
+      const sel = document.getElementById('f_position_code_pick');
+      if (!sel) return;
+      const curInput = document.getElementById('f_position_code').value.trim();
+      sel.innerHTML = '<option value="">— выбрать из справочника —</option>';
       try {
         const tpl = document.getElementById('filterTemplate').value || 'default';
         formPositionsCache = await fetchApi('/regulations/positions/list?template_code=' + encodeURIComponent(tpl)) || [];
@@ -758,19 +927,23 @@
           opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
           sel.appendChild(opt);
         });
-        if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+        if (curInput && [...sel.options].some(o => o.value === curInput)) sel.value = curInput;
       } catch (_) {
         formPositionsCache = [];
       }
     }
 
-    async function openCreateForm() {
+    async function openCreateForm(options) {
+      const opts = options || {};
+      closeGenerateModal();
+      if (!opts.preserveGeneratedDraft) clearGeneratedDraftUi();
       formMode = 'create';
       editRegulationCode = '';
       document.getElementById('formTitle').textContent = 'Новый регламент';
       document.getElementById('formFieldsCreate').style.display = 'block';
-      document.getElementById('f_position_code').disabled = false;
-      document.getElementById('f_position_code_hint').classList.add('hidden');
+      setPositionCodeFormMode('create');
+      document.getElementById('f_position_code').value = '';
+      document.getElementById('f_position_code_pick').value = '';
       showFormErr('');
       document.getElementById('f_regulation_code').value = '';
       const rh = document.getElementById('f_regulation_code_hint');
@@ -796,31 +969,25 @@
         await pickClientForOwnerCode('');
         await refreshOwnerOrgSelect('');
       }
-      await fillPositionSelect();
+      await fillPositionCodePick();
       await loadDeptTypeOptionsForForm('');
       syncDeptFromSelectedPosition();
+      syncGeneratedDraftUi();
       document.getElementById('formModal').classList.add('show');
     }
 
     async function openEditForm(code) {
+      clearGeneratedDraftUi();
       formMode = 'edit';
       editRegulationCode = code;
       document.getElementById('formTitle').textContent = 'Изменить регламент';
       document.getElementById('formFieldsCreate').style.display = 'none';
-      document.getElementById('f_position_code').disabled = true;
-      document.getElementById('f_position_code_hint').classList.remove('hidden');
+      setPositionCodeFormMode('edit');
       showFormErr('');
       try {
         const r = await fetchApi('/regulations/' + encodeURIComponent(code));
-        await fillPositionSelect();
-        const posSel = document.getElementById('f_position_code');
-        if (r.position_code && ![...posSel.options].some((o) => o.value === r.position_code)) {
-          const opt = document.createElement('option');
-          opt.value = r.position_code;
-          opt.textContent = (r.position_code || '') + ' (сохранённый код)';
-          posSel.appendChild(opt);
-        }
-        posSel.value = r.position_code || '';
+        await fillPositionCodePick();
+        document.getElementById('f_position_code').value = r.position_code || '';
         await loadDeptTypeOptionsForForm(r.dept_type_code || '');
         document.getElementById('f_regulation_name').value = r.regulation_name || '';
         document.getElementById('f_goal_summary').value = r.goal_summary || '';
@@ -861,7 +1028,7 @@
       showFormErr('');
       if (formMode === 'create') {
         const regulation_code = document.getElementById('f_regulation_code').value.trim();
-        const position_code = document.getElementById('f_position_code').value;
+        const position_code = document.getElementById('f_position_code').value.trim().toUpperCase();
         const dept_type_code = document.getElementById('f_dept_type_code').value.trim();
         const version_no = document.getElementById('f_version_no').value.trim();
         const regulation_name = document.getElementById('f_regulation_name').value.trim();
@@ -885,6 +1052,7 @@
           notes: document.getElementById('f_notes').value.trim() || null,
         };
         try {
+          await validateCreateRegulation(body);
           await fetchApi('/regulations', { method: 'POST', body: JSON.stringify(body) });
           closeForm();
           await loadRegulations();
@@ -932,7 +1100,23 @@
       }
     }
 
-    document.getElementById('f_position_code').addEventListener('change', syncDeptFromSelectedPosition);
+    document.getElementById('f_position_code_pick').addEventListener('change', function () {
+      const code = this.value.trim();
+      if (!code) return;
+      document.getElementById('f_position_code').value = code;
+      syncDeptFromSelectedPosition();
+      suggestRegulationCodeForPosition(code).catch(() => {});
+    });
+    document.getElementById('f_position_code').addEventListener('change', () => {
+      syncDeptFromSelectedPosition();
+      const code = document.getElementById('f_position_code').value.trim();
+      if (code) suggestRegulationCodeForPosition(code).catch(() => {});
+    });
+    document.getElementById('f_position_code').addEventListener('blur', () => {
+      syncDeptFromSelectedPosition();
+      const code = document.getElementById('f_position_code').value.trim();
+      if (code) suggestRegulationCodeForPosition(code).catch(() => {});
+    });
 
     async function loadFilterOptions() {
       try {
@@ -1017,20 +1201,25 @@
       }
       regulationCodeCheckTimer = setTimeout(async () => {
         try {
-          const data = await fetchApi('/regulations?search=' + encodeURIComponent(code) + '&limit=20');
+          const tpl = currentTemplateCode();
+          const data = await fetchApi(
+            '/regulations?template_code=' + encodeURIComponent(tpl) +
+            '&search=' + encodeURIComponent(code) + '&limit=20'
+          );
           const items = data.items || [];
           const exact = items.filter(r => String(r.regulation_code).toLowerCase() === code.toLowerCase());
           if (exact.length) {
-            hint.textContent = 'Такой код уже есть в общесистемном реестре: «' + exact[0].regulation_name + '». Откройте карточку или задайте другой код.';
+            hint.textContent = 'Такой код уже есть в шаблоне «' + tpl + '»: «' + exact[0].regulation_name + '». Задайте другой код или откройте карточку.';
             hint.classList.remove('hidden');
             return;
           }
           if (items.length) {
             const codes = items.slice(0, 6).map(r => r.regulation_code).join(', ');
-            hint.textContent = 'Похожие записи (' + items.length + '): ' + codes + (items.length > 6 ? '…' : '') + ' — проверьте, нет ли дубликата по смыслу.';
+            hint.textContent = 'Похожие записи в шаблоне «' + tpl + '» (' + items.length + '): ' + codes + (items.length > 6 ? '…' : '') + '.';
             hint.classList.remove('hidden');
           } else {
-            hint.classList.add('hidden');
+            hint.textContent = 'Код свободен в шаблоне «' + tpl + '».';
+            hint.classList.remove('hidden');
           }
         } catch (_) {
           hint.classList.add('hidden');
@@ -1064,6 +1253,7 @@
     document.getElementById('btnGenerateRun').onclick = () => { runGenerateFromWeb().catch(e => showGenerateErr(e.message)); };
     document.getElementById('btnGenerateCancel').onclick = closeGenerateModal;
     document.getElementById('btnGenerateToForm').onclick = () => { openCreateFormFromGenerated().catch(e => alert(e.message)); };
+    document.getElementById('generatedDraftBannerDismiss').onclick = clearGeneratedDraftUi;
     document.getElementById('generateModal').addEventListener('click', (e) => {
       if (e.target.id === 'generateModal') closeGenerateModal();
     });

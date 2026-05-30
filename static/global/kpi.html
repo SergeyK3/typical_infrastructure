@@ -15,7 +15,8 @@
     .data-table th, .data-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .data-table th { color: var(--text-muted); font-weight: 500; }
     /* Узже данные — больше места под кнопки в одну строку */
-    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 10%; }
+    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 10%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table td:nth-child(1) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
     .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 14%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 6%; }
     .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 13%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -71,9 +72,9 @@
         <a href="/global" class="sidebar-item">Обзор</a>
         <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
         <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
-        <a href="/global/kpi" class="sidebar-item active">Типовые KPI</a>
         <a href="/regulations" class="sidebar-item">Типовые регламенты</a>
+        <a href="/global/kpi" class="sidebar-item active">Типовые KPI</a>
+        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
         <a href="/docs" class="sidebar-item api-link">API</a>
       </div>
       <div class="sidebar-bottom">
@@ -276,7 +277,7 @@
           const dPos = row.position_code
             ? (row.position_name_ru ? escapeHtml(row.position_name_ru) + ' <code>' + escapeHtml(row.position_code) + '</code>' : '<code>' + escapeHtml(row.position_code) + '</code>')
             : '—';
-          tr.innerHTML = '<td><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
+          tr.innerHTML = '<td title="' + escapeHtml(row.kpi_code) + '"><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
             '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.kpi_code) + '">Изменить</button>' +
             '<button type="button" class="btn btn-secondary btn-clone" data-code="' + escapeHtml(row.kpi_code) + '">Копировать</button>' +
             '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + escapeHtml(row.kpi_code) + '" title="В другой шаблон">В шаблон</button>' +

@@ -31,6 +31,13 @@
     return (Array.isArray(data) ? data : (data.items || [])).filter((t) => t.is_active !== false);
   }
 
+  function resolveLocalToGlobalTargetTpl(cfg, templates, sourceTpl) {
+    const preferred = cfg.targetTemplateCode || cfg.clientTemplateCode;
+    if (preferred && templates.some((t) => t.code === preferred)) return preferred;
+    if (sourceTpl && templates.some((t) => t.code === sourceTpl)) return sourceTpl;
+    return templates[0]?.code || preferred || 'default';
+  }
+
   let modalEl = null;
 
   function ensureModal() {
@@ -67,7 +74,7 @@
 
   /**
    * @param {object} cfg
-   * @param {'regulation'|'position'|'kpi'|'skills'|'skill'} cfg.entity
+   * @param {'regulation'|'position'|'kpi'|'skills'|'skill'|'orgUnit'} cfg.entity
    * @param {'global_to_global'|'global_to_local'|'local_to_global'} cfg.mode
    * @param {string} [cfg.sourceTemplateCode]
    * @param {string} [cfg.sourceCode] - regulation_code / position_code / kpi_code
@@ -90,14 +97,20 @@
 
     title.textContent = entity === 'skills'
       ? 'Скопировать типовые навыки в организацию'
+      : entity === 'orgUnit'
+        ? 'Копировать подразделение в глобальный шаблон'
       : entity === 'skill'
         ? (mode === 'local_to_global'
           ? 'Копировать навык в глобальный шаблон'
           : 'Копировать навык в другой шаблон')
+        : entity === 'kpi' && mode === 'local_to_global'
+          ? 'Копировать KPI в глобальный шаблон'
+        : entity === 'position' && mode === 'local_to_global'
+          ? 'Копировать должность в глобальный шаблон'
         : 'Копировать ' + ({ regulation: 'регламент', position: 'должность', kpi: 'KPI' }[entity] || 'запись');
 
-    hint.textContent = entity === 'skill' && mode === 'local_to_global'
-      ? 'Строка локальной матрицы будет добавлена в глобальный справочник навыков выбранного шаблона. Должность должна существовать в типовом справочнике должностей.'
+    hint.textContent = mode === 'local_to_global'
+      ? 'Запись будет добавлена в глобальный справочник шаблона, из которого создана организация (можно выбрать другой целевой шаблон).'
       : entity === 'skill'
       ? 'Строка матрицы будет добавлена в целевой шаблон (дубликаты по должности/отделению/рангу пропускаются).'
       : mode === 'global_to_global'
@@ -126,7 +139,24 @@
           '</select>'
         : '') +
       targetTplHtml +
-      (entity !== 'skills' && entity !== 'skill' && mode !== 'local_to_global'
+      (entity === 'orgUnit' && mode === 'local_to_global'
+        ? '<p class="meta" style="margin:0.5rem 0 0 0;line-height:1.45;">' +
+          '<strong>Код узла:</strong> <code>' + escapeHtml(cfg.orgUnitCode || '') + '</code> · ' +
+          '<strong>тип:</strong> ' + escapeHtml(cfg.orgUnitType || '') +
+          '</p>'
+        : '') +
+      (entity === 'position' && mode === 'local_to_global'
+        ? '<p class="meta" style="margin:0.5rem 0 0 0;line-height:1.45;">' +
+          '<strong>Должность:</strong> <code>' + escapeHtml(cfg.sourceCode || '') + '</code>' +
+          (cfg.sourceName ? ' — ' + escapeHtml(cfg.sourceName) : '') +
+          '</p>'
+        : '') +
+      (entity === 'kpi' && mode === 'local_to_global'
+        ? '<p class="meta" style="margin:0.5rem 0 0 0;line-height:1.45;">' +
+          '<strong>KPI:</strong> <code>' + escapeHtml(cfg.sourceCode || '') + '</code>' +
+          '</p>'
+        : '') +
+      (entity !== 'skills' && entity !== 'skill' && entity !== 'orgUnit' && mode !== 'local_to_global'
         ? '<label>Код записи</label><input type="text" id="catalogCopySourceCode" style="width:100%;max-width:none;" value="' + escapeHtml(cfg.sourceCode || '') + '">'
         : '') +
       (entity === 'skill' && mode !== 'local_to_global'
@@ -161,15 +191,11 @@
       const sel = fields.querySelector('#catalogCopyTargetTpl');
       const effectiveSource = sourceSel ? sourceSel.value : sourceTpl;
       if (sel) {
-        if (mode === 'local_to_global' && entity === 'skill' && cfg.targetTemplateCode) {
-          sel.value = templates.some((t) => t.code === cfg.targetTemplateCode)
-            ? cfg.targetTemplateCode
-            : (templates[0]?.code || cfg.targetTemplateCode);
-        } else {
-          sel.value = pickOtherTemplate(effectiveSource);
-        }
+        sel.value = mode === 'local_to_global'
+          ? resolveLocalToGlobalTargetTpl(cfg, templates, effectiveSource)
+          : pickOtherTemplate(effectiveSource);
       }
-      if (sourceSel && sel) {
+      if (sourceSel && sel && mode === 'global_to_global') {
         sourceSel.onchange = () => {
           if (sel.value === sourceSel.value) sel.value = pickOtherTemplate(sourceSel.value);
         };
@@ -209,14 +235,24 @@
           const targetCode = fields.querySelector('#catalogCopyTargetCode')?.value.trim();
           if (targetCode) payload.target_regulation_code = targetCode;
           response = await api('POST', '/catalog-copy/regulation', payload);
+        } else if (entity === 'orgUnit') {
+          const targetTpl = fields.querySelector('#catalogCopyTargetTpl');
+          response = await api('POST', '/catalog-copy/org-unit', {
+            client_id: cfg.clientId,
+            source_org_unit_id: cfg.sourceOrgUnitId,
+            target_template_code: targetTpl?.value,
+            target_code: fields.querySelector('#catalogCopyTargetCode')?.value.trim() || null,
+          });
         } else if (entity === 'position') {
-          const payload = {
-            mode,
-            source_template_code: effectiveSourceTpl,
-            source_position_code: (fields.querySelector('#catalogCopySourceCode')?.value || cfg.sourceCode || '').trim(),
-          };
+          const payload = { mode, source_template_code: effectiveSourceTpl };
           const targetTpl = fields.querySelector('#catalogCopyTargetTpl');
           if (targetTpl) payload.target_template_code = targetTpl.value;
+          if (mode === 'local_to_global') {
+            payload.client_id = cfg.clientId;
+            payload.source_position_id = cfg.sourcePositionId;
+          } else {
+            payload.source_position_code = (fields.querySelector('#catalogCopySourceCode')?.value || cfg.sourceCode || '').trim();
+          }
           if (mode === 'global_to_local') {
             payload.client_id = cfg.clientId;
             payload.org_unit_id = fields.querySelector('#catalogCopyOrgUnit')?.value;
@@ -242,13 +278,24 @@
           response = await api('POST', '/catalog-copy/skill', payload);
         } else if (entity === 'kpi') {
           const targetTpl = fields.querySelector('#catalogCopyTargetTpl');
-          response = await api('POST', '/catalog-copy/kpi', {
-            mode: 'global_to_global',
-            source_template_code: effectiveSourceTpl,
-            target_template_code: targetTpl?.value,
-            source_kpi_code: (fields.querySelector('#catalogCopySourceCode')?.value || cfg.sourceCode || '').trim(),
-            target_kpi_code: fields.querySelector('#catalogCopyTargetCode')?.value.trim() || null,
-          });
+          if (mode === 'local_to_global') {
+            response = await api('POST', '/catalog-copy/kpi', {
+              mode: 'local_to_global',
+              client_id: cfg.clientId,
+              target_template_code: targetTpl?.value,
+              source_client_regulation_kpi_id: cfg.sourceClientRegulationKpiId || null,
+              source_client_standalone_kpi_id: cfg.sourceClientStandaloneKpiId || null,
+              target_kpi_code: fields.querySelector('#catalogCopyTargetCode')?.value.trim() || null,
+            });
+          } else {
+            response = await api('POST', '/catalog-copy/kpi', {
+              mode: 'global_to_global',
+              source_template_code: effectiveSourceTpl,
+              target_template_code: targetTpl?.value,
+              source_kpi_code: (fields.querySelector('#catalogCopySourceCode')?.value || cfg.sourceCode || '').trim(),
+              target_kpi_code: fields.querySelector('#catalogCopyTargetCode')?.value.trim() || null,
+            });
+          }
         }
         modal.classList.remove('show');
         if (typeof cfg.onSuccess === 'function') cfg.onSuccess(response);
