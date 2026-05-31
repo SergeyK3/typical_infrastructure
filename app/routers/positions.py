@@ -12,7 +12,8 @@ from app.excel_export import xlsx_file_response
 from app.models import Client, OrgUnit, Position, PositionCatalog
 from app.template_bundle_clone import resolve_client_template_code
 from app.template_constants import DEFAULT_TEMPLATE_CODE
-from app.position_catalog_ops import _unique_code
+from app.catalog_copy_ops import clone_local_position_row
+from app.template_bundle_clone import resolve_client_template_code
 from app.org_unit_ops import resolve_org_unit_effective_segment
 from app.schemas import (
     ListEnvelope,
@@ -191,12 +192,12 @@ def create_position(payload: PositionCreate, db: Session = Depends(get_db)) -> P
     return PositionOut.model_validate(obj)
 
 
-@router.post("/{position_id}/clone", response_model=PositionOut, status_code=201)
+@router.post("/{position_id}/clone", status_code=201)
 def clone_position(
     position_id: str,
     body: PositionCloneIn,
     db: Session = Depends(get_db),
-) -> PositionOut:
+) -> dict:
     source = db.get(Position, position_id)
     if not source:
         raise HTTPException(status_code=404, detail="position_not_found")
@@ -204,41 +205,22 @@ def clone_position(
     org_unit_id = body.target_org_unit_id if body.target_org_unit_id is not None else source.org_unit_id
     _assert_org_unit(db, source.client_id, org_unit_id)
 
-    existing_codes = set(
-        db.scalars(
-            select(Position.code).where(
-                Position.client_id == source.client_id,
-                Position.org_unit_id == org_unit_id,
-            )
-        ).all()
-    )
-    code = (body.new_code or _unique_code(existing_codes, source.code)).strip()
-    if not code:
-        raise HTTPException(status_code=422, detail="validation_error")
-    if code in existing_codes:
-        raise HTTPException(status_code=409, detail="position_code_already_exists")
-
-    copy_name = source.name if body.name_suffix in source.name else f"{source.name} ({body.name_suffix})"
-    segment = source.segment_code if org_unit_id == source.org_unit_id else None
-    obj = Position(
-        id=new_id32(),
-        client_id=source.client_id,
+    tpl = resolve_client_template_code(db, source.client_id)
+    result = clone_local_position_row(
+        db,
+        source=source,
         org_unit_id=org_unit_id,
-        code=code,
-        name=copy_name,
-        grade=source.grade,
-        is_active=source.is_active,
-        position_catalog_code=source.position_catalog_code,
-        function_code=source.function_code,
-        position_level=source.position_level,
-        is_managerial=source.is_managerial,
-        is_detached=True,
-        segment_code=_segment_for_org_unit(db, org_unit_id, segment),
+        template_code=tpl,
+        preferred_code=body.new_code,
     )
-    db.add(obj)
     db.commit()
-    db.refresh(obj)
-    return PositionOut.model_validate(obj)
+    db.refresh(result.position)
+    out: dict = {"position": PositionOut.model_validate(result.position)}
+    if result.message:
+        out["message"] = result.message
+    if result.already_exists_codes:
+        out["already_exists_codes"] = result.already_exists_codes
+    return out
 
 
 @router.patch("/{position_id}", response_model=PositionOut)

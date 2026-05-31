@@ -41,6 +41,8 @@ Health check: `GET /health/ready` — readiness probe for deployment.
 
 Описание разделения (флаги `is_detached`, `catalog_source_code`, модель `ClientPositionRegulation`): **[docs/architecture/reference_catalogs_global_and_client.md](docs/architecture/reference_catalogs_global_and_client.md)**.
 
+Пользовательское руководство (несколько ординаторов / ставок, схема для скриншота): **[docs/guides/](docs/guides/)** — [Markdown](docs/guides/руководство_должности_тип_и_ставки.md), [HTML в браузере](docs/guides/руководство_должности_тип_и_ставки.html).
+
 Копии на стороне клиента (через `/docs`): `POST /api/client-regulations/copy-from-global`, `POST /api/positions/from-catalog`, `POST /api/org-units/from-template-node`.
 
 ### Tests

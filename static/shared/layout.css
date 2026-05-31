@@ -287,6 +287,89 @@ td .cra-wrap, .row-actions.cra-wrap { vertical-align: middle; }
   box-sizing: border-box;
 }
 
+/* Combobox: поиск и выбор в одном поле */
+.filter-combobox {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0.25rem 0 0.5rem 0;
+}
+.filter-combobox-input {
+  width: 100%;
+  max-width: none;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.filter-combobox-list {
+  max-height: 11rem;
+  overflow-y: auto;
+  margin-top: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--shadow-color);
+}
+.filter-combobox-list[hidden] {
+  display: none !important;
+}
+.filter-combobox-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  cursor: pointer;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filter-combobox-option:hover,
+.filter-combobox-option:focus {
+  background: var(--surface-hover);
+  outline: none;
+}
+.filter-combobox-empty {
+  padding: 0.45rem 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.org-unit-picker-search {
+  width: 100%;
+  max-width: none;
+  margin: 0.25rem 0 0.35rem 0;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.org-unit-picker-select {
+  width: 100%;
+  max-width: none;
+  min-height: 6.5rem;
+  margin-top: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+
 /* Print-friendly (economy toner; works in any theme) */
 .th-filter input[type="search"],
 .th-filter input.th-filter-search,

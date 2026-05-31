@@ -30,7 +30,7 @@
     localPosition: [
       { action: 'assign', label: 'Назначить' },
       { action: 'edit', label: 'Изменить' },
-      { action: 'clone', label: 'Копировать', title: 'Сделать копию' },
+      { action: 'clone', label: 'Копировать', title: 'Добавить ещё одну ставку (код _2, _3…)' },
       { action: 'to-global', label: 'В шаблон', title: 'Скопировать в глобальный шаблон' },
       { action: 'delete', label: 'Удалить', danger: true },
     ],

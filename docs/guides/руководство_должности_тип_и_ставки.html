@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Должности: тип и ставки</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      max-width: 52rem;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      color: #1a1a1a;
+      background: #ffffff;
+      line-height: 1.5;
+      font-size: 11pt;
+    }
+    h1 { font-size: 1.35rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
+    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #d1d5db; padding: 0.45rem 0.6rem; text-align: left; }
+    th { background: #f3f4f6; }
+    .diagram {
+      background: #fafafa;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    pre.ascii {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 1rem;
+      font-size: 10pt;
+      line-height: 1.35;
+    }
+    ol { padding-left: 1.25rem; }
+    .meta { color: #6b7280; font-size: 0.9rem; }
+    .file-hint { font-size: 0.85rem; margin-bottom: 1rem; }
+    @media print {
+      body { margin: 1cm; }
+      .diagram { break-inside: avoid; }
+      .file-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <p class="file-hint meta">Документация: <code>docs/guides/руководство_должности_тип_и_ставки.html</code> · полная версия: <code>руководство_должности_тип_и_ставки.md</code></p>
+
+  <h1>Должности: типовая роль и несколько ставок в отделении</h1>
+  <p class="meta">Краткое руководство для HR. Светлый фон — для печати или вставки в Word (PDF / скриншот блока диаграммы).</p>
+
+  <h2>1. Два уровня</h2>
+  <table>
+    <tr><th>Уровень</th><th>Где</th><th>Сколько «Ординатор»</th></tr>
+    <tr><td>Типовая должность</td><td>Глобальный справочник</td><td>Одна запись</td></tr>
+    <tr><td>Штатная ставка</td><td>Локальные должности организации</td><td>По числу людей в отделении</td></tr>
+  </table>
+
+  <h2>2. Схема</h2>
+  <div class="diagram">
+    <pre class="mermaid">
+%%{init: {'theme': 'neutral', 'themeVariables': {'fontFamily': 'Segoe UI, Arial, sans-serif'}}}%%
+flowchart LR
+  CAT["Типовой каталог: Ординатор"]
+  P1["Локальная ставка 1, код ORD_1"]
+  P2["Локальная ставка 2, код ORD_2"]
+  P3["Локальная ставка 3, код ORD_3"]
+  E1["Сотрудник Иванов"]
+  E2["Сотрудник Петров"]
+  E3["Сотрудник Сидоров"]
+  CAT --> P1
+  CAT --> P2
+  CAT --> P3
+  P1 --> E1
+  P2 --> E2
+  P3 --> E3
+    </pre>
+  </div>
+
+  <h2>3. Текстовая схема (без диаграммы)</h2>
+  <pre class="ascii">  [ Типовой каталог: Ординатор ]
+           |
+     +-----+-----+-----+
+     |     |     |     |
+  [ORD_1][ORD_2][ORD_3]
+     |     |     |
+  Иванов Петров Сидоров</pre>
+
+  <h2>4. Действия в системе</h2>
+  <ol>
+    <li>В каталоге — одна должность «Ординатор».</li>
+    <li>В организации — несколько локальных строк; коды разные, тип каталога один.</li>
+    <li>На каждую строку: <strong>Назначить</strong> сотрудника.</li>
+  </ol>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+</body>
+</html>

@@ -9,7 +9,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Client, ClientStandaloneKpi
+from app.excel_export import xlsx_file_response
+from app.models import (
+    Client,
+    ClientPositionRegulation,
+    ClientRegulationKpi,
+    ClientStandaloneKpi,
+)
 from app.schemas import ClientStandaloneKpiCreate, ClientStandaloneKpiOut, ClientStandaloneKpiPatch, ListEnvelope
 from app.utils import new_id32
 
@@ -19,6 +25,87 @@ router = APIRouter(prefix="/client-kpis", tags=["client-kpis"])
 def _assert_client(db: Session, client_id: str) -> None:
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
+
+
+@router.get("/export/excel")
+def export_local_kpis_excel(
+    client_id: str = Query(..., description="ID организации"),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Сводная выгрузка KPI организации: из локальных регламентов и без регламента."""
+    _assert_client(db, client_id)
+    headers = [
+        "kpi_code",
+        "position_code",
+        "dept_type_code",
+        "target_value",
+        "period_type",
+        "weight",
+        "is_active",
+        "regulation_code",
+        "regulation_name",
+        "from_regulation",
+        "kpi_id",
+    ]
+    data: list[list] = []
+    regs = db.scalars(
+        select(ClientPositionRegulation)
+        .where(ClientPositionRegulation.client_id == client_id)
+        .order_by(
+            ClientPositionRegulation.position_code,
+            ClientPositionRegulation.dept_type_code,
+            ClientPositionRegulation.regulation_code,
+        )
+    ).all()
+    for reg in regs:
+        kpis = db.scalars(
+            select(ClientRegulationKpi).where(
+                ClientRegulationKpi.client_regulation_id == reg.id
+            )
+        ).all()
+        for kpi in kpis:
+            data.append(
+                [
+                    kpi.kpi_code,
+                    reg.position_code,
+                    reg.dept_type_code,
+                    kpi.target_value,
+                    kpi.period_type,
+                    kpi.weight,
+                    kpi.is_active,
+                    reg.regulation_code,
+                    reg.regulation_name,
+                    True,
+                    kpi.id,
+                ]
+            )
+    standalone = db.scalars(
+        select(ClientStandaloneKpi)
+        .where(ClientStandaloneKpi.client_id == client_id)
+        .order_by(ClientStandaloneKpi.kpi_code)
+    ).all()
+    for kpi in standalone:
+        data.append(
+            [
+                kpi.kpi_code,
+                kpi.position_code,
+                None,
+                kpi.target_value,
+                kpi.period_type,
+                kpi.weight,
+                kpi.is_active,
+                None,
+                None,
+                False,
+                kpi.id,
+            ]
+        )
+    return xlsx_file_response(
+        download_name=f"local_kpis_{client_id}.xlsx",
+        sheet_title="local_kpis",
+        headers=headers,
+        rows=data,
+    )
 
 
 @router.get("", response_model=ListEnvelope[ClientStandaloneKpiOut])

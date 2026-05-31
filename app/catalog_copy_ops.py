@@ -2,6 +2,7 @@ r"""Копирование отдельных записей между глоб
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from fastapi import HTTPException
@@ -25,7 +26,12 @@ from app.models import (
     RegulationKpi,
     TemplateOrgUnitRow,
 )
-from app.org_unit_ops import PROTECTED_ORG_CODES, format_org_unit_name, normalize_template_log_group
+from app.org_unit_ops import (
+    PROTECTED_ORG_CODES,
+    format_org_unit_name,
+    normalize_template_log_group,
+    resolve_org_unit_effective_segment,
+)
 from app.position_catalog_ops import PositionCatalogCloneResult, _unique_code, clone_position_catalog
 from app.template_bundle_clone import resolve_client_template_code
 from app.utils import new_id32
@@ -797,6 +803,236 @@ def copy_org_unit_local_to_global(
     db.add(row)
     db.flush()
     return TemplateOrgUnitCopyResult(row=row, created=True)
+
+
+_LEGACY_COPY_SUFFIX = re.compile(r"_COPY(_\d+)?$", re.IGNORECASE)
+
+
+def _strip_legacy_copy_suffix(code: str) -> str:
+    return _LEGACY_COPY_SUFFIX.sub("", code.strip())
+
+
+def _clean_position_display_name(name: str) -> str:
+    n = name.strip()
+    for suffix in (" (Копия)", " (копия)"):
+        if n.endswith(suffix):
+            return n[: -len(suffix)].strip()
+    return n
+
+
+def _unique_local_position_code(existing: set[str], base: str) -> str:
+    """Код ставки в подразделении: base, base_2, base_3, …"""
+    if base not in existing:
+        return base
+    n = 2
+    while True:
+        candidate = f"{base}_{n}"
+        if candidate not in existing:
+            return candidate
+        n += 1
+
+
+def plan_local_position_code_from_catalog(
+    db: Session,
+    *,
+    client_id: str,
+    org_unit_id: str,
+    catalog: PositionCatalog,
+    preferred_code: str | None = None,
+) -> tuple[str, list[str], str | None]:
+    """Подобрать код локальной ставки при копировании из каталога; сообщение, если тип уже есть в отделении."""
+    base = (preferred_code or catalog.position_code).strip()
+    if not base:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_position_code", "message": "Код должности не может быть пустым."},
+        )
+    codes_in_unit = set(
+        db.scalars(
+            select(Position.code).where(
+                Position.client_id == client_id,
+                Position.org_unit_id == org_unit_id,
+            )
+        ).all()
+    )
+    slots = db.scalars(
+        select(Position)
+        .where(
+            Position.client_id == client_id,
+            Position.org_unit_id == org_unit_id,
+            Position.position_catalog_code == catalog.position_code,
+        )
+        .order_by(Position.code)
+    ).all()
+    already = sorted({p.code for p in slots})
+    if not already and base in codes_in_unit:
+        already = [base]
+    if not already and base not in codes_in_unit:
+        return base, [], None
+    new_code = _unique_local_position_code(codes_in_unit, base)
+    label = ", ".join(already)
+    message = f"Уже есть: {label}. Создана ставка с кодом {new_code}."
+    return new_code, already, message
+
+
+@dataclass
+class PositionCatalogGlobalToLocalResult:
+    position: Position
+    message: str | None = None
+    already_exists_codes: list[str] | None = None
+
+
+def copy_position_catalog_global_to_local(
+    db: Session,
+    *,
+    client_id: str,
+    org_unit_id: str,
+    catalog: PositionCatalog,
+    preferred_code: str | None = None,
+    preferred_name: str | None = None,
+) -> PositionCatalogGlobalToLocalResult:
+    ou = db.get(OrgUnit, org_unit_id)
+    if not ou or ou.client_id != client_id:
+        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    code, already, message = plan_local_position_code_from_catalog(
+        db,
+        client_id=client_id,
+        org_unit_id=org_unit_id,
+        catalog=catalog,
+        preferred_code=preferred_code,
+    )
+    segment = resolve_org_unit_effective_segment(db, ou) if ou else None
+    obj = Position(
+        id=new_id32(),
+        client_id=client_id,
+        org_unit_id=org_unit_id,
+        code=code,
+        name=(preferred_name or catalog.position_name_ru).strip(),
+        grade=None,
+        is_active=True,
+        position_catalog_code=catalog.position_code,
+        function_code=catalog.function_code,
+        position_level=catalog.position_level,
+        is_managerial=catalog.is_managerial,
+        is_detached=True,
+        segment_code=segment,
+    )
+    db.add(obj)
+    db.flush()
+    return PositionCatalogGlobalToLocalResult(
+        position=obj,
+        message=message,
+        already_exists_codes=already or None,
+    )
+
+
+def plan_local_position_clone_code(
+    db: Session,
+    *,
+    client_id: str,
+    org_unit_id: str,
+    source: Position,
+    preferred_code: str | None = None,
+    template_code: str | None = None,
+) -> tuple[str, list[str], str | None]:
+    """Код новой ставки при копировании локальной строки (Действия → Копировать)."""
+    catalog_code = (source.position_catalog_code or "").strip() or None
+    if catalog_code and template_code:
+        cat = db.get(PositionCatalog, (template_code, catalog_code))
+        if cat:
+            pref = preferred_code or _strip_legacy_copy_suffix(source.code)
+            return plan_local_position_code_from_catalog(
+                db,
+                client_id=client_id,
+                org_unit_id=org_unit_id,
+                catalog=cat,
+                preferred_code=pref,
+            )
+    base = (preferred_code or catalog_code or _strip_legacy_copy_suffix(source.code)).strip()
+    if not base:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_position_code", "message": "Код должности не может быть пустым."},
+        )
+    codes_in_unit = set(
+        db.scalars(
+            select(Position.code).where(
+                Position.client_id == client_id,
+                Position.org_unit_id == org_unit_id,
+            )
+        ).all()
+    )
+    related: set[str] = set()
+    for code in codes_in_unit:
+        if code == base:
+            related.add(code)
+            continue
+        if code.startswith(base + "_"):
+            tail = code[len(base) + 1 :]
+            if tail.isdigit():
+                related.add(code)
+    already = sorted(related)
+    if not already and base not in codes_in_unit:
+        return base, [], None
+    new_code = _unique_local_position_code(codes_in_unit, base)
+    label = ", ".join(already)
+    message = f"Уже есть: {label}. Создана ставка с кодом {new_code}."
+    return new_code, already, message
+
+
+@dataclass
+class LocalPositionCloneResult:
+    position: Position
+    message: str | None = None
+    already_exists_codes: list[str] | None = None
+
+
+def clone_local_position_row(
+    db: Session,
+    *,
+    source: Position,
+    org_unit_id: str,
+    template_code: str | None,
+    preferred_code: str | None = None,
+) -> LocalPositionCloneResult:
+    ou = db.get(OrgUnit, org_unit_id)
+    if not ou or ou.client_id != source.client_id:
+        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    code, already, message = plan_local_position_clone_code(
+        db,
+        client_id=source.client_id,
+        org_unit_id=org_unit_id,
+        source=source,
+        preferred_code=preferred_code,
+        template_code=template_code,
+    )
+    segment = (
+        source.segment_code
+        if org_unit_id == source.org_unit_id
+        else resolve_org_unit_effective_segment(db, ou)
+    )
+    obj = Position(
+        id=new_id32(),
+        client_id=source.client_id,
+        org_unit_id=org_unit_id,
+        code=code,
+        name=_clean_position_display_name(source.name),
+        grade=source.grade,
+        is_active=source.is_active,
+        position_catalog_code=source.position_catalog_code,
+        function_code=source.function_code,
+        position_level=source.position_level,
+        is_managerial=source.is_managerial,
+        is_detached=True,
+        segment_code=segment,
+    )
+    db.add(obj)
+    db.flush()
+    return LocalPositionCloneResult(
+        position=obj,
+        message=message,
+        already_exists_codes=already or None,
+    )
 
 
 def _dept_type_hint_for_position(db: Session, pos: Position) -> str:

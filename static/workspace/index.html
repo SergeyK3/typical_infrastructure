@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Рабочее пространство — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css?v=catalog-filter-bar-1">
+  <link rel="stylesheet" href="/static/shared/layout.css?v=filter-combobox-1">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/catalog-copy.js?v=catalog-copy-5"></script>
   <style>
@@ -282,8 +282,10 @@
         <a class="btn btn-secondary" id="exportPositionsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
       <div class="catalog-filter-bar">
+        <label for="filterLocalPositionOrgSearch">Отделение</label>
+        <input type="search" id="filterLocalPositionOrgSearch" placeholder="Код, название, сегмент…" title="Поиск по подразделению (отделение, секция)" autocomplete="off">
         <label for="filterLocalPositionNameSearch">Должность</label>
-        <input type="search" id="filterLocalPositionNameSearch" placeholder="Код или название…" title="Поиск по коду, названию, подразделению, сотруднику" autocomplete="off">
+        <input type="search" id="filterLocalPositionNameSearch" placeholder="Код или название…" title="Поиск по коду, названию, сотруднику" autocomplete="off">
       </div>
       <div id="positionsList" style="margin-top: 0.25rem;"></div>
     </div>
@@ -305,6 +307,8 @@
         <label><input type="checkbox" id="crFilterCurrent" /> Только действующие</label>
       </div>
       <div class="catalog-filter-bar">
+        <label for="crFilterOrgSearch">Отделение</label>
+        <input type="search" id="crFilterOrgSearch" placeholder="Код, название, сегмент…" title="Поиск по типу подразделения / отделению" autocomplete="off">
         <label for="crFilterPositionSearch">Должность</label>
         <input type="search" id="crFilterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
       </div>
@@ -353,8 +357,11 @@
         <button type="button" class="btn btn-primary" id="btnLocalKpiCopy">+ Скопировать регламент</button>
         <button type="button" class="btn btn-primary" id="btnLocalKpiAdd">+ Добавить KPI</button>
         <button type="button" class="btn btn-secondary" id="btnLocalKpiRefresh">Обновить</button>
+        <a class="btn btn-secondary" id="exportLocalKpisXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
       <div class="catalog-filter-bar">
+        <label for="localKpiFilterOrg">Отделение</label>
+        <input type="search" id="localKpiFilterOrg" placeholder="Код, название, сегмент…" title="Поиск по подразделению через должность" autocomplete="off">
         <label for="localKpiFilterPosition">Должность</label>
         <input type="search" id="localKpiFilterPosition" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
       </div>
@@ -390,8 +397,11 @@
       <div class="org-actions">
         <button type="button" class="btn btn-primary" id="btnLocalSkillsCopy" title="Скопировать типовую матрицу навыков из глобального шаблона для должностей организации">Загрузить из шаблона</button>
         <button type="button" class="btn btn-secondary" id="btnLocalSkillsRefresh">Обновить</button>
+        <a class="btn btn-secondary" id="exportLocalSkillsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
       <div class="catalog-filter-bar">
+        <label for="localSkillsFilterOrg">Отделение</label>
+        <input type="search" id="localSkillsFilterOrg" placeholder="Код, название, сегмент…" title="Поиск по типу подразделения / отделению" autocomplete="off">
         <label for="localSkillsFilterPosition">Должность</label>
         <input type="search" id="localSkillsFilterPosition" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
         <label for="localSkillsFilterSkill">Навык</label>
@@ -478,6 +488,8 @@
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none">
       <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;line-height:1.45;">Импорт: колонки Фамилия, Имя (+ опционально Отчество, Email, телефон, Telegram, код подразделения, код должности). Коды должны совпадать с подразделениями и должностями этой организации.</p>
       <div class="catalog-filter-bar">
+        <label for="empFilterOrgSearch">Отделение</label>
+        <input type="search" id="empFilterOrgSearch" placeholder="Код, название, сегмент…" title="Поиск по подразделению (дополняет выпадающий список в таблице)" autocomplete="off">
         <label for="empFilterPositionSearch">Должность</label>
         <input type="search" id="empFilterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
       </div>
@@ -789,10 +801,15 @@
       <input type="text" id="posEditCode">
       <label>Название</label>
       <input type="text" id="posEditName">
-      <label>Подразделение</label>
-      <select id="posEditOrgUnit"></select>
-      <label>Код функции</label>
-      <input type="text" id="posEditFunc" placeholder="HR, SALES…">
+      <label for="posEditOrgUnitInput">Подразделение</label>
+      <div class="filter-combobox">
+        <input type="text" id="posEditOrgUnitInput" class="filter-combobox-input" placeholder="Введите код, название или сегмент…" autocomplete="off">
+        <input type="hidden" id="posEditOrgUnit" value="">
+        <div class="filter-combobox-list" id="posEditOrgUnitList" hidden role="listbox"></div>
+      </div>
+      <label for="posEditFunc">Код функции</label>
+      <select id="posEditFunc"><option value="">— не задан —</option></select>
+      <p class="meta" style="margin:0.2rem 0 0.5rem 0;font-size:0.78rem;line-height:1.35;">Сегмент из словаря шаблона (CLINIC, …) или код функции из типового каталога.</p>
       <label>Уровень</label>
       <select id="posEditLevel">
         <option value="SPEC">SPEC — специалист</option>
@@ -824,10 +841,15 @@
       <input type="text" id="posCode" placeholder="DEV">
       <label>Название</label>
       <input type="text" id="posName" placeholder="Разработчик">
-      <label>Подразделение</label>
-      <select id="posOrgUnit"></select>
-      <label>Код функции</label>
-      <input type="text" id="posFunc" placeholder="HR, SALES…">
+      <label for="posOrgUnitInput">Подразделение</label>
+      <div class="filter-combobox">
+        <input type="text" id="posOrgUnitInput" class="filter-combobox-input" placeholder="Введите код, название или сегмент…" autocomplete="off">
+        <input type="hidden" id="posOrgUnit" value="">
+        <div class="filter-combobox-list" id="posOrgUnitList" hidden role="listbox"></div>
+      </div>
+      <label for="posFunc">Код функции</label>
+      <select id="posFunc"><option value="">— не задан —</option></select>
+      <p class="meta" style="margin:0.2rem 0 0.5rem 0;font-size:0.78rem;line-height:1.35;">Сегмент из словаря шаблона (CLINIC, …) или код функции из типового каталога.</p>
       <label>Уровень</label>
       <select id="posLevel">
         <option value="SPEC">SPEC — специалист</option>
@@ -967,10 +989,18 @@
       <p class="meta" style="margin-top:0;">Создаётся локальная штатная должность по записи глобального справочника.</p>
       <label>Шаблон источника</label>
       <select id="posCopyTemplate" style="width:100%;max-width:none;"></select>
-      <label>Должность из каталога</label>
-      <select id="posCopyCatalog" style="width:100%;max-width:none;"></select>
-      <label>Подразделение организации</label>
-      <select id="posCopyOrgUnit" style="width:100%;max-width:none;"></select>
+      <label for="posCopyCatalogInput">Должность из каталога</label>
+      <div class="filter-combobox">
+        <input type="text" id="posCopyCatalogInput" class="filter-combobox-input" placeholder="Введите название или код должности…" autocomplete="off">
+        <input type="hidden" id="posCopyCatalog" value="">
+        <div class="filter-combobox-list" id="posCopyCatalogList" hidden role="listbox"></div>
+      </div>
+      <label for="posCopyOrgUnitInput">Подразделение организации</label>
+      <div class="filter-combobox">
+        <input type="text" id="posCopyOrgUnitInput" class="filter-combobox-input" placeholder="Введите код, название или сегмент…" autocomplete="off">
+        <input type="hidden" id="posCopyOrgUnit" value="">
+        <div class="filter-combobox-list" id="posCopyOrgUnitList" hidden role="listbox"></div>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-primary" id="btnPosCopyDo">Скопировать</button>
         <button type="button" class="btn btn-secondary" id="btnPosCopyCancel">Отмена</button>
@@ -1116,6 +1146,8 @@
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/catalog-row-actions.js?v=cra-2"></script>
   <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
+  <script src="/static/shared/filter-combobox.js?v=fcb-1"></script>
+  <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script>
     if (window.SidebarRenderer) {
@@ -1779,6 +1811,12 @@
       const qBase = clientId ? 'client_id=' + encodeURIComponent(clientId) : '';
       setHref('exportOrgXlsx', '/api/org-units/export/excel', qBase);
       setHref('exportPositionsXlsx', '/api/positions/export/excel', qBase);
+      setHref(
+        'exportLocalSkillsXlsx',
+        '/api/skill-assessment/catalog/competency-matrix/export/excel',
+        qBase
+      );
+      setHref('exportLocalKpisXlsx', '/api/client-kpis/export/excel', qBase);
       if (!clientId) {
         setHref('exportEmployeesXlsx', '/api/employees/export/excel', null);
         setHref('exportAccountsXlsx', '/api/accounts/export/excel', null);
@@ -2155,6 +2193,7 @@
       try {
         orgTreeData = await fetchApi('/org-units/tree?client_id=' + encodeURIComponent(clientId));
         orgUnits = [];
+        wsOrgUnitPathsCache = null;
         flattenTree(orgTreeData, orgUnits);
         orgFlatRows = [];
         flattenOrgTreeWithParent(orgTreeData, orgFlatRows, null);
@@ -2511,6 +2550,76 @@
     }
 
     // Positions
+    let positionSegmentLabels = {};
+    let positionCatalogFuncCodes = [];
+
+    async function loadPositionFuncOptions() {
+      const tpl = clientTemplateCode();
+      try {
+        const segData = await fetchApi('/template-segment-codes?template_code=' + encodeURIComponent(tpl) + '&limit=200');
+        positionSegmentLabels = Object.fromEntries(
+          (segData.items || []).map((s) => [s.code, s.label_ru || s.code])
+        );
+      } catch (_) {
+        positionSegmentLabels = {};
+      }
+      const funcSet = new Set();
+      try {
+        const catData = await fetchApi('/position-catalog?template_code=' + encodeURIComponent(tpl) + '&limit=500');
+        (catData.items || []).forEach((r) => {
+          if (r.function_code) funcSet.add(String(r.function_code).trim());
+        });
+      } catch (_) {}
+      positionsCache.forEach((p) => {
+        if (p.function_code) funcSet.add(String(p.function_code).trim());
+      });
+      positionCatalogFuncCodes = [...funcSet]
+        .filter((c) => c && !positionSegmentLabels[c])
+        .sort((a, b) => a.localeCompare(b, 'ru'));
+    }
+
+    function positionSegmentDisplay(code) {
+      const c = String(code || '').trim();
+      if (!c) return '';
+      const label = positionSegmentLabels[c];
+      return label && label !== c ? c + ' — ' + label : c;
+    }
+
+    function fillPositionFuncSelect(selectEl, selectedValue) {
+      if (!selectEl) return;
+      const keep = (selectedValue !== undefined ? selectedValue : selectEl.value).trim();
+      const segmentCodes = Object.keys(positionSegmentLabels).sort((a, b) => a.localeCompare(b, 'ru'));
+      let html = '<option value="">— не задан —</option>';
+      if (segmentCodes.length) {
+        html += '<optgroup label="Сегменты (словарь шаблона)">';
+        segmentCodes.forEach((seg) => {
+          html += '<option value="' + escapeHtml(seg) + '">' + escapeHtml(positionSegmentDisplay(seg)) + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      if (positionCatalogFuncCodes.length) {
+        html += '<optgroup label="Коды функций (каталог)">';
+        positionCatalogFuncCodes.forEach((code) => {
+          html += '<option value="' + escapeHtml(code) + '">' + escapeHtml(code) + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      selectEl.innerHTML = html;
+      syncPositionFuncSelect(selectEl, keep);
+    }
+
+    function syncPositionFuncSelect(selectEl, value) {
+      if (!selectEl) return;
+      const v = String(value || '').trim();
+      if (v && ![...selectEl.options].some((o) => o.value === v)) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = positionSegmentLabels[v] ? positionSegmentDisplay(v) : v;
+        selectEl.appendChild(opt);
+      }
+      selectEl.value = v;
+    }
+
     function syncPosLevelSelect(sel, level) {
       const value = (level || 'SPEC').trim() || 'SPEC';
       if (![...sel.options].some((o) => o.value === value)) {
@@ -2534,7 +2643,7 @@
     }
 
     function fillPositionExtraFields(prefix, row) {
-      document.getElementById(prefix + 'Func').value = row.function_code || '';
+      syncPositionFuncSelect(document.getElementById(prefix + 'Func'), row.function_code || '');
       syncPosLevelSelect(document.getElementById(prefix + 'Level'), row.position_level || 'SPEC');
       document.getElementById(prefix + 'Mgr').checked = !!row.is_managerial;
       document.getElementById(prefix + 'CatCode').value = row.position_catalog_code || '';
@@ -2543,7 +2652,7 @@
     }
 
     function clearPositionExtraFields(prefix) {
-      document.getElementById(prefix + 'Func').value = '';
+      syncPositionFuncSelect(document.getElementById(prefix + 'Func'), '');
       syncPosLevelSelect(document.getElementById(prefix + 'Level'), 'SPEC');
       document.getElementById(prefix + 'Mgr').checked = false;
       document.getElementById(prefix + 'CatCode').value = '';
@@ -2599,18 +2708,92 @@
       );
     }
 
+    function orgUnitTypeLabel(unitType) {
+      if (window.OrgTreeShared && OrgTreeShared.unitTypeLabel) {
+        return OrgTreeShared.unitTypeLabel(unitType);
+      }
+      if (unitType === 'company') return 'компания';
+      if (unitType === 'department') return 'отделение';
+      if (unitType === 'section') return 'секция';
+      return unitType || 'узел';
+    }
+
+    function formatOrgUnitPositionCell(ou) {
+      if (!ou) return '—';
+      const name = String(ou.name || ou.code || '').trim();
+      const typeLabel = orgUnitTypeLabel(ou.unit_type);
+      if (!name) return String(ou.code || '—');
+      return name + ' (' + typeLabel + ')';
+    }
+
+    let wsOrgUnitPathsCache = null;
+
+    function wsEnsureOrgUnitPaths() {
+      if (!wsOrgUnitPathsCache && window.OrgUnitPicker && orgUnits.length) {
+        wsOrgUnitPathsCache = OrgUnitPicker.buildPaths(orgUnits);
+      }
+      return wsOrgUnitPathsCache || {};
+    }
+
+    function wsMatchesOrgUnitId(orgUnitId, query) {
+      const q = String(query || '').trim();
+      if (!q) return true;
+      if (!orgUnitId) return false;
+      const ou = orgUnits.find((x) => x.id === orgUnitId);
+      if (!ou || !window.OrgUnitPicker) return false;
+      const paths = wsEnsureOrgUnitPaths();
+      return OrgUnitPicker.matchUnit(ou, paths[ou.id] || '', q);
+    }
+
+    /** dept_type_code / department_code в регламентах и навыках */
+    function wsMatchesOrgUnitDeptCode(deptCode, query) {
+      const q = String(query || '').trim();
+      if (!q) return true;
+      const code = String(deptCode || '').trim();
+      if (!code) return false;
+      const ou = orgUnits.find((x) => String(x.code || '').trim() === code);
+      if (ou) return wsMatchesOrgUnitId(ou.id, q);
+      return code.toLowerCase().includes(q.toLowerCase());
+    }
+
+    function wsMatchesOrgForPositionCode(positionCode, query) {
+      const q = String(query || '').trim();
+      if (!q) return true;
+      const code = String(positionCode || '').trim();
+      if (!code) return false;
+      const related = positionsCache.filter((p) => {
+        const pc = (p.position_catalog_code || p.code || '').trim();
+        return pc === code || String(p.code || '').trim() === code;
+      });
+      if (related.length) {
+        return related.some((p) => wsMatchesOrgUnitId(p.org_unit_id, q));
+      }
+      return wsMatchesOrgUnitDeptCode(code, q);
+    }
+
+    function wireOrgUnitSearch(inputId, onFilter) {
+      const el = document.getElementById(inputId);
+      if (!el || typeof onFilter !== 'function') return;
+      let timer;
+      el.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(onFilter, 200);
+      });
+    }
+
     function renderPositions() {
       const el = document.getElementById('positionsList');
       const items = positionsCache || [];
+      const orgQ = (document.getElementById('filterLocalPositionOrgSearch')?.value || '').trim();
       const nameQ = (document.getElementById('filterLocalPositionNameSearch')?.value || '').trim();
       const filtered = items.filter((p) => {
+        if (orgQ && !wsMatchesOrgUnitId(p.org_unit_id, orgQ)) return false;
         if (!nameQ) return true;
-        const ou = orgUnits.find((x) => x.id === p.org_unit_id);
         const emp = employeesAllCache.find((x) => x.position_id === p.id);
         const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '';
         return window.CatalogPositionSearch
           ? CatalogPositionSearch.matchesAnyKeyword(
-            [p.code, p.name, ou ? ou.code : '', ou ? ou.name : '', empName],
+            [p.code, p.name, empName],
             nameQ
           )
           : true;
@@ -2624,7 +2807,11 @@
           const ou = orgUnits.find((x) => x.id === p.org_unit_id);
           const emp = employeesAllCache.find((x) => x.position_id === p.id);
           const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
-          return '<tr><td>' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(ou ? ou.code : p.org_unit_id) + '</td><td>' + escapeHtml(empName) + '</td><td>' + (p.is_active !== false ? 'да' : 'нет') + '</td><td>' +
+          const ouLabel = formatOrgUnitPositionCell(ou);
+          const ouTitle = ou
+            ? [ou.code, ou.name, orgUnitTypeLabel(ou.unit_type)].filter(Boolean).join(' · ')
+            : String(p.org_unit_id || '');
+          return '<tr><td>' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td class="td-ellipsis" title="' + escapeHtml(ouTitle) + '">' + escapeHtml(ouLabel) + '</td><td>' + escapeHtml(empName) + '</td><td>' + (p.is_active !== false ? 'да' : 'нет') + '</td><td>' +
             CatalogRowActions.preset('localPosition', { id: p.id }, { rowKey: p.id, size: 'sm' }) + '</td></tr>';
         }).join('') + '</tbody></table>';
       if (!el._craBound && window.CatalogRowActions) {
@@ -2636,11 +2823,15 @@
             fetchApi('/positions/' + encodeURIComponent(id) + '/clone', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name_suffix: 'Копия' }),
+              body: JSON.stringify({}),
             }).then(async (res) => {
               await loadPositionsForSelect();
               await loadPositions();
-              showWorkspaceToast('Создана должность «' + res.name + '» (' + res.code + ')', 'success');
+              const pos = res.position || res;
+              const toast = res.message
+                ? res.message
+                : ('Создана должность «' + (pos.name || '') + '» (' + (pos.code || '') + ')');
+              showWorkspaceToast(toast, res.message ? 'info' : 'success');
             }).catch((e) => showWorkspaceToast(e.message, 'error'));
           } else if (action === 'to-global') {
             const p = positionsCache.find((x) => x.id === id);
@@ -2660,6 +2851,7 @@
 
     async function loadPositions() {
       await loadEmployeesForSelect();
+      await ensureOrgUnitsLoaded();
       const el = document.getElementById('positionsList');
       try {
         const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
@@ -2670,12 +2862,63 @@
       }
     }
 
-    document.getElementById('btnAddPosition').onclick = () => {
-      const sel = document.getElementById('posOrgUnit');
-      sel.innerHTML = orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
-      if (!orgUnits.length) sel.innerHTML = '<option value="">Нет подразделений</option>';
+    async function ensureOrgUnitsLoaded() {
+      if (!orgUnits.length && clientId) await loadOrgTree();
+    }
+
+    function fillPositionOrgUnitPicker(hiddenId, inputId, listId, selectedId) {
+      if (!window.OrgUnitPicker) return;
+      OrgUnitPicker.populateField({
+        hiddenId,
+        inputId,
+        listId,
+        units: orgUnits,
+        selectedId: selectedId || '',
+        escapeHtml,
+      });
+    }
+
+    function initPositionCatalogCombobox(items, selectedValue) {
+      if (!window.FilterCombobox) return;
+      FilterCombobox.ensure({
+        hiddenId: 'posCopyCatalog',
+        inputId: 'posCopyCatalogInput',
+        listId: 'posCopyCatalogList',
+        items: items || [],
+        selectedValue: selectedValue || '',
+        placeholder: 'Введите название или код должности…',
+        escapeHtml,
+      });
+    }
+
+    function catalogItemsToCombobox(items) {
+      return (items || []).map((p) => {
+        const code = p.position_code || p.code || '';
+        const name = p.position_name_ru || p.name || code;
+        const label = name + (code ? ' (' + code + ')' : '');
+        return {
+          value: code,
+          label,
+          title: label,
+          displayValue: label,
+          keywords: [
+            code,
+            name,
+            p.position_name_en,
+            p.function_code,
+            p.primary_dept_type_code,
+          ].filter(Boolean),
+        };
+      });
+    }
+
+    document.getElementById('btnAddPosition').onclick = async () => {
+      await ensureOrgUnitsLoaded();
+      fillPositionOrgUnitPicker('posOrgUnit', 'posOrgUnitInput', 'posOrgUnitList', '');
       document.getElementById('posCode').value = '';
       document.getElementById('posName').value = '';
+      await loadPositionFuncOptions();
+      fillPositionFuncSelect(document.getElementById('posFunc'), '');
       clearPositionExtraFields('pos');
       showErr(document.getElementById('modalPositionErr'), '');
       document.getElementById('modalPosition').classList.add('show');
@@ -2705,15 +2948,16 @@
 
     document.getElementById('btnPositionCancel').onclick = () => document.getElementById('modalPosition').classList.remove('show');
 
-    function openEditPosition(id) {
+    async function openEditPosition(id) {
       const p = positionsCache.find(x => x.id === id);
       if (!p) return;
+      await ensureOrgUnitsLoaded();
       document.getElementById('posEditId').value = id;
       document.getElementById('posEditCode').value = p.code;
       document.getElementById('posEditName').value = p.name;
-      const sel = document.getElementById('posEditOrgUnit');
-      sel.innerHTML = orgUnits.map(u => '<option value="' + u.id + '">' + u.code + ' — ' + u.name + '</option>').join('');
-      sel.value = p.org_unit_id;
+      fillPositionOrgUnitPicker('posEditOrgUnit', 'posEditOrgUnitInput', 'posEditOrgUnitList', p.org_unit_id);
+      await loadPositionFuncOptions();
+      fillPositionFuncSelect(document.getElementById('posEditFunc'), p.function_code || '');
       fillPositionExtraFields('posEdit', p);
       showErr(document.getElementById('modalPositionEditErr'), '');
       document.getElementById('modalPositionEdit').classList.add('show');
@@ -2859,6 +3103,10 @@
           const flNorm = fl.toLowerCase();
           items = items.filter((e) => String(e.last_name || '').toLowerCase().includes(flNorm));
         }
+        const orgSearchQ = (document.getElementById('empFilterOrgSearch')?.value || '').trim();
+        if (orgSearchQ) {
+          items = items.filter((e) => wsMatchesOrgUnitId(e.org_unit_id, orgSearchQ));
+        }
         const posQ = (document.getElementById('empFilterPositionSearch')?.value || '').trim();
         if (posQ) {
           items = items.filter((e) => {
@@ -2944,12 +3192,15 @@
       const tbody = document.getElementById('localKpiTbody');
       const meta = document.getElementById('localKpiMeta');
       if (!tbody) return;
+      const orgQ = (document.getElementById('localKpiFilterOrg')?.value || '').trim();
       const posQ = (document.getElementById('localKpiFilterPosition')?.value || '').trim();
       const all = localKpiRowsCache || [];
       const standaloneCount = all.filter((r) => r.kind === 'standalone').length;
-      const rows = all.filter(({ kind, reg, kpi }) =>
-        wsMatchesPositionKeyword(localKpiPositionCode(kind, reg, kpi), posQ)
-      );
+      const rows = all.filter(({ kind, reg, kpi }) => {
+        const posCode = localKpiPositionCode(kind, reg, kpi);
+        if (orgQ && !wsMatchesOrgForPositionCode(posCode, orgQ)) return false;
+        return wsMatchesPositionKeyword(posCode, posQ);
+      });
       if (meta) {
         meta.textContent = 'Записей KPI: ' + rows.length + ' из ' + all.length +
           ' (из регламентов: ' + (all.length - standaloneCount) + ', без регламента: ' + standaloneCount + ')';
@@ -2960,7 +3211,7 @@
         return;
       }
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет KPI по фильтру должности. Измените поиск в шапке таблицы.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет KPI по фильтрам. Измените поиск по отделению или должности.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map(({ kind, reg, kpi }) => {
@@ -3044,6 +3295,7 @@
       }
       try {
         await loadPositionsForSelect();
+        await ensureOrgUnitsLoaded();
         if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
           try {
             const positions = await fetchApi('/regulations/positions/list') || [];
@@ -3331,9 +3583,12 @@
       const tbody = document.getElementById('localSkillsTbody');
       const meta = document.getElementById('localSkillsMeta');
       if (!tbody) return;
+      const orgQ = (document.getElementById('localSkillsFilterOrg')?.value || '').trim();
       const posQ = (document.getElementById('localSkillsFilterPosition')?.value || '').trim();
       const skillQ = (document.getElementById('localSkillsFilterSkill')?.value || '').trim();
       const rows = localSkillRows.filter((row) => {
+        if (orgQ && !wsMatchesOrgUnitDeptCode(row.department_code, orgQ) &&
+          !wsMatchesOrgForPositionCode(row.position_code, orgQ)) return false;
         if (posQ && !wsMatchesPositionKeyword(row.position_code, posQ)) return false;
         if (skillQ && window.CatalogPositionSearch) {
           return CatalogPositionSearch.matchesAnyKeyword(
@@ -3404,6 +3659,7 @@
       }
       try {
         await loadPositionsForSelect();
+        await ensureOrgUnitsLoaded();
         await loadGlobalPositionCodesForClientTemplate();
         if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
           try {
@@ -4080,6 +4336,11 @@
       CatalogPositionSearch.wireSearch(document.getElementById('crFilterPositionSearch'), loadClientRegulations);
       CatalogPositionSearch.wireSearch(document.getElementById('empFilterPositionSearch'), loadEmployees);
     }
+    wireOrgUnitSearch('filterLocalPositionOrgSearch', renderPositions);
+    wireOrgUnitSearch('crFilterOrgSearch', loadClientRegulations);
+    wireOrgUnitSearch('localKpiFilterOrg', renderLocalKpis);
+    wireOrgUnitSearch('localSkillsFilterOrg', renderLocalSkills);
+    wireOrgUnitSearch('empFilterOrgSearch', loadEmployees);
     document.getElementById('btnLocalSkillCancel').onclick = () => document.getElementById('modalLocalSkill').classList.remove('show');
     document.getElementById('btnLocalSkillSave').onclick = async () => {
       const errEl = document.getElementById('localSkillModalErr');
@@ -4204,6 +4465,7 @@
       if (!tbody) return;
       try {
         await loadPositionsForSelect();
+        await ensureOrgUnitsLoaded();
         if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
           try {
             const positions = await fetchApi('/regulations/positions/list') || [];
@@ -4212,6 +4474,13 @@
         }
         const data = await fetchApi('/client-regulations?' + buildClientRegQueryParams().toString());
         let items = data.items || [];
+        const orgQ = (document.getElementById('crFilterOrgSearch')?.value || '').trim();
+        if (orgQ) {
+          items = items.filter((r) =>
+            wsMatchesOrgUnitDeptCode(r.dept_type_code, orgQ) ||
+            wsMatchesOrgForPositionCode(r.position_code, orgQ)
+          );
+        }
         const posQ = (document.getElementById('crFilterPositionSearch')?.value || '').trim();
         if (posQ) {
           items = items.filter((r) => wsMatchesPositionKeyword(r.position_code, posQ));
@@ -4313,19 +4582,11 @@
     }
 
     async function fillPosCopyCatalog(templateCode) {
-      const sel = document.getElementById('posCopyCatalog');
-      sel.innerHTML = '<option value="">— загрузка —</option>';
       try {
         const data = await fetchApi('/position-catalog?template_code=' + encodeURIComponent(templateCode) + '&limit=500');
-        sel.innerHTML = '<option value="">— выберите должность —</option>';
-        (data.items || []).forEach((p) => {
-          const opt = document.createElement('option');
-          opt.value = p.position_code;
-          opt.textContent = p.position_name_ru + ' (' + p.position_code + ')';
-          sel.appendChild(opt);
-        });
-      } catch (e) {
-        sel.innerHTML = '<option value="">Ошибка</option>';
+        initPositionCatalogCombobox(catalogItemsToCombobox(data.items || []), '');
+      } catch (_) {
+        initPositionCatalogCombobox([], '');
       }
     }
 
@@ -4333,17 +4594,14 @@
       if (!clientId) { alert('Выберите организацию'); return; }
       const client = getCurrentClient();
       const tplSel = document.getElementById('posCopyTemplate');
-      const ouSel = document.getElementById('posCopyOrgUnit');
       try {
+        await ensureOrgUnitsLoaded();
         const templates = await CatalogCopy.loadTemplates();
         tplSel.innerHTML = templates.map((t) =>
           '<option value="' + escapeHtml(t.code) + '">' + escapeHtml(t.code + ' — ' + t.name) + '</option>'
         ).join('');
         tplSel.value = (client && client.template_code) || 'default';
-        ouSel.innerHTML = orgUnits.map((u) =>
-          '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.code + ' — ' + u.name) + '</option>'
-        ).join('');
-        if (!orgUnits.length) ouSel.innerHTML = '<option value="">Нет подразделений</option>';
+        fillPositionOrgUnitPicker('posCopyOrgUnit', 'posCopyOrgUnitInput', 'posCopyOrgUnitList', '');
         await fillPosCopyCatalog(tplSel.value);
         tplSel.onchange = () => fillPosCopyCatalog(tplSel.value);
         document.getElementById('modalPosCopy').classList.add('show');
@@ -4360,7 +4618,7 @@
       const sourceTpl = document.getElementById('posCopyTemplate').value;
       if (!code || !orgUnitId) { alert('Выберите должность и подразделение'); return; }
       try {
-        await CatalogCopy.api('POST', '/catalog-copy/position', {
+        const res = await CatalogCopy.api('POST', '/catalog-copy/position', {
           mode: 'global_to_local',
           source_template_code: sourceTpl,
           source_position_code: code,
@@ -4369,8 +4627,13 @@
         });
         document.getElementById('modalPosCopy').classList.remove('show');
         await loadPositions();
+        const pos = res.position || res;
+        const toast = res.message
+          ? res.message
+          : ('Создана должность «' + (pos.name || '') + '» (' + (pos.code || '') + ')');
+        showWorkspaceToast(toast, res.message ? 'info' : 'success');
       } catch (e) {
-        alert(e.message);
+        showWorkspaceToast(e.message, 'error');
       }
     };
 

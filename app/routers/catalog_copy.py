@@ -17,6 +17,7 @@ from app.catalog_copy_ops import (
     copy_org_unit_local_to_global,
     copy_template_org_unit_global_to_global,
     copy_position_catalog_global_to_global,
+    copy_position_catalog_global_to_local,
     copy_position_local_to_global,
     copy_regulation_global_to_global,
     copy_regulation_global_to_local,
@@ -138,28 +139,21 @@ def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
                 cat = interim.row
             else:
                 raise HTTPException(status_code=404, detail="position_catalog_not_found")
-        ou = db.get(OrgUnit, body.org_unit_id)
-        if not ou or ou.client_id != body.client_id:
-            raise HTTPException(status_code=404, detail="org_unit_not_found")
-        code = (body.target_position_code or cat.position_code).strip()
-        obj = Position(
-            id=new_id32(),
+        result = copy_position_catalog_global_to_local(
+            db,
             client_id=body.client_id,
             org_unit_id=body.org_unit_id,
-            code=code,
-            name=cat.position_name_ru,
-            grade=None,
-            is_active=True,
-            position_catalog_code=cat.position_code,
-            function_code=cat.function_code,
-            position_level=cat.position_level,
-            is_managerial=cat.is_managerial,
-            is_detached=True,
+            catalog=cat,
+            preferred_code=body.target_position_code,
         )
-        db.add(obj)
         db.commit()
-        db.refresh(obj)
-        return {"position": PositionOut.model_validate(obj)}
+        db.refresh(result.position)
+        out: dict = {"position": PositionOut.model_validate(result.position)}
+        if result.message:
+            out["message"] = result.message
+        if result.already_exists_codes:
+            out["already_exists_codes"] = result.already_exists_codes
+        return out
     if mode == "local_to_global":
         if not body.client_id or not body.source_position_id:
             raise HTTPException(status_code=422, detail="client_id_and_source_position_id_required")

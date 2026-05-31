@@ -54,6 +54,103 @@ def test_position_from_catalog(client):
     assert pos["is_detached"] is True
 
 
+def test_catalog_copy_position_auto_suffix_when_catalog_slot_exists(client):
+    r = client.post(
+        "/api/clients",
+        json={"code": "cc_pos_dup", "name": "cc_pos_dup", "status": "active"},
+    )
+    assert r.status_code == 200, r.text
+    cid = r.json()["id"]
+    for unit_code in ("company", "HR"):
+        r_ou = client.post(
+            "/api/org-units/from-template-node",
+            json={"client_id": cid, "template_unit_code": unit_code, "template_code": "default"},
+        )
+        assert r_ou.status_code == 201, r_ou.text
+    hr_id = r_ou.json()["id"]
+
+    cat = client.get("/api/position-catalog", params={"limit": 1}).json()["items"][0]
+    pc = cat["position_code"]
+    payload = {
+        "mode": "global_to_local",
+        "source_template_code": "default",
+        "source_position_code": pc,
+        "client_id": cid,
+        "org_unit_id": hr_id,
+    }
+    r1 = client.post("/api/catalog-copy/position", json=payload)
+    assert r1.status_code == 201, r1.text
+    assert r1.json()["position"]["code"] == pc
+    assert not r1.json().get("message")
+
+    r2 = client.post("/api/catalog-copy/position", json=payload)
+    assert r2.status_code == 201, r2.text
+    body = r2.json()
+    assert body["position"]["code"] == f"{pc}_2"
+    assert body["position"]["position_catalog_code"] == pc
+    assert pc in body.get("already_exists_codes", [])
+    assert "Уже есть" in (body.get("message") or "")
+    assert pc in body["message"]
+
+
+def test_clone_local_position_uses_numeric_suffix_not_copy(client):
+    r = client.post(
+        "/api/clients",
+        json={"code": "cc_pos_cl", "name": "cc_pos_cl", "status": "active"},
+    )
+    assert r.status_code == 200, r.text
+    cid = r.json()["id"]
+    for unit_code in ("company", "HR"):
+        r_ou = client.post(
+            "/api/org-units/from-template-node",
+            json={"client_id": cid, "template_unit_code": unit_code, "template_code": "default"},
+        )
+        assert r_ou.status_code == 201, r_ou.text
+    hr_id = r_ou.json()["id"]
+
+    cat = client.get("/api/position-catalog", params={"limit": 1}).json()["items"][0]
+    pc = cat["position_code"]
+    r_pos = client.post(
+        "/api/catalog-copy/position",
+        json={
+            "mode": "global_to_local",
+            "source_template_code": "default",
+            "source_position_code": pc,
+            "client_id": cid,
+            "org_unit_id": hr_id,
+        },
+    )
+    assert r_pos.status_code == 201, r_pos.text
+    pos_id = r_pos.json()["position"]["id"]
+
+    r_clone = client.post(f"/api/positions/{pos_id}/clone", json={})
+    assert r_clone.status_code == 201, r_clone.text
+    body = r_clone.json()
+    assert body["position"]["code"] == f"{pc}_2"
+    assert body["position"]["name"] == cat["position_name_ru"]
+    assert "Копия" not in body["position"]["name"]
+    assert "_COPY" not in body["position"]["code"]
+    assert "Уже есть" in (body.get("message") or "")
+
+
+def test_export_local_kpis_and_skills_excel(client):
+    r = client.post(
+        "/api/clients",
+        json={"code": "cc_xlsx", "name": "cc_xlsx", "status": "active"},
+    )
+    assert r.status_code == 200, r.text
+    cid = r.json()["id"]
+    r_kpi = client.get("/api/client-kpis/export/excel", params={"client_id": cid})
+    assert r_kpi.status_code == 200, r_kpi.text
+    assert "spreadsheet" in (r_kpi.headers.get("content-type") or "")
+    r_sk = client.get(
+        "/api/skill-assessment/catalog/competency-matrix/export/excel",
+        params={"client_id": cid},
+    )
+    assert r_sk.status_code == 200, r_sk.text
+    assert "spreadsheet" in (r_sk.headers.get("content-type") or "")
+
+
 def test_org_unit_from_template_node_empty_client(client):
     r = client.post(
         "/api/clients",
