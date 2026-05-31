@@ -7,8 +7,10 @@
   <title>Типовые KPI — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
-  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-2"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
+  <script src="/static/shared/catalog-row-actions.js?v=cra-1"></script>
+  <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
@@ -95,6 +97,10 @@
           <button type="button" class="btn btn-primary" id="btnAdd">+ Добавить</button>
         </div>
         <p id="globalEditTemplateHint" class="meta"></p>
+        <div class="catalog-filter-bar">
+          <label for="filterPositionSearch">Должность</label>
+          <input type="search" id="filterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
+        </div>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
@@ -173,6 +179,13 @@
     let templateCode = window.GlobalTemplateContext.getGlobalEditTemplateCode('default');
     /** Кэш справочника должностей (с primary_dept_type_code) для фильтра в шапке таблицы */
     let positionsCatalog = [];
+    let positionNameMap = {};
+
+    function rebuildPositionNameMap() {
+      positionNameMap = window.CatalogPositionSearch
+        ? CatalogPositionSearch.buildPositionNameMap(positionsCatalog)
+        : {};
+    }
 
     async function loadTemplatesList() {
       try {
@@ -232,6 +245,7 @@
     async function loadPositionsCatalog() {
       try {
         positionsCatalog = await api('GET', '/regulations/positions/list?' + tplParam()) || [];
+        rebuildPositionNameMap();
       } catch (_) {
         positionsCatalog = [];
       }
@@ -264,7 +278,13 @@
         if (pos) qs += '&position_code=' + encodeURIComponent(pos);
         const data = await api('GET', '/kpi-templates?' + qs);
         items = data.items || [];
-        const parts = ['Записей: ' + (data.total ?? items.length)];
+        const posQ = ($('filterPositionSearch') && $('filterPositionSearch').value.trim()) || '';
+        if (posQ && window.CatalogPositionSearch) {
+          items = items.filter((row) => CatalogPositionSearch.matchesPositionKeyword(
+            positionNameMap, row.position_code, posQ, [row.position_name_ru]
+          ));
+        }
+        const parts = ['Записей: ' + items.length];
         if (dept) parts.push('отделение: ' + dept);
         if (pos) parts.push('должность: ' + pos);
         $('listMeta').textContent = parts.join(' · ');
@@ -274,28 +294,17 @@
           const tr = document.createElement('tr');
           const tgt = row.default_target != null ? String(row.default_target) : '—';
           const dDept = row.primary_dept_type_code ? escapeHtml(row.primary_dept_type_code) : '—';
-          const dPos = row.position_code
-            ? (row.position_name_ru ? escapeHtml(row.position_name_ru) + ' <code>' + escapeHtml(row.position_code) + '</code>' : '<code>' + escapeHtml(row.position_code) + '</code>')
+          const posName = row.position_code
+            ? escapeHtml(CatalogPositionSearch ? CatalogPositionSearch.positionDisplayName(positionNameMap, row.position_code, row.position_name_ru || row.position_code) : (row.position_name_ru || row.position_code))
             : '—';
-          tr.innerHTML = '<td title="' + escapeHtml(row.kpi_code) + '"><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td class="row-actions">' +
-            '<button type="button" class="btn btn-secondary btn-edit" data-code="' + escapeHtml(row.kpi_code) + '">Изменить</button>' +
-            '<button type="button" class="btn btn-secondary btn-clone" data-code="' + escapeHtml(row.kpi_code) + '">Копировать</button>' +
-            '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + escapeHtml(row.kpi_code) + '" title="В другой шаблон">В шаблон</button>' +
-            '<button type="button" class="btn btn-danger btn-del" data-code="' + escapeHtml(row.kpi_code) + '">Удалить</button></td>';
+          const dPos = row.position_code
+            ? posName + ' <code>' + escapeHtml(row.position_code) + '</code>'
+            : '—';
+          tr.innerHTML = '<td title="' + escapeHtml(row.kpi_code) + '"><code>' + escapeHtml(row.kpi_code) + '</code></td><td>' + escapeHtml(row.kpi_name) + '</td><td>' + dDept + '</td><td>' + dPos + '</td><td>' + escapeHtml(row.unit) + '</td><td>' + escapeHtml(row.period_type) + '</td><td>' + tgt + '</td><td>' + (row.is_active ? 'да' : 'нет') + '</td><td>' +
+            CatalogRowActions.preset('globalCatalog', { code: row.kpi_code }, { rowKey: row.kpi_code, size: 'sm' }) +
+            '</td>';
           tb.appendChild(tr);
         }
-        tb.querySelectorAll('.btn-edit').forEach((b) => b.onclick = () => openEdit(b.dataset.code));
-        tb.querySelectorAll('.btn-clone').forEach((b) => b.onclick = () => cloneRow(b.dataset.code));
-        tb.querySelectorAll('.btn-copy-tpl').forEach((b) => b.onclick = () => {
-          CatalogCopy.open({
-            entity: 'kpi',
-            mode: 'global_to_global',
-            sourceTemplateCode: templateCode,
-            sourceCode: b.dataset.code,
-            onSuccess: () => load(),
-          });
-        });
-        tb.querySelectorAll('.btn-del').forEach((b) => b.onclick = () => delRow(b.dataset.code));
       } catch (e) {
         $('listErr').textContent = e.message;
         $('listErr').classList.remove('hidden');
@@ -393,7 +402,11 @@
     }
 
     async function delRow(code) {
-      if (!confirm('Удалить шаблон KPI?')) return;
+      const row = items.find((x) => x.kpi_code === code);
+      const title = row && row.kpi_name
+        ? '«' + row.kpi_name + '» (' + code + ')'
+        : '«' + code + '»';
+      if (!confirm('Удалить шаблон KPI ' + title + '?')) return;
       $('listErr').classList.add('hidden');
       try {
         await api('DELETE', '/kpi-templates/' + encodeURIComponent(code) + '?' + tplParam());
@@ -409,8 +422,31 @@
       load();
     };
     $('filterPositionCol').onchange = () => load();
+    if (window.CatalogPositionSearch) {
+      CatalogPositionSearch.wireSearch($('filterPositionSearch'), load);
+    }
 
     loadTemplatesList();
+
+    (function bindKpiRowActions() {
+      const tb = $('tbody');
+      if (!tb || tb._craBound || !window.CatalogRowActions) return;
+      CatalogRowActions.bind(tb, (action, wrap) => {
+        const code = wrap.dataset.code;
+        if (action === 'edit') openEdit(code);
+        else if (action === 'clone') cloneRow(code);
+        else if (action === 'copy-to-template') {
+          CatalogCopy.open({
+            entity: 'kpi',
+            mode: 'global_to_global',
+            sourceTemplateCode: templateCode,
+            sourceCode: code,
+            onSuccess: () => load(),
+          });
+        } else if (action === 'delete') delRow(code);
+      });
+      tb._craBound = true;
+    })();
   </script>
 </body>
 </html>

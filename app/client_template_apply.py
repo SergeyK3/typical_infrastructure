@@ -16,6 +16,8 @@ from app.position_deploy import (
     normalize_template_position_dept_links,
     select_position_dept_links_for_deploy,
 )
+from app.client_org_segment_sync import sync_segments_from_template
+from app.org_unit_ops import resolve_org_unit_effective_segment
 from app.template_org_resolve import resolve_template_structure
 from app.utils import new_id32
 
@@ -147,6 +149,8 @@ def apply_template_to_client(
             if key in existing_positions:
                 result.positions_skipped += 1
                 continue
+            ou = db.get(OrgUnit, ou_id)
+            segment = resolve_org_unit_effective_segment(db, ou) if ou else None
             pos = Position(
                 id=new_id32(),
                 client_id=client_id,
@@ -160,6 +164,7 @@ def apply_template_to_client(
                 position_level=p.get("position_level"),
                 is_managerial=p.get("is_managerial"),
                 is_detached=True,
+                segment_code=segment,
             )
             db.add(pos)
             db.flush()
@@ -176,6 +181,14 @@ def apply_template_to_client(
             db, client_id, template_code=template_code
         )
         result.positions_removed = dedup_stats.positions_removed
+
+    if include_org_units:
+        sync_segments_from_template(
+            db,
+            client_id,
+            template_code,
+            update_positions=include_positions,
+        )
 
     db.flush()
     return result

@@ -512,6 +512,39 @@ def seed_template_org_units(db: Session) -> int:
     return changed
 
 
+HOSP_SEGMENT_CODE_SEEDS: list[tuple[str, str, str, int]] = [
+    ("hosp", "CLINIC", "Клиника (стационар)", 10),
+    ("hosp", "PARACLINIC", "Параклиника", 20),
+    ("hosp", "POLYCLINIC", "Поликлиника", 30),
+    ("hosp", "AUXILIARY", "Вспомогательные службы", 40),
+    ("hosp", "SERVICE", "Сервисные подразделения", 50),
+    ("hosp", "ADMINISTRATIVE", "Управление", 60),
+]
+
+
+def seed_template_segment_codes(db: Session) -> int:
+    """Словарь segment_code для шаблонов (medical hosp — базовый набор)."""
+    from app.models import TemplateSegmentCode
+
+    created = 0
+    for template_code, code, label_ru, sort_order in HOSP_SEGMENT_CODE_SEEDS:
+        if db.get(TemplateSegmentCode, (template_code, code)):
+            continue
+        db.add(
+            TemplateSegmentCode(
+                template_code=template_code,
+                code=code,
+                label_ru=label_ru,
+                sort_order=sort_order,
+                is_active=True,
+            )
+        )
+        created += 1
+    if created:
+        db.commit()
+    return created
+
+
 def seed_all(db: Session) -> dict[str, int]:
     return {
         "roles": seed_roles(db),

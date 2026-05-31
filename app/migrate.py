@@ -987,6 +987,49 @@ def migrate_template_org_units_log_group() -> None:
         conn.commit()
 
 
+def migrate_segment_code_fields() -> None:
+    """segment_code на типовой оргструктуре, клиентских org_units и должностях."""
+    with engine.connect() as conn:
+        if _table_exists("template_org_units") and not _column_exists("template_org_units", "segment_code"):
+            conn.execute(text("ALTER TABLE template_org_units ADD COLUMN segment_code VARCHAR(64) NULL"))
+        if _table_exists("org_units") and not _column_exists("org_units", "segment_code"):
+            conn.execute(text("ALTER TABLE org_units ADD COLUMN segment_code VARCHAR(64) NULL"))
+        if _table_exists("positions") and not _column_exists("positions", "segment_code"):
+            conn.execute(text("ALTER TABLE positions ADD COLUMN segment_code VARCHAR(64) NULL"))
+        conn.commit()
+
+
+def migrate_template_segment_codes_table() -> None:
+    """Словарь segment_code по шаблонам."""
+    if _table_exists("template_segment_codes"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE template_segment_codes (
+                    template_code VARCHAR(64) NOT NULL,
+                    code VARCHAR(64) NOT NULL,
+                    label_ru VARCHAR(128) NOT NULL,
+                    label_en VARCHAR(128) NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (template_code, code)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_template_segment_codes_tpl "
+                "ON template_segment_codes (template_code)"
+            )
+        )
+        conn.commit()
+
+
 def migrate_position_catalog_sort_order() -> None:
     """Индекс сортировки для типовых должностей в глобальном каталоге."""
     if not _table_exists("position_catalog"):
@@ -1078,6 +1121,18 @@ def migrate_client_standalone_kpis() -> None:
         conn.commit()
 
 
+def migrate_client_kpi_is_active() -> None:
+    for table in ("client_regulation_kpis", "client_standalone_kpis"):
+        if not _table_exists(table):
+            continue
+        if not _column_exists(table, "is_active"):
+            with engine.connect() as conn:
+                conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+                )
+                conn.commit()
+
+
 def migrate_backfill_position_name_en() -> None:
     """Заполнить position_name_en в каталоге должностей (default, hosp)."""
     if not _table_exists("position_catalog"):
@@ -1122,8 +1177,11 @@ def run_migrations() -> None:
     migrate_position_regulations_template_scope()
     migrate_competency_skill_definitions_template_scope()
     migrate_template_org_units_log_group()
+    migrate_segment_code_fields()
+    migrate_template_segment_codes_table()
     migrate_position_catalog_sort_order()
     migrate_org_unit_name_casing()
     migrate_normalize_position_dept_links()
     migrate_client_standalone_kpis()
+    migrate_client_kpi_is_active()
     migrate_backfill_position_name_en()

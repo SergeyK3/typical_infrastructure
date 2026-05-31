@@ -24,6 +24,12 @@ from app.models import (
 )
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.catalog_copy_ops import clone_regulation
+from app.regulation_ops import (
+    ensure_regulation_position_code,
+    ensure_regulation_slot_available,
+    rename_regulation_code,
+)
+from app.position_catalog_ops import get_primary_dept_type_code, is_template_dept_or_segment_code
 from app.schemas import (
     ListEnvelope,
     PositionRegulationCreate,
@@ -38,6 +44,12 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/regulations", tags=["regulations"])
+
+
+def _regulation_out(db: Session, row: PositionRegulation) -> PositionRegulationOut:
+    base = PositionRegulationOut.model_validate(row)
+    catalog_dept = get_primary_dept_type_code(db, row.template_code, row.position_code)
+    return base.model_copy(update={"catalog_dept_type_code": catalog_dept})
 
 
 def _id(prefix: str, code: str) -> str:
@@ -99,7 +111,7 @@ def list_regulations(
         .offset(offset)
     ).all()
     return ListEnvelope[PositionRegulationOut](
-        items=[PositionRegulationOut.model_validate(r) for r in rows],
+        items=[_regulation_out(db, r) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -112,18 +124,39 @@ def list_dept_types_for_regulations(
     template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
     db: Session = Depends(get_db),
 ) -> list[str]:
-    """Коды типов подразделений, встречающиеся в регламентах шаблона (для фильтра в UI)."""
-    rows = db.scalars(
-        select(PositionRegulation.dept_type_code)
-        .where(
+    """Коды типов подразделения для фильтра: регламенты, оргструктура, справочник должностей, сегменты."""
+    from app.models import TemplateSegmentCode
+
+    codes: set[str] = set()
+    for row in db.scalars(
+        select(PositionRegulation.dept_type_code).where(
             PositionRegulation.template_code == template_code,
             PositionRegulation.dept_type_code.isnot(None),
             PositionRegulation.dept_type_code != "",
         )
-        .distinct()
-        .order_by(PositionRegulation.dept_type_code.asc())
-    ).all()
-    return list(rows)
+    ).all():
+        if row:
+            codes.add(row)
+    for row in db.scalars(
+        select(TemplateOrgUnitRow.code).where(
+            TemplateOrgUnitRow.template_code == template_code,
+            TemplateOrgUnitRow.unit_type == "department",
+        )
+    ).all():
+        if row:
+            codes.add(row)
+    for row in db.scalars(
+        select(TemplateSegmentCode.code).where(TemplateSegmentCode.template_code == template_code)
+    ).all():
+        if row:
+            codes.add(row)
+    for pc in db.scalars(
+        select(PositionCatalog.position_code).where(PositionCatalog.template_code == template_code)
+    ).all():
+        dept = get_primary_dept_type_code(db, template_code, pc)
+        if dept:
+            codes.add(dept)
+    return sorted(codes)
 
 
 @router.get("/kpi-templates/list", response_model=list[dict])
@@ -355,8 +388,9 @@ def get_regulation(regulation_code: str, db: Session = Depends(get_db)) -> Posit
         .where(RegulationInstruction.regulation_code == regulation_code)
         .order_by(RegulationInstruction.sort_order)
     ).all()
+    base = _regulation_out(db, obj)
     return PositionRegulationDetailOut(
-        **PositionRegulationOut.model_validate(obj).model_dump(),
+        **base.model_dump(),
         kpis=[RegulationKpiOut.model_validate(k) for k in kpis],
         instructions=[RegulationInstructionOut.model_validate(i) for i in instructions],
     )
@@ -403,12 +437,13 @@ def create_regulation(body: PositionRegulationCreate, db: Session = Depends(get_
                 ),
             },
         )
+    _ensure_dept_type_code(db, body.template_code, body.dept_type_code)
     obj = PositionRegulation(
         id=body.id or _id("regulation", body.regulation_code),
         template_code=body.template_code,
         regulation_code=body.regulation_code,
         position_code=body.position_code,
-        dept_type_code=body.dept_type_code,
+        dept_type_code=body.dept_type_code.strip(),
         regulation_name=body.regulation_name,
         goal_summary=body.goal_summary,
         ckp_short=body.ckp_short,
@@ -426,24 +461,40 @@ def create_regulation(body: PositionRegulationCreate, db: Session = Depends(get_
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return PositionRegulationOut.model_validate(obj)
+    return _regulation_out(db, obj)
 
 
 def _ensure_dept_type_code(db: Session, template_code: str, dept_type_code: str) -> None:
     code = dept_type_code.strip()
     if not code:
         raise HTTPException(status_code=422, detail="invalid_dept_type_code")
-    ok = db.scalar(
-        select(func.count())
-        .select_from(TemplateOrgUnitRow)
-        .where(
-            TemplateOrgUnitRow.template_code == template_code,
-            TemplateOrgUnitRow.code == code,
-            TemplateOrgUnitRow.unit_type == "department",
-        )
-    )
-    if not ok:
+    if not is_template_dept_or_segment_code(db, template_code, code):
         raise HTTPException(status_code=400, detail="dept_type_not_found")
+
+
+@router.post("/sync-dept-from-catalog")
+def sync_regulation_dept_from_catalog(
+    template_code: str = Query(DEFAULT_TEMPLATE_CODE, min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Подтянуть dept_type_code из справочника типовых должностей во все регламенты шаблона."""
+    rows = db.scalars(
+        select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+    ).all()
+    updated = 0
+    skipped = 0
+    for row in rows:
+        catalog_dept = get_primary_dept_type_code(db, template_code, row.position_code)
+        if not catalog_dept:
+            skipped += 1
+            continue
+        if row.dept_type_code == catalog_dept:
+            continue
+        _ensure_dept_type_code(db, template_code, catalog_dept)
+        row.dept_type_code = catalog_dept
+        updated += 1
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "total": len(rows)}
 
 
 @router.post("/{regulation_code}/clone", response_model=RegulationCloneOut, status_code=201)
@@ -478,15 +529,34 @@ def patch_regulation(
     if not obj:
         raise HTTPException(status_code=404, detail="regulation_not_found")
     data = body.model_dump(exclude_unset=True)
+    new_reg_code = data.pop("regulation_code", None)
+    new_pos = data.pop("position_code", None)
+    new_ver = data.pop("version_no", None)
     dept = data.pop("dept_type_code", None)
+
+    pos = ensure_regulation_position_code(db, obj.template_code, new_pos) if new_pos is not None else obj.position_code
+    ver = new_ver.strip() if new_ver is not None else obj.version_no
+    dept_val = dept.strip() if dept is not None else obj.dept_type_code
     if dept is not None:
-        _ensure_dept_type_code(db, obj.template_code, dept)
-        obj.dept_type_code = dept.strip()
+        _ensure_dept_type_code(db, obj.template_code, dept_val)
+
+    ensure_regulation_slot_available(
+        db, obj.template_code, pos, dept_val, ver, exclude_regulation_code=obj.regulation_code
+    )
+
+    if new_reg_code is not None:
+        rename_regulation_code(db, obj, new_reg_code)
+    if new_pos is not None:
+        obj.position_code = pos
+    if dept is not None:
+        obj.dept_type_code = dept_val
+    if new_ver is not None:
+        obj.version_no = ver
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
-    return PositionRegulationOut.model_validate(obj)
+    return _regulation_out(db, obj)
 
 
 @router.delete("/{regulation_code}", status_code=204)

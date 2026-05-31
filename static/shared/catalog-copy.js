@@ -74,7 +74,7 @@
 
   /**
    * @param {object} cfg
-   * @param {'regulation'|'position'|'kpi'|'skills'|'skill'|'orgUnit'} cfg.entity
+   * @param {'regulation'|'position'|'kpi'|'skills'|'skill'|'orgUnit'|'templateOrgUnit'} cfg.entity
    * @param {'global_to_global'|'global_to_local'|'local_to_global'} cfg.mode
    * @param {string} [cfg.sourceTemplateCode]
    * @param {string} [cfg.sourceCode] - regulation_code / position_code / kpi_code
@@ -97,6 +97,8 @@
 
     title.textContent = entity === 'skills'
       ? 'Скопировать типовые навыки в организацию'
+      : entity === 'templateOrgUnit'
+        ? 'Копировать узел в другой шаблон'
       : entity === 'orgUnit'
         ? 'Копировать подразделение в глобальный шаблон'
       : entity === 'skill'
@@ -143,6 +145,13 @@
         ? '<p class="meta" style="margin:0.5rem 0 0 0;line-height:1.45;">' +
           '<strong>Код узла:</strong> <code>' + escapeHtml(cfg.orgUnitCode || '') + '</code> · ' +
           '<strong>тип:</strong> ' + escapeHtml(cfg.orgUnitType || '') +
+          '</p>'
+        : '') +
+      (entity === 'templateOrgUnit'
+        ? '<p class="meta" style="margin:0.5rem 0 0 0;line-height:1.45;">' +
+          '<strong>Узел:</strong> <code>' + escapeHtml(cfg.orgUnitCode || '') + '</code>' +
+          (cfg.orgUnitName ? ' — ' + escapeHtml(cfg.orgUnitName) : '') +
+          (cfg.orgUnitType ? ' · <strong>тип:</strong> ' + escapeHtml(cfg.orgUnitType) : '') +
           '</p>'
         : '') +
       (entity === 'position' && mode === 'local_to_global'
@@ -235,6 +244,15 @@
           const targetCode = fields.querySelector('#catalogCopyTargetCode')?.value.trim();
           if (targetCode) payload.target_regulation_code = targetCode;
           response = await api('POST', '/catalog-copy/regulation', payload);
+        } else if (entity === 'templateOrgUnit') {
+          const targetTpl = fields.querySelector('#catalogCopyTargetTpl');
+          response = await api('POST', '/catalog-copy/org-unit', {
+            mode: 'global_to_global',
+            source_template_code: effectiveSourceTpl,
+            target_template_code: targetTpl?.value,
+            source_org_unit_id: cfg.sourceOrgUnitId,
+            target_code: fields.querySelector('#catalogCopyTargetCode')?.value.trim() || null,
+          });
         } else if (entity === 'orgUnit') {
           const targetTpl = fields.querySelector('#catalogCopyTargetTpl');
           response = await api('POST', '/catalog-copy/org-unit', {

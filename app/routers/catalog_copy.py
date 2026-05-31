@@ -15,6 +15,7 @@ from app.catalog_copy_ops import (
     copy_kpi_local_to_global,
     copy_kpi_template_global_to_global,
     copy_org_unit_local_to_global,
+    copy_template_org_unit_global_to_global,
     copy_position_catalog_global_to_global,
     copy_position_local_to_global,
     copy_regulation_global_to_global,
@@ -184,6 +185,27 @@ def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
 
 @router.post("/org-unit", status_code=201)
 def copy_org_unit(body: CatalogCopyOrgUnitIn, db: Session = Depends(get_db)):
+    mode = body.mode.strip()
+    if mode == "global_to_global":
+        if not body.target_template_code:
+            raise HTTPException(status_code=422, detail="target_template_code_required")
+        result = copy_template_org_unit_global_to_global(
+            db,
+            body.source_template_code,
+            body.target_template_code,
+            body.source_org_unit_id.strip(),
+            body.target_code,
+        )
+        db.commit()
+        db.refresh(result.row)
+        return {
+            "row": TemplateOrgUnitOut.model_validate(result.row),
+            "created": result.created,
+        }
+    if mode != "local_to_global":
+        raise HTTPException(status_code=422, detail="invalid_copy_mode")
+    if not body.client_id:
+        raise HTTPException(status_code=422, detail="client_id_required")
     tpl = body.target_template_code or resolve_client_template_code(db, body.client_id.strip())
     if not tpl:
         raise HTTPException(status_code=422, detail="target_template_code_required")

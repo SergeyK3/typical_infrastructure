@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Рабочее пространство — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css?v=ui-theme-20260522">
+  <link rel="stylesheet" href="/static/shared/layout.css?v=catalog-filter-bar-1">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <script src="/static/shared/catalog-copy.js?v=catalog-copy-5"></script>
   <style>
@@ -159,7 +159,8 @@
     .local-skills-table th:nth-child(2), .local-skills-table td:nth-child(2) { width: 10rem; max-width: 10rem; }
     .local-skills-table th:nth-child(3), .local-skills-table td:nth-child(3) { width: 2.4rem; max-width: 2.4rem; text-align: center; }
     .local-skills-table th:nth-child(4), .local-skills-table td:nth-child(4) { width: auto; min-width: 0; }
-    .local-skills-table th:nth-child(5), .local-skills-table td:nth-child(5) {
+    .local-skills-table th:nth-child(5), .local-skills-table td:nth-child(5) { width: 4rem; max-width: 4rem; text-align: center; white-space: nowrap; }
+    .local-skills-table th:nth-child(6), .local-skills-table td:nth-child(6) {
       width: 15.5rem; max-width: 15.5rem; min-width: 15.5rem;
       padding-left: 0.2rem; padding-right: 0.2rem;
     }
@@ -248,6 +249,7 @@
       <div class="org-actions">
         <button class="btn btn-primary" id="btnAddOrg">+ Добавить подразделение</button>
         <button class="btn btn-secondary" id="btnDeployTemplate">Развернуть типовую оргструктуру</button>
+        <button class="btn btn-secondary" id="btnSyncOrgSegments" title="Перенести segment_code из типового шаблона в локальные подразделения и должности">Синхронизировать сегменты</button>
         <button class="btn btn-secondary" id="btnSaveOrgTemplate" title="Сохранить текущую структуру как новый типовой шаблон">Сохранить как шаблон</button>
         <a class="btn btn-secondary" id="exportOrgXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
@@ -279,7 +281,11 @@
         <button class="btn btn-secondary" id="btnDeployTemplatePos">Развернуть типовую оргструктуру</button>
         <a class="btn btn-secondary" id="exportPositionsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
-      <div id="positionsList" style="margin-top: 1rem;"></div>
+      <div class="catalog-filter-bar">
+        <label for="filterLocalPositionNameSearch">Должность</label>
+        <input type="search" id="filterLocalPositionNameSearch" placeholder="Код или название…" title="Поиск по коду, названию, подразделению, сотруднику" autocomplete="off">
+      </div>
+      <div id="positionsList" style="margin-top: 0.25rem;"></div>
     </div>
 
     <!-- Регламенты организации (клиентские копии) -->
@@ -287,7 +293,7 @@
       <h2>Локальные регламенты</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
         Здесь только регламенты <strong>выбранной организации</strong> (копии из <a id="crLinkGlobal" href="/regulations">глобального реестра</a> или созданные вручную).
-        Глобальная страница <code>/regulations</code> — общесистемные шаблоны; эта вкладка — ваши редактируемые карточки.
+        В строке: <strong>Открыть</strong>, <strong>Изменить</strong>, <strong>В шаблон</strong> — без копирования и удаления всей карточки (удаление — внутри открытой карточки при необходимости).
       </p>
       <div class="org-actions" style="flex-wrap: wrap;">
         <button type="button" class="btn btn-primary" id="btnCrCopy">+ Скопировать</button>
@@ -297,6 +303,10 @@
       </div>
       <div class="cr-filter-toolbar">
         <label><input type="checkbox" id="crFilterCurrent" /> Только действующие</label>
+      </div>
+      <div class="catalog-filter-bar">
+        <label for="crFilterPositionSearch">Должность</label>
+        <input type="search" id="crFilterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
       </div>
       <p id="crListMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
       <p id="crNoClient" class="meta hidden" style="margin-top:0.75rem;">Выберите организацию.</p>
@@ -315,11 +325,11 @@
                 <th title="Папка с инструкциями (URL)">Инстр.</th>
                 <th><label class="cr-th-filter">Статус<select id="crFilterStatus" title="Фильтр по статусу">
                   <option value="">— все —</option>
-                  <option value="draft">draft</option>
-                  <option value="on_review">on_review</option>
-                  <option value="approved">approved</option>
-                  <option value="active">active</option>
-                  <option value="archived">archived</option>
+                  <option value="draft">Черновик</option>
+                  <option value="on_review">На согласовании</option>
+                  <option value="approved">Утверждён</option>
+                  <option value="active">Действующий</option>
+                  <option value="archived">Архив</option>
                 </select></label></th>
                 <th></th>
               </tr>
@@ -334,23 +344,31 @@
     <div id="panel-local-kpi" class="panel">
       <h2>Локальные KPI</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
-        KPI организации разворачиваются из типовых KPI как часть локальных регламентов. Здесь показана отдельная выборка KPI без смешивания с карточками регламентов.
-        У KPI из регламента кнопка <strong>«Синхр.»</strong> подтягивает из глобального шаблона только <em>отсутствующие</em> KPI и инструкции; уже существующие не изменяются, устаревшие удаляются вручную.
+        KPI организации разворачиваются из типовых KPI как часть локальных регламентов. Здесь — сводная таблица KPI.
+        Для KPI, привязанного к регламенту: <strong>Открыть</strong> (карточку регламента), <strong>В шаблон</strong> (отправить KPI в глобальный справочник),
+        <strong>Синхронизировать</strong> — подтянуть из глобального регламента только <em>новые</em> строки KPI и инструкций (уже существующие не перезаписываются).
+        KPI «без регламента»: Изменить, В шаблон, Удалить.
       </p>
       <div class="org-actions">
         <button type="button" class="btn btn-primary" id="btnLocalKpiCopy">+ Скопировать регламент</button>
         <button type="button" class="btn btn-primary" id="btnLocalKpiAdd">+ Добавить KPI</button>
         <button type="button" class="btn btn-secondary" id="btnLocalKpiRefresh">Обновить</button>
       </div>
+      <div class="catalog-filter-bar">
+        <label for="localKpiFilterPosition">Должность</label>
+        <input type="search" id="localKpiFilterPosition" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
+      </div>
       <p id="localKpiMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
       <div style="overflow-x:auto;margin-top:0.75rem;">
         <table class="ws-table" id="localKpiTable">
           <thead>
             <tr>
-              <th style="width:18%;">Код KPI</th>
-              <th style="width:14%;">Цель</th>
-              <th style="width:12%;">Период</th>
-              <th style="width:10%;">Вес</th>
+              <th style="width:14%;">Код KPI</th>
+              <th style="width:14%;">Должность</th>
+              <th style="width:10%;">Цель</th>
+              <th style="width:10%;">Период</th>
+              <th style="width:8%;">Вес</th>
+              <th style="width:6%;">Активен</th>
               <th>Локальный регламент</th>
               <th>Регламент</th>
               <th style="width:9rem;"></th>
@@ -365,12 +383,19 @@
     <div id="panel-local-skills" class="panel">
       <h2>Локальные навыки</h2>
       <p class="meta" style="margin: -0.5rem 0 1rem 0; max-width: 52rem; line-height: 1.45;">
-        Навыки разворачиваются из типовой матрицы для тех должностей, которые есть в выбранной организации.
+        Навыки разворачиваются из типовой матрицы для должностей, которые есть в организации.
+        В строке: <strong>Изменить</strong>, <strong>Дублировать</strong> (копия одной строки), <strong>В шаблон</strong>, <strong>Удалить</strong>.
+        Кнопка <strong>«Загрузить из шаблона»</strong> выше таблицы — массовое копирование матрицы из глобального справочника (это не «Синхронизировать» в строке; в навыках синхронизации построчно нет).
       </p>
       <div class="org-actions">
-        <button type="button" class="btn btn-primary" id="btnLocalSkillsCopy">+ Скопировать</button>
+        <button type="button" class="btn btn-primary" id="btnLocalSkillsCopy" title="Скопировать типовую матрицу навыков из глобального шаблона для должностей организации">Загрузить из шаблона</button>
         <button type="button" class="btn btn-secondary" id="btnLocalSkillsRefresh">Обновить</button>
-        <input type="search" id="localSkillsSearch" placeholder="Поиск по должности, коду или навыку" style="min-width: 240px; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" autocomplete="off">
+      </div>
+      <div class="catalog-filter-bar">
+        <label for="localSkillsFilterPosition">Должность</label>
+        <input type="search" id="localSkillsFilterPosition" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
+        <label for="localSkillsFilterSkill">Навык</label>
+        <input type="search" id="localSkillsFilterSkill" placeholder="Название или код…" title="Поиск по названию или коду навыка" autocomplete="off">
       </div>
       <p id="localSkillsMeta" class="meta hidden" style="margin: 0.75rem 0 0.25rem 0;"></p>
       <div style="overflow-x:auto;margin-top:0.75rem;">
@@ -381,6 +406,7 @@
               <th>Должность</th>
               <th>#</th>
               <th>Навык</th>
+              <th>Активен</th>
               <th></th>
             </tr>
           </thead>
@@ -410,6 +436,7 @@
       <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;line-height:1.4;">
         Формулировку навыка меняют в глобальном справочнике или через копию строки с последующей правкой ранга и привязки.
       </p>
+      <label class="check-row"><input type="checkbox" id="localSkillActive" checked> Активен</label>
       <div class="modal-actions">
         <button type="button" class="btn btn-primary" id="btnLocalSkillSave">Сохранить</button>
         <button type="button" class="btn btn-secondary" id="btnLocalSkillCancel">Отмена</button>
@@ -450,6 +477,10 @@
       </div>
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none">
       <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;line-height:1.45;">Импорт: колонки Фамилия, Имя (+ опционально Отчество, Email, телефон, Telegram, код подразделения, код должности). Коды должны совпадать с подразделениями и должностями этой организации.</p>
+      <div class="catalog-filter-bar">
+        <label for="empFilterPositionSearch">Должность</label>
+        <input type="search" id="empFilterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
+      </div>
       <div style="overflow-x:auto;margin-top:0.75rem;">
         <table class="ws-table" id="empTable">
           <thead>
@@ -738,6 +769,9 @@
       <select id="orgParent"><option value="">— Корень —</option></select>
       <label>Тип</label>
       <input type="text" id="orgType" placeholder="department">
+      <label id="lblOrgSegment" class="org-segment-field">Сегмент деятельности</label>
+      <select id="orgSegment" class="org-segment-field"><option value="">— не задан —</option></select>
+      <p class="meta org-segment-field" id="orgSegmentHint">Только для отделений (department).</p>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnOrgSave">Сохранить</button>
         <button class="btn btn-secondary" id="btnOrgCancel">Отмена</button>
@@ -993,17 +1027,17 @@
       <input type="url" id="crEditFolder" style="max-width:none;width:100%;">
       <label>Статус</label>
       <select id="crEditStatus" style="width:100%;max-width:none;">
-        <option value="draft">draft</option>
-        <option value="on_review">on_review</option>
-        <option value="approved">approved</option>
-        <option value="active">active</option>
-        <option value="archived">archived</option>
+        <option value="draft">Черновик</option>
+        <option value="on_review">На согласовании</option>
+        <option value="approved">Утверждён</option>
+        <option value="active">Действующий</option>
+        <option value="archived">Архив</option>
       </select>
       <label>Действует с</label>
       <input type="date" id="crEditFrom" style="max-width:none;width:100%;">
       <label>Действует по</label>
       <input type="date" id="crEditTo" style="max-width:none;width:100%;">
-      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;"><input type="checkbox" id="crEditCurrent"> Действующий</label>
+      <label class="check-row"><input type="checkbox" id="crEditCurrent"> Действующий</label>
       <label>Код владельца (подразделение)</label>
       <input type="text" id="crEditOwner" placeholder="Необязательно" style="max-width:none;width:100%;">
       <label>Заметки</label>
@@ -1043,6 +1077,7 @@
       </select>
       <label>Заметки</label>
       <textarea id="localKpiNotes" rows="2" style="width:100%;max-width:none;"></textarea>
+      <label class="check-row"><input type="checkbox" id="localKpiActive" checked> Активен</label>
       <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;line-height:1.4;">
         KPI без регламента — локальное дополнение организации. Связь с карточками регламентов при необходимости настраивается вручную.
       </p>
@@ -1067,6 +1102,9 @@
       <select id="orgEditParent"><option value="">— Корень —</option></select>
       <label>Тип</label>
       <input type="text" id="orgEditType">
+      <label id="lblOrgEditSegment">Сегмент деятельности</label>
+      <select id="orgEditSegment"><option value="">— не задан —</option></select>
+      <p class="meta" id="orgEditSegmentHint">Только для отделений (department). Секции наследуют сегмент родителя.</p>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnOrgEditSave">Сохранить</button>
         <button class="btn btn-secondary" id="btnOrgEditCancel">Отмена</button>
@@ -1076,7 +1114,9 @@
 
   <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
-  <script src="/static/shared/org-tree.js?v=org-tree-to-global-20260530"></script>
+  <script src="/static/shared/catalog-row-actions.js?v=cra-2"></script>
+  <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script>
     if (window.SidebarRenderer) {
       window.SidebarRenderer.renderWorkspaceSidebar({
@@ -1681,6 +1721,20 @@
       return d.innerHTML;
     }
 
+    const REGULATION_STATUS_RU = {
+      draft: 'Черновик',
+      on_review: 'На согласовании',
+      approved: 'Утверждён',
+      active: 'Действующий',
+      archived: 'Архив',
+    };
+
+    function regulationStatusLabel(status, isCurrent) {
+      if (isCurrent) return 'Действующий';
+      const key = String(status || '').trim();
+      return REGULATION_STATUS_RU[key] || key || '—';
+    }
+
     function renderRegulationUrlCell(url, openTitle, emptyTitle) {
       const href = url && String(url).trim();
       if (href) {
@@ -2242,6 +2296,59 @@
     }
     document.getElementById('btnDeployTemplate').onclick = () => deployTemplate(document.getElementById('btnDeployTemplate'));
     document.getElementById('btnDeployTemplatePos').onclick = () => deployTemplate(document.getElementById('btnDeployTemplatePos'));
+    document.getElementById('btnSyncOrgSegments').onclick = async () => {
+      if (!clientId) return;
+      const btn = document.getElementById('btnSyncOrgSegments');
+      try {
+        btn.disabled = true;
+        const res = await fetchApi(
+          '/org-units/sync-segments-from-template?client_id=' + encodeURIComponent(clientId) + '&update_positions=true',
+          { method: 'POST' }
+        );
+        showWorkspaceToast(
+          'Сегменты синхронизированы: подразделений ' + res.org_units_updated + ', должностей ' + res.positions_updated + '.',
+          'success'
+        );
+        await loadOrgTree();
+        if (document.getElementById('panel-positions').classList.contains('active')) loadPositions();
+      } catch (e) {
+        alert('Ошибка: ' + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    async function loadClientSegmentOptions(selectEl, keepValue) {
+      if (!selectEl) return;
+      const tpl = clientTemplateCode();
+      try {
+        const data = await fetchApi('/template-segment-codes?template_code=' + encodeURIComponent(tpl) + '&limit=200');
+        const items = data.items || [];
+        const prev = keepValue !== undefined ? keepValue : selectEl.value;
+        selectEl.innerHTML = '<option value="">— не задан —</option>' +
+          items.map((s) => '<option value="' + s.code + '">' + s.code + ' — ' + s.label_ru + '</option>').join('');
+        if (prev && [...selectEl.options].some((o) => o.value === prev)) selectEl.value = prev;
+      } catch (_) {}
+    }
+
+    function syncOrgSegmentField(unitType, effectiveSegment, prefix) {
+      const p = prefix || 'orgEdit';
+      const isDept = (unitType || '').trim() === 'department';
+      const ids = prefix === 'orgEdit'
+        ? ['lblOrgEditSegment', 'orgEditSegment', 'orgEditSegmentHint']
+        : ['lblOrgSegment', 'orgSegment', 'orgSegmentHint'];
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', !isDept);
+      });
+      const hint = document.getElementById(prefix === 'orgEdit' ? 'orgEditSegmentHint' : 'orgSegmentHint');
+      if (hint && !isDept && effectiveSegment) {
+        hint.classList.remove('hidden');
+        hint.textContent = 'Секция наследует сегмент «' + effectiveSegment + '» от родительского отделения.';
+      } else if (hint && isDept) {
+        hint.textContent = 'Только для отделений (department).';
+      }
+    }
 
     document.getElementById('btnOrgViewTable').onclick = () => setOrgViewMode('table');
     document.getElementById('btnOrgViewTree').onclick = () => setOrgViewMode('tree');
@@ -2251,13 +2358,15 @@
       if (orgViewMode === 'table') renderOrgView();
     };
 
-    document.getElementById('btnAddOrg').onclick = () => {
+    document.getElementById('btnAddOrg').onclick = async () => {
       fillOrgSelect(document.getElementById('orgParent'));
       const company = orgUnits.find(function (u) { return u.code === 'company' || u.unit_type === 'company'; });
       document.getElementById('orgCode').value = '';
       document.getElementById('orgName').value = '';
       document.getElementById('orgType').value = 'department';
       if (company) document.getElementById('orgParent').value = company.id;
+      await loadClientSegmentOptions(document.getElementById('orgSegment'), '');
+      syncOrgSegmentField('department', '', 'org');
       showErr(document.getElementById('modalOrgErr'), '');
       document.getElementById('modalOrg').classList.add('show');
     };
@@ -2305,11 +2414,15 @@
       const unitType = document.getElementById('orgType').value.trim() || 'department';
       const errEl = document.getElementById('modalOrgErr');
       if (!code || !name) { showErr(errEl, 'Заполните код и название'); return; }
+      const body = { client_id: clientId, code, name, parent_id: parentId, unit_type: unitType };
+      if (unitType === 'department') {
+        body.segment_code = document.getElementById('orgSegment').value.trim() || null;
+      }
       try {
         await fetchApi('/org-units', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: clientId, code, name, parent_id: parentId, unit_type: unitType })
+          body: JSON.stringify(body)
         });
         document.getElementById('modalOrg').classList.remove('show');
         loadOrgTree();
@@ -2333,6 +2446,18 @@
         const opt = document.getElementById('orgEditParent').options[i];
         if (opt.value === (u.parent_id || '')) { opt.selected = true; break; }
       }
+      loadClientSegmentOptions(document.getElementById('orgEditSegment'), u.segment_code || '').then(() => {
+        const seg = u.segment_code || '';
+        if (seg && ![...document.getElementById('orgEditSegment').options].some((o) => o.value === seg)) {
+          const opt = document.createElement('option');
+          opt.value = seg;
+          opt.textContent = seg + ' (сохранённый)';
+          opt.selected = true;
+          document.getElementById('orgEditSegment').appendChild(opt);
+        }
+        document.getElementById('orgEditSegment').value = seg;
+      });
+      syncOrgSegmentField(u.unit_type, u.effective_segment_code || '', 'orgEdit');
       showErr(document.getElementById('modalOrgEditErr'), '');
       document.getElementById('modalOrgEdit').classList.add('show');
     }
@@ -2345,11 +2470,15 @@
       const unitType = document.getElementById('orgEditType').value.trim() || 'department';
       const errEl = document.getElementById('modalOrgEditErr');
       if (!code || !name) { showErr(errEl, 'Заполните код и название'); return; }
+      const body = { code, name, parent_id: parentId, unit_type: unitType };
+      if (unitType === 'department') {
+        body.segment_code = document.getElementById('orgEditSegment').value.trim() || null;
+      }
       try {
         await fetchApi('/org-units/' + id, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, name, parent_id: parentId, unit_type: unitType })
+          body: JSON.stringify(body)
         });
         document.getElementById('modalOrgEdit').classList.remove('show');
         loadOrgTree();
@@ -2422,45 +2551,99 @@
       document.getElementById(prefix + 'Active').checked = true;
     }
 
-    async function loadPositions() {
-      await loadEmployeesForSelect();
+    let positionsCache = [];
+    let wsGlobalPositionNameMap = {};
+    let localKpiRowsCache = [];
+
+    function findLocalPositionByCode(code) {
+      const q = String(code || '').trim().toLowerCase();
+      if (!q) return null;
+      return positionsCache.find((p) => {
+        const c = String(p.code || '').trim().toLowerCase();
+        const cat = String(p.position_catalog_code || '').trim().toLowerCase();
+        return c === q || cat === q;
+      }) || null;
+    }
+
+    function wsPositionExtraFields(code) {
+      const local = findLocalPositionByCode(code);
+      return local && local.name ? [local.name] : [];
+    }
+
+    function wsPositionDisplayName(code) {
+      const local = findLocalPositionByCode(code);
+      if (local && local.name) return local.name;
+      if (window.CatalogPositionSearch) {
+        return CatalogPositionSearch.positionDisplayName(wsGlobalPositionNameMap, code, code || '—');
+      }
+      return code || '—';
+    }
+
+    function wsPositionCellHtml(code) {
+      const c = String(code || '').trim();
+      if (!c) return '<td class="meta">—</td>';
+      const name = wsPositionDisplayName(c);
+      if (name && name !== c) {
+        return '<td class="td-ellipsis" title="' + escapeHtml(name + ' (' + c + ')') + '">' + escapeHtml(name) + '</td>';
+      }
+      return '<td><code>' + escapeHtml(c) + '</code></td>';
+    }
+
+    function wsMatchesPositionKeyword(code, query) {
+      if (!window.CatalogPositionSearch) return true;
+      return CatalogPositionSearch.matchesPositionKeyword(
+        wsGlobalPositionNameMap,
+        code,
+        query,
+        wsPositionExtraFields(code)
+      );
+    }
+
+    function renderPositions() {
       const el = document.getElementById('positionsList');
-      try {
-        const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
-        const items = data.items || [];
-        positionsCache = items;
-        if (!items.length) {
-          el.innerHTML = '<div class="empty-state"><p class="empty-message">Нет должностей.</p><p class="empty-hint">Нажмите «Развернуть типовую оргструктуру» — создастся дерево подразделений и типовые должности.</p></div>';
-          return;
-        }
-        el.innerHTML = '<table><thead><tr><th>Код</th><th>Название</th><th>Подразделение</th><th>Сотрудник</th><th></th></tr></thead><tbody>' +
-          items.map(p => {
-            const ou = orgUnits.find(x => x.id === p.org_unit_id);
-            const emp = employeesAllCache.find(x => x.position_id === p.id);
-            const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
-            return '<tr><td>' + p.code + '</td><td>' + p.name + '</td><td>' + (ou ? ou.code : p.org_unit_id) + '</td><td>' + empName + '</td><td class="row-actions"><button class="btn btn-sm btn-primary" data-assign-pos="' + p.id + '">Назначить</button><button class="btn btn-sm btn-secondary" data-edit-pos="' + p.id + '">Изменить</button><button class="btn btn-sm btn-secondary" data-clone-pos="' + p.id + '" title="Сделать копию">Копир.</button><button class="btn btn-sm btn-secondary" data-to-global-pos="' + p.id + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button><button class="btn btn-sm btn-danger" data-del-pos="' + p.id + '">Удалить</button></td></tr>';
-          }).join('') + '</tbody></table>';
-        el.querySelectorAll('[data-assign-pos]').forEach(btn => { btn.onclick = () => openAssignModal(btn.dataset.assignPos); });
-        el.querySelectorAll('[data-edit-pos]').forEach(btn => { btn.onclick = () => openEditPosition(btn.dataset.editPos); });
-        el.querySelectorAll('[data-clone-pos]').forEach((btn) => {
-          btn.onclick = async () => {
-            try {
-              const res = await fetchApi('/positions/' + encodeURIComponent(btn.dataset.clonePos) + '/clone', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name_suffix: 'Копия' }),
-              });
+      const items = positionsCache || [];
+      const nameQ = (document.getElementById('filterLocalPositionNameSearch')?.value || '').trim();
+      const filtered = items.filter((p) => {
+        if (!nameQ) return true;
+        const ou = orgUnits.find((x) => x.id === p.org_unit_id);
+        const emp = employeesAllCache.find((x) => x.position_id === p.id);
+        const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '';
+        return window.CatalogPositionSearch
+          ? CatalogPositionSearch.matchesAnyKeyword(
+            [p.code, p.name, ou ? ou.code : '', ou ? ou.name : '', empName],
+            nameQ
+          )
+          : true;
+      });
+      if (!items.length) {
+        el.innerHTML = '<div class="empty-state"><p class="empty-message">Нет должностей.</p><p class="empty-hint">Нажмите «Развернуть типовую оргструктуру» — создастся дерево подразделений и типовые должности.</p></div>';
+        return;
+      }
+      el.innerHTML = '<table><thead><tr><th>Код</th><th>Название</th><th>Подразделение</th><th>Сотрудник</th><th>Активна</th><th></th></tr></thead><tbody>' +
+        filtered.map((p) => {
+          const ou = orgUnits.find((x) => x.id === p.org_unit_id);
+          const emp = employeesAllCache.find((x) => x.position_id === p.id);
+          const empName = emp ? [emp.last_name, emp.first_name].filter(Boolean).join(' ') : '—';
+          return '<tr><td>' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(ou ? ou.code : p.org_unit_id) + '</td><td>' + escapeHtml(empName) + '</td><td>' + (p.is_active !== false ? 'да' : 'нет') + '</td><td>' +
+            CatalogRowActions.preset('localPosition', { id: p.id }, { rowKey: p.id, size: 'sm' }) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+      if (!el._craBound && window.CatalogRowActions) {
+        CatalogRowActions.bind(el, (action, wrap) => {
+          const id = wrap.dataset.id;
+          if (action === 'assign') openAssignModal(id);
+          else if (action === 'edit') openEditPosition(id);
+          else if (action === 'clone') {
+            fetchApi('/positions/' + encodeURIComponent(id) + '/clone', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name_suffix: 'Копия' }),
+            }).then(async (res) => {
               await loadPositionsForSelect();
               await loadPositions();
               showWorkspaceToast('Создана должность «' + res.name + '» (' + res.code + ')', 'success');
-            } catch (e) {
-              showWorkspaceToast(e.message, 'error');
-            }
-          };
-        });
-        el.querySelectorAll('[data-to-global-pos]').forEach((btn) => {
-          btn.onclick = () => {
-            const p = positionsCache.find((x) => x.id === btn.dataset.toGlobalPos);
+            }).catch((e) => showWorkspaceToast(e.message, 'error'));
+          } else if (action === 'to-global') {
+            const p = positionsCache.find((x) => x.id === id);
             if (!p) return;
             openLocalToGlobalCopy({
               entity: 'position',
@@ -2469,9 +2652,19 @@
               sourceName: p.name,
               onSuccess: (res) => onLocalToGlobalSuccess(res, 'Должность'),
             });
-          };
+          } else if (action === 'delete') deletePosition(id);
         });
-        el.querySelectorAll('[data-del-pos]').forEach(btn => { btn.onclick = () => deletePosition(btn.dataset.delPos); });
+        el._craBound = true;
+      }
+    }
+
+    async function loadPositions() {
+      await loadEmployeesForSelect();
+      const el = document.getElementById('positionsList');
+      try {
+        const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
+        positionsCache = data.items || [];
+        renderPositions();
       } catch (e) {
         el.innerHTML = '<p class="err">' + e.message + '</p>';
       }
@@ -2666,6 +2859,16 @@
           const flNorm = fl.toLowerCase();
           items = items.filter((e) => String(e.last_name || '').toLowerCase().includes(flNorm));
         }
+        const posQ = (document.getElementById('empFilterPositionSearch')?.value || '').trim();
+        if (posQ) {
+          items = items.filter((e) => {
+            const pos = positionsCache.find((x) => x.id === e.position_id);
+            const fields = pos ? [pos.code, pos.name, pos.position_catalog_code] : [];
+            return window.CatalogPositionSearch
+              ? CatalogPositionSearch.matchesAnyKeyword(fields, posQ)
+              : fields.some((v) => String(v || '').toLowerCase().includes(posQ.toLowerCase()));
+          });
+        }
         const sortMode = (document.getElementById('empSort') && document.getElementById('empSort').value) || 'created_desc';
         const fullNameOf = (e) => [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
         const orgLabelOf = (e) => {
@@ -2707,17 +2910,22 @@
             '<td class="td-ellipsis">' + escapeHtml(ou ? ou.code : '') + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(e.account_login || '') + '</td>' +
-            '<td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-emp="' + e.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-emp="' + e.id + '">Удалить</button></td>' +
-            '</tr>';
+            '<td class="row-actions">' + CatalogRowActions.preset('editDelete', { id: e.id }, { rowKey: e.id, size: 'sm' }) + '</td>' +
+          '</tr>';
         }).join('');
-        tbody.querySelectorAll('[data-edit-emp]').forEach((btn) => { btn.onclick = () => openEditEmployee(btn.dataset.editEmp); });
-        tbody.querySelectorAll('[data-del-emp]').forEach((btn) => { btn.onclick = () => deleteEmployee(btn.dataset.delEmp); });
+        if (!tbody._craBound && window.CatalogRowActions) {
+          CatalogRowActions.bind(tbody, (action, wrap) => {
+            const id = wrap.dataset.id;
+            if (action === 'edit') openEditEmployee(id);
+            else if (action === 'delete') deleteEmployee(id);
+          });
+          tbody._craBound = true;
+        }
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="8" class="err" style="padding:1rem;">' + escapeHtml(err.message) + '</td></tr>';
       }
     }
 
-    let positionsCache = [];
     async function loadPositionsForSelect() {
       try {
         const data = await fetchApi('/positions?client_id=' + encodeURIComponent(clientId));
@@ -2725,16 +2933,123 @@
       } catch (_) { positionsCache = []; }
     }
 
+    let localKpiStandaloneCache = [];
+
+    function localKpiPositionCode(kind, reg, kpi) {
+      if (kind === 'standalone') return kpi.position_code || '';
+      return (reg && reg.position_code) || kpi.position_code || '';
+    }
+
+    function renderLocalKpis() {
+      const tbody = document.getElementById('localKpiTbody');
+      const meta = document.getElementById('localKpiMeta');
+      if (!tbody) return;
+      const posQ = (document.getElementById('localKpiFilterPosition')?.value || '').trim();
+      const all = localKpiRowsCache || [];
+      const standaloneCount = all.filter((r) => r.kind === 'standalone').length;
+      const rows = all.filter(({ kind, reg, kpi }) =>
+        wsMatchesPositionKeyword(localKpiPositionCode(kind, reg, kpi), posQ)
+      );
+      if (meta) {
+        meta.textContent = 'Записей KPI: ' + rows.length + ' из ' + all.length +
+          ' (из регламентов: ' + (all.length - standaloneCount) + ', без регламента: ' + standaloneCount + ')';
+        meta.classList.remove('hidden');
+      }
+      if (!all.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет локальных KPI. Скопируйте регламент с KPI или добавьте KPI без регламента.</td></tr>';
+        return;
+      }
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет KPI по фильтру должности. Измените поиск в шапке таблицы.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(({ kind, reg, kpi }) => {
+        const isStandalone = kind === 'standalone';
+        const regLabel = isStandalone ? '—' : escapeHtml(reg.regulation_name || reg.regulation_code);
+        const regFlag = isStandalone ? 'нет' : 'да';
+        const posCode = localKpiPositionCode(kind, reg, kpi);
+        const actions = isStandalone
+          ? CatalogRowActions.preset('localKpiStandalone', {
+              standaloneId: kpi.id,
+              kpiCode: kpi.kpi_code,
+            }, { rowKey: 'lkpi-s-' + kpi.id, size: 'sm' })
+          : CatalogRowActions.preset('localKpiRegulation', {
+              regId: reg.id,
+              kpiId: kpi.id,
+              kpiCode: kpi.kpi_code,
+            }, { rowKey: 'lkpi-r-' + kpi.id, size: 'sm' });
+        return '<tr>' +
+          '<td><code>' + escapeHtml(kpi.kpi_code) + '</code></td>' +
+          wsPositionCellHtml(posCode) +
+          '<td>' + escapeHtml(kpi.target_value == null ? '' : String(kpi.target_value)) + '</td>' +
+          '<td>' + escapeHtml(kpi.period_type || '') + '</td>' +
+          '<td>' + escapeHtml(kpi.weight == null ? '' : String(kpi.weight)) + '</td>' +
+          '<td>' + (kpi.is_active !== false ? 'да' : 'нет') + '</td>' +
+          '<td class="td-ellipsis">' + regLabel + '</td>' +
+          '<td>' + regFlag + '</td>' +
+          '<td class="row-actions">' + actions + '</td>' +
+        '</tr>';
+      }).join('');
+      if (!tbody._craBound && window.CatalogRowActions) {
+        CatalogRowActions.bind(tbody, (action, wrap) => {
+          if (action === 'open') openCrDetail(wrap.dataset.regId);
+          else if (action === 'edit') openLocalKpiModal(wrap.dataset.standaloneId, localKpiStandaloneCache);
+          else if (action === 'to-global') {
+            openLocalToGlobalCopy({
+              entity: 'kpi',
+              sourceCode: wrap.dataset.kpiCode,
+              sourceClientRegulationKpiId: wrap.dataset.kpiId || undefined,
+              sourceClientStandaloneKpiId: wrap.dataset.standaloneId || undefined,
+              onSuccess: (res) => onLocalToGlobalSuccess(res, 'KPI'),
+            });
+          } else if (action === 'sync') {
+            const explain =
+              'Синхронизация с глобальным шаблоном:\n\n' +
+              '• добавляет только отсутствующие KPI и инструкции (по коду);\n' +
+              '• уже существующие записи не изменяются;\n' +
+              '• устаревшие KPI и инструкции удаляются вручную в карточке регламента.\n\n' +
+              'Продолжить?';
+            if (!confirm(explain)) return;
+            fetchApi('/client-regulations/' + encodeURIComponent(wrap.dataset.regId) + '/sync-from-global', { method: 'POST' })
+              .then(async (res) => {
+                const kpis = res.kpis_added ?? 0;
+                const ins = res.instructions_added ?? 0;
+                if (kpis === 0 && ins === 0) {
+                  alert('Синхронизация завершена.\n\nНовых KPI и инструкций не найдено — локальный регламент уже содержит все записи из глобального шаблона.\nСуществующие записи не изменялись.');
+                } else {
+                  alert('Синхронизация завершена.\n\nДобавлено KPI: ' + kpis + ', инструкций: ' + ins + '.\nСуществующие записи не изменялись.');
+                }
+                await loadLocalKpis();
+              })
+              .catch((e) => alert(e.message));
+          } else if (action === 'delete') {
+            if (!confirm('Удалить локальный KPI без регламента?')) return;
+            fetchApi('/client-kpis/' + encodeURIComponent(wrap.dataset.standaloneId), { method: 'DELETE' })
+              .then(() => loadLocalKpis())
+              .catch((e) => alert(e.message));
+          }
+        });
+        tbody._craBound = true;
+      }
+    }
+
     async function loadLocalKpis() {
       const tbody = document.getElementById('localKpiTbody');
       const meta = document.getElementById('localKpiMeta');
       if (!tbody) return;
       if (!clientId) {
-        tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         if (meta) meta.classList.add('hidden');
         return;
       }
       try {
+        await loadPositionsForSelect();
+        if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
+          try {
+            const positions = await fetchApi('/regulations/positions/list') || [];
+            wsGlobalPositionNameMap = CatalogPositionSearch.buildPositionNameMap(positions);
+          } catch (_) {}
+        }
         const data = await fetchApi('/client-regulations?client_id=' + encodeURIComponent(clientId) + '&limit=500');
         const regs = data.items || [];
         const details = await Promise.all(regs.map((r) =>
@@ -2752,95 +3067,11 @@
           standalone = sk.items || [];
         } catch (_) {}
         standalone.forEach((kpi) => rows.push({ kind: 'standalone', kpi }));
-        if (meta) {
-          meta.textContent = 'Записей KPI: ' + rows.length + ' (из регламентов: ' + (rows.length - standalone.length) + ', без регламента: ' + standalone.length + ')';
-          meta.classList.remove('hidden');
-        }
-        if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Нет локальных KPI. Скопируйте регламент с KPI или добавьте KPI без регламента.</td></tr>';
-          return;
-        }
-        tbody.innerHTML = rows.map(({ kind, reg, kpi }) => {
-          const isStandalone = kind === 'standalone';
-          const regLabel = isStandalone ? '—' : escapeHtml(reg.regulation_name || reg.regulation_code);
-          const regFlag = isStandalone ? 'нет' : 'да';
-          const actions = isStandalone
-            ? '<button type="button" class="btn btn-sm btn-secondary lkpi-edit" data-id="' + escapeHtml(kpi.id) + '">Изменить</button>' +
-              '<button type="button" class="btn btn-sm btn-secondary lkpi-global" data-standalone-id="' + escapeHtml(kpi.id) + '" data-kpi-code="' + escapeHtml(kpi.kpi_code) + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
-              '<button type="button" class="btn btn-sm btn-danger lkpi-del" data-id="' + escapeHtml(kpi.id) + '">Удалить</button>'
-            : '<button type="button" class="btn btn-sm btn-secondary lkpi-open" data-id="' + escapeHtml(reg.id) + '">Открыть</button>' +
-              '<button type="button" class="btn btn-sm btn-secondary lkpi-global" data-kpi-id="' + escapeHtml(kpi.id) + '" data-kpi-code="' + escapeHtml(kpi.kpi_code) + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
-              '<button type="button" class="btn btn-sm btn-secondary lkpi-sync" data-id="' + escapeHtml(reg.id) + '" title="Добавить из глобального шаблона только отсутствующие KPI и инструкции">Синхр.</button>';
-          return '<tr>' +
-            '<td><code>' + escapeHtml(kpi.kpi_code) + '</code></td>' +
-            '<td>' + escapeHtml(kpi.target_value == null ? '' : String(kpi.target_value)) + '</td>' +
-            '<td>' + escapeHtml(kpi.period_type || '') + '</td>' +
-            '<td>' + escapeHtml(kpi.weight == null ? '' : String(kpi.weight)) + '</td>' +
-            '<td class="td-ellipsis">' + regLabel + '</td>' +
-            '<td>' + regFlag + '</td>' +
-            '<td class="row-actions">' + actions + '</td>' +
-          '</tr>';
-        }).join('');
-        tbody.querySelectorAll('.lkpi-open').forEach((btn) => {
-          btn.onclick = () => openCrDetail(btn.dataset.id);
-        });
-        tbody.querySelectorAll('.lkpi-sync').forEach((btn) => {
-          btn.onclick = async () => {
-            const explain =
-              'Синхронизация с глобальным шаблоном:\n\n' +
-              '• добавляет только отсутствующие KPI и инструкции (по коду);\n' +
-              '• уже существующие записи не изменяются;\n' +
-              '• устаревшие KPI и инструкции удаляются вручную в карточке регламента.\n\n' +
-              'Продолжить?';
-            if (!confirm(explain)) return;
-            try {
-              const res = await fetchApi('/client-regulations/' + encodeURIComponent(btn.dataset.id) + '/sync-from-global', { method: 'POST' });
-              const kpis = res.kpis_added ?? 0;
-              const ins = res.instructions_added ?? 0;
-              if (kpis === 0 && ins === 0) {
-                alert(
-                  'Синхронизация завершена.\n\n' +
-                  'Новых KPI и инструкций не найдено — локальный регламент уже содержит все записи из глобального шаблона.\n' +
-                  'Существующие записи не изменялись.'
-                );
-              } else {
-                alert(
-                  'Синхронизация завершена.\n\n' +
-                  'Добавлено KPI: ' + kpis + ', инструкций: ' + ins + '.\n' +
-                  'Существующие записи не изменялись.'
-                );
-              }
-              await loadLocalKpis();
-            } catch (e) {
-              alert(e.message);
-            }
-          };
-        });
-        tbody.querySelectorAll('.lkpi-edit').forEach((btn) => {
-          btn.onclick = async () => openLocalKpiModal(btn.dataset.id, standalone);
-        });
-        tbody.querySelectorAll('.lkpi-global').forEach((btn) => {
-          btn.onclick = () => openLocalToGlobalCopy({
-            entity: 'kpi',
-            sourceCode: btn.dataset.kpiCode,
-            sourceClientRegulationKpiId: btn.dataset.kpiId || undefined,
-            sourceClientStandaloneKpiId: btn.dataset.standaloneId || undefined,
-            onSuccess: (res) => onLocalToGlobalSuccess(res, 'KPI'),
-          });
-        });
-        tbody.querySelectorAll('.lkpi-del').forEach((btn) => {
-          btn.onclick = async () => {
-            if (!confirm('Удалить локальный KPI без регламента?')) return;
-            try {
-              await fetchApi('/client-kpis/' + encodeURIComponent(btn.dataset.id), { method: 'DELETE' });
-              await loadLocalKpis();
-            } catch (e) {
-              alert(e.message);
-            }
-          };
-        });
+        localKpiRowsCache = rows;
+        localKpiStandaloneCache = standalone;
+        renderLocalKpis();
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
@@ -2884,12 +3115,14 @@
         document.getElementById('localKpiWeight').value = row && row.weight != null ? String(row.weight) : '';
         positionCode = row ? (row.position_code || '') : '';
         document.getElementById('localKpiNotes').value = row ? (row.notes || '') : '';
+        document.getElementById('localKpiActive').checked = row ? row.is_active !== false : true;
       } else {
         codeEl.value = '';
         document.getElementById('localKpiTarget').value = '';
         document.getElementById('localKpiPeriod').value = 'month';
         document.getElementById('localKpiWeight').value = '';
         document.getElementById('localKpiNotes').value = '';
+        document.getElementById('localKpiActive').checked = true;
       }
       let orgUnitId = '';
       if (positionCode) {
@@ -2921,6 +3154,7 @@
         weight: wv === '' ? null : Number(wv),
         position_code: document.getElementById('localKpiPosition').value || null,
         notes: document.getElementById('localKpiNotes').value.trim() || null,
+        is_active: document.getElementById('localKpiActive').checked,
       };
       try {
         if (editId) {
@@ -3082,6 +3316,7 @@
       document.getElementById('localSkillDept').value = row.department_code || '';
       document.getElementById('localSkillRank').value = row.skill_rank != null ? String(row.skill_rank) : '1';
       document.getElementById('localSkillTitle').value = row.skill_title_ru || row.skill_name || '';
+      document.getElementById('localSkillActive').checked = row.is_active !== false;
       let orgUnitId = '';
       const pos = positionsCache.find((p) => (p.position_catalog_code || p.code || '').trim() === row.position_code);
       if (pos) orgUnitId = pos.org_unit_id;
@@ -3096,19 +3331,29 @@
       const tbody = document.getElementById('localSkillsTbody');
       const meta = document.getElementById('localSkillsMeta');
       if (!tbody) return;
-      const q = (document.getElementById('localSkillsSearch')?.value || '').trim().toLowerCase();
+      const posQ = (document.getElementById('localSkillsFilterPosition')?.value || '').trim();
+      const skillQ = (document.getElementById('localSkillsFilterSkill')?.value || '').trim();
       const rows = localSkillRows.filter((row) => {
-        if (!q) return true;
-        return [row.position_code, row.position_name_ru, row.skill_name].some((value) =>
-          String(value || '').toLowerCase().includes(q)
-        );
+        if (posQ && !wsMatchesPositionKeyword(row.position_code, posQ)) return false;
+        if (skillQ && window.CatalogPositionSearch) {
+          return CatalogPositionSearch.matchesAnyKeyword(
+            [row.skill_title_ru, row.skill_name, row.skill_code, row.position_name_ru],
+            skillQ
+          );
+        }
+        if (skillQ) {
+          return [row.skill_title_ru, row.skill_name, row.skill_code].some((value) =>
+            String(value || '').toLowerCase().includes(skillQ.toLowerCase())
+          );
+        }
+        return true;
       });
       if (meta) {
         meta.textContent = 'Записей навыков: ' + rows.length + ' из ' + localSkillRows.length;
         meta.classList.remove('hidden');
       }
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Нет локальных навыков. Нажмите «Скопировать» для загрузки типовой матрицы.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Нет локальных навыков. Нажмите «Скопировать» для загрузки типовой матрицы.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row) => {
@@ -3121,56 +3366,51 @@
           '<td class="td-ellipsis" title="' + escapeHtml(posName) + '">' + escapeHtml(posName) + '</td>' +
           '<td>' + escapeHtml(row.skill_rank != null ? String(row.skill_rank) : '') + '</td>' +
           '<td class="td-ellipsis" title="' + escapeHtml(skillTitle) + '">' + escapeHtml(skillTitle) + '</td>' +
+          '<td>' + (row.is_active !== false ? 'да' : 'нет') + '</td>' +
           '<td class="row-actions">' +
             (row.row_id
-              ? '<button type="button" class="btn btn-sm btn-secondary lskill-edit" data-id="' + escapeHtml(row.row_id) + '" title="Изменить">Изм.</button>' +
-                '<button type="button" class="btn btn-sm btn-secondary lskill-clone" data-id="' + escapeHtml(row.row_id) + '" title="Сделать копию">Копия</button>' +
-                '<button type="button" class="btn btn-sm btn-secondary lskill-global" data-id="' + escapeHtml(row.row_id) + '" title="Копировать в глобальный справочник навыков">В шаблон</button>' +
-                '<button type="button" class="btn btn-sm btn-danger lskill-del" data-id="' + escapeHtml(row.row_id) + '" title="Удалить">×</button>'
+              ? CatalogRowActions.preset('localSkill', { id: row.row_id }, { rowKey: row.row_id, size: 'sm' })
               : '') +
           '</td>' +
         '</tr>'
         );
       }).join('');
-      tbody.querySelectorAll('.lskill-edit').forEach((btn) => {
-        btn.onclick = () => openLocalSkillModal(btn.dataset.id);
-      });
-      tbody.querySelectorAll('.lskill-clone').forEach((btn) => {
-        btn.onclick = async () => {
-          try {
-            await localSkillApi(btn.dataset.id, { method: 'POST' }, '/clone');
-            await loadLocalSkills();
-          } catch (e) {
-            alert(e.message || 'Ошибка копирования');
+      if (!tbody._craBound && window.CatalogRowActions) {
+        CatalogRowActions.bind(tbody, (action, wrap) => {
+          const id = wrap.dataset.id;
+          if (action === 'edit') openLocalSkillModal(id);
+          else if (action === 'clone') {
+            localSkillApi(id, { method: 'POST' }, '/clone')
+              .then(() => loadLocalSkills())
+              .catch((e) => alert(e.message || 'Ошибка копирования'));
+          } else if (action === 'to-global') openLocalSkillToGlobal(id);
+          else if (action === 'delete') {
+            if (!confirm('Удалить строку навыка из локальной матрицы?')) return;
+            localSkillApi(id, { method: 'DELETE' })
+              .then(() => loadLocalSkills())
+              .catch((e) => alert(e.message || 'Ошибка удаления'));
           }
-        };
-      });
-      tbody.querySelectorAll('.lskill-global').forEach((btn) => {
-        btn.onclick = () => openLocalSkillToGlobal(btn.dataset.id);
-      });
-      tbody.querySelectorAll('.lskill-del').forEach((btn) => {
-        btn.onclick = async () => {
-          if (!confirm('Удалить строку навыка из локальной матрицы?')) return;
-          try {
-            await localSkillApi(btn.dataset.id, { method: 'DELETE' });
-            await loadLocalSkills();
-          } catch (e) {
-            alert(e.message || 'Ошибка удаления');
-          }
-        };
-      });
+        });
+        tbody._craBound = true;
+      }
     }
 
     async function loadLocalSkills() {
       const tbody = document.getElementById('localSkillsTbody');
       if (!tbody) return;
       if (!clientId) {
-        tbody.innerHTML = '<tr><td colspan="5" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';
         return;
       }
       try {
         await loadPositionsForSelect();
         await loadGlobalPositionCodesForClientTemplate();
+        if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
+          try {
+            const positions = await fetchApi('/regulations/positions/list') || [];
+            wsGlobalPositionNameMap = CatalogPositionSearch.buildPositionNameMap(positions);
+          } catch (_) {}
+        }
         const positionCodes = new Set(
           positionsCache.map((p) => (p.position_catalog_code || p.code || '').trim()).filter(Boolean)
         );
@@ -3189,10 +3429,11 @@
             skill_code: row.skill_code,
             skill_name: row.skill_title_ru,
             skill_title_ru: row.skill_title_ru,
+            is_active: row.is_active,
           }));
         renderLocalSkills();
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 
@@ -3705,11 +3946,17 @@
             '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
             '<td class="meta" title="Задаётся при создании или в форме «Изменить»">—</td>' +
             '<td class="td-ellipsis">' + escapeHtml(a.status || '') + '</td>' +
-            '<td class="row-actions"><button class="btn btn-sm btn-secondary" data-edit-acc="' + a.id + '">Изменить</button><button class="btn btn-sm btn-danger" data-del-acc="' + a.id + '">Удалить</button></td>' +
-            '</tr>';
+            '<td>' + CatalogRowActions.preset('editDelete', { id: a.id }, { rowKey: a.id, size: 'sm' }) + '</td>' +
+          '</tr>';
         }).join('');
-        tbody.querySelectorAll('[data-edit-acc]').forEach((btn) => { btn.onclick = () => openEditAccount(btn.dataset.editAcc); });
-        tbody.querySelectorAll('[data-del-acc]').forEach((btn) => { btn.onclick = () => deleteAccount(btn.dataset.delAcc); });
+        if (!tbody._craBound && window.CatalogRowActions) {
+          CatalogRowActions.bind(tbody, (action, wrap) => {
+            const id = wrap.dataset.id;
+            if (action === 'edit') openEditAccount(id);
+            else if (action === 'delete') deleteAccount(id);
+          });
+          tbody._craBound = true;
+        }
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
@@ -3825,7 +4072,14 @@
     });
     document.getElementById('btnLocalKpiRefresh').onclick = loadLocalKpis;
     document.getElementById('btnLocalSkillsRefresh').onclick = loadLocalSkills;
-    document.getElementById('localSkillsSearch').oninput = renderLocalSkills;
+    if (window.CatalogPositionSearch) {
+      CatalogPositionSearch.wireSearch(document.getElementById('filterLocalPositionNameSearch'), renderPositions);
+      CatalogPositionSearch.wireSearch(document.getElementById('localKpiFilterPosition'), renderLocalKpis);
+      CatalogPositionSearch.wireSearch(document.getElementById('localSkillsFilterPosition'), renderLocalSkills);
+      CatalogPositionSearch.wireSearch(document.getElementById('localSkillsFilterSkill'), renderLocalSkills);
+      CatalogPositionSearch.wireSearch(document.getElementById('crFilterPositionSearch'), loadClientRegulations);
+      CatalogPositionSearch.wireSearch(document.getElementById('empFilterPositionSearch'), loadEmployees);
+    }
     document.getElementById('btnLocalSkillCancel').onclick = () => document.getElementById('modalLocalSkill').classList.remove('show');
     document.getElementById('btnLocalSkillSave').onclick = async () => {
       const errEl = document.getElementById('localSkillModalErr');
@@ -3846,6 +4100,7 @@
             position_code: positionCode,
             department_code: departmentCode,
             skill_rank: parseInt(rankRaw, 10) || 1,
+            is_active: document.getElementById('localSkillActive').checked,
           }),
         });
         document.getElementById('modalLocalSkill').classList.remove('show');
@@ -3867,6 +4122,9 @@
       const keepD = deptSel.value;
       try {
         const positions = await fetchApi('/regulations/positions/list') || [];
+        if (window.CatalogPositionSearch) {
+          wsGlobalPositionNameMap = CatalogPositionSearch.buildPositionNameMap(positions);
+        }
         posSel.innerHTML = '<option value="">— все —</option>';
         positions.forEach((p) => {
           const opt = document.createElement('option');
@@ -3913,24 +4171,21 @@
       tbody.querySelectorAll('.cr-open-link').forEach((a) => {
         a.addEventListener('click', (e) => { e.preventDefault(); openCrDetail(a.dataset.id); });
       });
-      tbody.querySelectorAll('.cr-open').forEach((b) => {
-        b.addEventListener('click', () => openCrDetail(b.dataset.id));
-      });
-      tbody.querySelectorAll('.cr-edit').forEach((b) => {
-        b.addEventListener('click', async () => {
-          await openCrDetail(b.dataset.id);
-          document.getElementById('btnCrDetailEdit').click();
-        });
-      });
-      tbody.querySelectorAll('.cr-to-global').forEach((b) => {
-        b.addEventListener('click', () => {
+      if (tbody._craBound || !window.CatalogRowActions) return;
+      CatalogRowActions.bind(tbody, (action, wrap) => {
+        const id = wrap.dataset.id;
+        if (action === 'open') openCrDetail(id);
+        else if (action === 'edit') {
+          openCrDetail(id).then(() => document.getElementById('btnCrDetailEdit').click());
+        } else if (action === 'to-global') {
           openLocalToGlobalCopy({
             entity: 'regulation',
-            sourceClientRegulationId: b.dataset.id,
+            sourceClientRegulationId: id,
             onSuccess: (res) => onLocalToGlobalSuccess(res, 'Регламент'),
           });
-        });
+        }
       });
+      tbody._craBound = true;
     }
 
     async function loadClientRegulations() {
@@ -3948,14 +4203,25 @@
       if (mount) mount.classList.remove('hidden');
       if (!tbody) return;
       try {
+        await loadPositionsForSelect();
+        if (!Object.keys(wsGlobalPositionNameMap).length && window.CatalogPositionSearch) {
+          try {
+            const positions = await fetchApi('/regulations/positions/list') || [];
+            wsGlobalPositionNameMap = CatalogPositionSearch.buildPositionNameMap(positions);
+          } catch (_) {}
+        }
         const data = await fetchApi('/client-regulations?' + buildClientRegQueryParams().toString());
-        const items = data.items || [];
+        let items = data.items || [];
+        const posQ = (document.getElementById('crFilterPositionSearch')?.value || '').trim();
+        if (posQ) {
+          items = items.filter((r) => wsMatchesPositionKeyword(r.position_code, posQ));
+        }
         if (meta) {
-          meta.textContent = 'Записей: ' + (data.total != null ? data.total : items.length);
+          meta.textContent = 'Записей: ' + items.length + (data.total != null && items.length !== data.total ? ' из ' + data.total + ' по API' : '');
           meta.classList.remove('hidden');
         }
         if (!items.length) {
-          tbody.innerHTML = '<tr><td colspan="10" class="meta" style="padding:1rem;">Нет регламентов организации. Нажмите «Скопировать» или измените фильтры.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="meta" style="padding:1rem;">Нет регламентов организации. Нажмите «Скопировать» или измените фильтры и поиск.</td></tr>';
           return;
         }
         tbody.innerHTML = items.map((r) => {
@@ -3963,23 +4229,18 @@
           const src = r.global_regulation_code
             ? '<span class="badge-g" title="Историческая связь с глобальным шаблоном">глоб. ' + escapeHtml(r.global_regulation_code) + '</span>'
             : '<span class="badge-g">своя карточка</span>';
-          const statusHtml = escapeHtml(r.status || '') +
-            (r.is_current ? ' <span class="badge-g" style="background:rgba(63,185,80,0.2);color:var(--success);">действующий</span>' : '');
+          const statusHtml = escapeHtml(regulationStatusLabel(r.status, r.is_current));
           return '<tr>' +
             '<td title="' + escapeHtml(r.regulation_code) + '"><code>' + escapeHtml(r.regulation_code) + '</code></td>' +
             '<td class="td-name" title="' + escapeHtml(r.regulation_name) + '"><a href="#" class="cr-open-link" data-id="' + rid + '">' + escapeHtml(r.regulation_name) + '</a></td>' +
-            '<td title="' + escapeHtml(r.position_code) + '"><code>' + escapeHtml(r.position_code) + '</code></td>' +
+            wsPositionCellHtml(r.position_code) +
             '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
             '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
             '<td title="' + escapeHtml(r.global_regulation_code || '') + '">' + src + '</td>' +
             renderRegulationUrlCell(r.google_doc_url, 'Открыть регламент', 'Ссылка на регламент не указана') +
             renderRegulationUrlCell(r.instructions_folder_url, 'Открыть папку инструкций', 'Папка инструкций не указана') +
             '<td class="td-status">' + statusHtml + '</td>' +
-            '<td class="row-actions">' +
-            '<button type="button" class="btn btn-secondary btn-sm cr-open" data-id="' + rid + '">Открыть</button>' +
-            '<button type="button" class="btn btn-secondary btn-sm cr-edit" data-id="' + rid + '">Изменить</button>' +
-            '<button type="button" class="btn btn-secondary btn-sm cr-to-global" data-id="' + rid + '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>' +
-            '</td>' +
+            '<td>' + CatalogRowActions.preset('clientRegulation', { id: rid }, { rowKey: rid, size: 'sm' }) + '</td>' +
             '</tr>';
         }).join('');
         bindCrTableActions(tbody);
@@ -3999,13 +4260,17 @@
         } else {
           html += '<p><strong>Источник:</strong> создано для организации (без копирования из глобального реестра).</p>';
         }
-        html += '<p><strong>Статус:</strong> ' + escapeHtml(r.status) + (r.is_current ? ' <span style="color:var(--success)">действующий</span>' : '') + '</p>';
+        html += '<p><strong>Статус:</strong> ' + escapeHtml(regulationStatusLabel(r.status, r.is_current)) + '</p>';
         if (r.goal_summary) html += '<p>' + escapeHtml(r.goal_summary) + '</p>';
         if (r.ckp_short) html += '<p><strong>ЦКП:</strong> ' + escapeHtml(r.ckp_short) + '</p>';
         if (r.google_doc_url) html += '<p><a href="' + escapeHtml(r.google_doc_url) + '" target="_blank" rel="noopener">Документ</a></p>';
         if (r.kpis && r.kpis.length) {
           html += '<p><strong>KPI</strong></p><ul>';
-          r.kpis.forEach(k => { html += '<li>' + escapeHtml(k.kpi_code) + (k.target_value != null ? ' — ' + k.target_value : '') + '</li>'; });
+          r.kpis.forEach(k => {
+            html += '<li>' + escapeHtml(k.kpi_code) +
+              (k.target_value != null ? ' — ' + k.target_value : '') +
+              ' · ' + (k.is_active !== false ? 'активен' : 'неактивен') + '</li>';
+          });
           html += '</ul>';
         }
         if (r.instructions && r.instructions.length) {

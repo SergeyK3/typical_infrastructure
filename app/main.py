@@ -24,6 +24,7 @@ from app.seed import (
     seed_regulations,
     seed_roles,
     seed_template_org_units,
+    seed_template_segment_codes,
 )
 from app.universal_seed import (
     apply_regulation_enrichment_json,
@@ -243,6 +244,7 @@ def _startup() -> None:
         merge_position_regulations_from_client_xlsx(db)
         link_regulation_kpis_from_templates(db)
         seed_template_org_units(db)
+        seed_template_segment_codes(db)
         # seed_clients отключён — удалённые клиенты не восстанавливаются
     finally:
         db.close()

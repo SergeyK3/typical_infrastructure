@@ -46,6 +46,7 @@ def sync_client_org_units_from_template(
         unit_type = spec["unit_type"]
         name = format_org_unit_name(spec["name"], unit_type)
         sort_order = int(spec.get("sort_order", 0))
+        expected_segment = spec.get("segment_code") if unit_type == "department" else None
 
         if code in ids_by_code:
             ou = db.get(OrgUnit, ids_by_code[code])
@@ -69,6 +70,12 @@ def sync_client_org_units_from_template(
             if (ou.catalog_source_code or "") != code:
                 ou.catalog_source_code = code
                 changed = True
+            if unit_type == "department" and ou.segment_code != expected_segment:
+                ou.segment_code = expected_segment
+                changed = True
+            elif unit_type != "department" and ou.segment_code is not None:
+                ou.segment_code = None
+                changed = True
             if changed:
                 updated += 1
                 db.flush()
@@ -87,6 +94,7 @@ def sync_client_org_units_from_template(
             sort_order=sort_order,
             catalog_source_code=code,
             is_detached=True,
+            segment_code=expected_segment,
         )
         db.add(ou)
         db.flush()

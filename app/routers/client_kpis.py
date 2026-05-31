@@ -66,6 +66,7 @@ def create_client_standalone_kpi(
         period_type=body.period_type,
         weight=body.weight,
         is_required=body.is_required,
+        is_active=body.is_active,
         position_code=body.position_code,
         notes=body.notes,
     )

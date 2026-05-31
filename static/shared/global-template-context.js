@@ -60,6 +60,7 @@
       url.searchParams.set(URL_PARAM, c);
       global.history.replaceState(null, '', url.pathname + url.search + url.hash);
     } catch (_) {}
+    patchGlobalCatalogNavLinks(document);
     return c;
   }
 
@@ -156,6 +157,32 @@
     });
   }
 
+  function patchGlobalCatalogNavLinks(root) {
+    const scope = root || document;
+    scope
+      .querySelectorAll(
+        '.sidebar a.sidebar-item[href="/global"], .sidebar a.sidebar-item[href^="/global/"], .sidebar a.sidebar-item[href="/regulations"]'
+      )
+      .forEach((a) => {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        a.setAttribute('href', withTemplateQuery(href));
+      });
+  }
+
+  function initGlobalTemplateContext() {
+    applyTemplateLinks(document);
+    patchGlobalCatalogNavLinks(document);
+  }
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initGlobalTemplateContext);
+    } else {
+      initGlobalTemplateContext();
+    }
+  }
+
   global.GlobalTemplateContext = {
     STORAGE_KEY,
     URL_PARAM,
@@ -169,5 +196,7 @@
     bindTemplateSelect,
     renderEditHint,
     applyTemplateLinks,
+    patchGlobalCatalogNavLinks,
+    initGlobalTemplateContext,
   };
 })(window);

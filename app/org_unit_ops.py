@@ -21,6 +21,7 @@ from app.utils import new_id32
 PROTECTED_ORG_CODES = frozenset({"company"})
 VALID_UNIT_TYPES = frozenset({"company", "department", "section"})
 LOG_GROUP_UNIT_TYPES = frozenset({"department", "section"})
+SEGMENT_UNIT_TYPES = frozenset({"department"})
 
 
 def assert_valid_unit_type(unit_type: str) -> None:
@@ -61,6 +62,72 @@ def normalize_template_log_group(unit_type: str, log_group: str | None) -> str |
                 "message": "Логическая группа допустима только для отделений и секций.",
             },
         )
+    return None
+
+
+def normalize_template_segment_code(unit_type: str, segment_code: str | None) -> str | None:
+    """segment_code задаётся только для отделений (department)."""
+    seg = (segment_code or "").strip() or None
+    if unit_type in SEGMENT_UNIT_TYPES:
+        return seg
+    if seg:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "segment_code_only_for_department",
+                "message": "Сегмент деятельности допустим только для отделений (department).",
+            },
+        )
+    return None
+
+
+def effective_segment_from_specs(specs: list[dict], code: str) -> str | None:
+    """Эффективный segment_code узла по списку spec (department — своё; section — от родителя)."""
+    by_code = {s["code"]: s for s in specs if s.get("code")}
+    spec = by_code.get(code)
+    if not spec:
+        return None
+    if spec.get("unit_type") == "department":
+        return spec.get("segment_code") or None
+    parent = spec.get("parent_code")
+    while parent:
+        parent_spec = by_code.get(parent)
+        if not parent_spec:
+            break
+        if parent_spec.get("unit_type") == "department":
+            return parent_spec.get("segment_code") or None
+        parent = parent_spec.get("parent_code")
+    return None
+
+
+def enrich_structure_with_effective_segments(specs: list[dict]) -> list[dict]:
+    """Добавить effective_segment_code к каждому spec."""
+    out: list[dict] = []
+    for spec in specs:
+        row = dict(spec)
+        row["effective_segment_code"] = effective_segment_from_specs(specs, spec["code"])
+        out.append(row)
+    return out
+
+
+def resolve_org_unit_effective_segment(db: Session, org_unit: OrgUnit) -> str | None:
+    """Эффективный segment_code для клиентского узла (section → от department-предка)."""
+    if org_unit.unit_type == "department":
+        return org_unit.segment_code
+    by_id = {
+        u.id: u
+        for u in db.scalars(select(OrgUnit).where(OrgUnit.client_id == org_unit.client_id)).all()
+    }
+    cur = org_unit
+    seen: set[str] = set()
+    while cur.parent_id and cur.parent_id not in seen:
+        seen.add(cur.parent_id)
+        parent = by_id.get(cur.parent_id)
+        if not parent:
+            break
+        if parent.unit_type == "department":
+            return parent.segment_code
+        cur = parent
     return None
 
 
@@ -466,6 +533,7 @@ def clone_template_department(db: Session, source: TemplateOrgUnitRow) -> Templa
         unit_type="department",
         sort_order=source.sort_order + 1,
         log_group=source.log_group,
+        segment_code=source.segment_code,
     )
     db.add(row)
     db.flush()

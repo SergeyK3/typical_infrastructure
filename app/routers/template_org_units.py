@@ -13,6 +13,7 @@ from app.excel_export import xlsx_file_response
 from app.models import PositionDeptType, TemplateOrgUnitRow
 from app.org_unit_ops import (
     LOG_GROUP_UNIT_TYPES,
+    SEGMENT_UNIT_TYPES,
     assert_not_protected_code,
     assert_valid_unit_type,
     clone_template_department,
@@ -20,8 +21,10 @@ from app.org_unit_ops import (
     delete_template_org_unit_cascade,
     delete_template_org_unit_leaf,
     normalize_template_log_group,
+    normalize_template_segment_code,
     rename_template_org_unit_code,
     format_org_unit_name,
+    effective_segment_from_specs,
     template_delete_impact,
 )
 from app.schemas import (
@@ -35,6 +38,26 @@ from app.schemas import (
 from app.utils import new_id32
 
 router = APIRouter(prefix="/template-org-units", tags=["template_org_units"])
+
+
+def _segment_specs(rows: list[TemplateOrgUnitRow]) -> list[dict]:
+    return [
+        {
+            "code": r.code,
+            "parent_code": r.parent_code,
+            "unit_type": r.unit_type,
+            "segment_code": r.segment_code,
+        }
+        for r in rows
+    ]
+
+
+def _template_org_out(row: TemplateOrgUnitRow, all_rows: list[TemplateOrgUnitRow]) -> TemplateOrgUnitOut:
+    specs = _segment_specs(all_rows)
+    base = TemplateOrgUnitOut.model_validate(row)
+    return base.model_copy(
+        update={"effective_segment_code": effective_segment_from_specs(specs, row.code)}
+    )
 
 
 def _ensure_parent_exists(
@@ -82,7 +105,7 @@ def list_template_org_units(
         .offset(offset)
     ).all()
     return ListEnvelope[TemplateOrgUnitOut](
-        items=[TemplateOrgUnitOut.model_validate(r) for r in rows],
+        items=[_template_org_out(r, rows) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -100,10 +123,12 @@ def tree_template_org_units(
         .order_by(TemplateOrgUnitRow.sort_order.asc(), TemplateOrgUnitRow.code.asc())
     ).all()
     pos_counts = _position_counts_by_dept(db, template_code)
+    specs = _segment_specs(rows)
     by_code = {r.code: r for r in rows}
     nodes: dict[str, TemplateOrgUnitNode] = {}
     for r in rows:
-        nodes[r.code] = TemplateOrgUnitNode.model_validate(r).model_copy(
+        base = _template_org_out(r, rows)
+        nodes[r.code] = TemplateOrgUnitNode.model_validate(base).model_copy(
             update={"children": [], "position_count": pos_counts.get(r.code, 0)}
         )
 
@@ -150,6 +175,7 @@ def export_template_org_units_excel(
         "parent_code",
         "unit_type",
         "log_group",
+        "segment_code",
         "sort_order",
         "created_at",
         "updated_at",
@@ -163,6 +189,7 @@ def export_template_org_units_excel(
             r.parent_code,
             r.unit_type,
             r.log_group,
+            r.segment_code,
             r.sort_order,
             r.created_at,
             r.updated_at,
@@ -179,6 +206,7 @@ def create_template_org_unit(
 ) -> TemplateOrgUnitOut:
     assert_valid_unit_type(body.unit_type)
     log_group = normalize_template_log_group(body.unit_type, body.log_group)
+    segment_code = normalize_template_segment_code(body.unit_type, body.segment_code)
     dup = db.scalar(
         select(func.count())
         .select_from(TemplateOrgUnitRow)
@@ -199,11 +227,15 @@ def create_template_org_unit(
         unit_type=body.unit_type,
         sort_order=body.sort_order,
         log_group=log_group,
+        segment_code=segment_code,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return TemplateOrgUnitOut.model_validate(row)
+    all_rows = db.scalars(
+        select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == body.template_code)
+    ).all()
+    return _template_org_out(row, all_rows)
 
 
 @router.post("/{row_id}/clone", response_model=TemplateOrgUnitCloneOut, status_code=201)
@@ -222,8 +254,11 @@ def clone_template_org_unit(row_id: str, db: Session = Depends(get_db)) -> Templ
         )
     db.commit()
     db.refresh(result.row)
+    all_rows = db.scalars(
+        select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == result.row.template_code)
+    ).all()
     return TemplateOrgUnitCloneOut(
-        row=TemplateOrgUnitOut.model_validate(result.row),
+        row=_template_org_out(result.row, all_rows),
         position_links_created=result.position_links_created,
         sections_skipped=result.sections_skipped,
     )
@@ -251,6 +286,10 @@ def patch_template_org_unit(
         data["log_group"] = normalize_template_log_group(unit_type, data["log_group"])
     elif "unit_type" in data and unit_type not in LOG_GROUP_UNIT_TYPES:
         data["log_group"] = None
+    if "segment_code" in data:
+        data["segment_code"] = normalize_template_segment_code(unit_type, data["segment_code"])
+    elif "unit_type" in data and unit_type not in SEGMENT_UNIT_TYPES:
+        data["segment_code"] = None
     if "name" in data or "unit_type" in data:
         current_name = data.get("name", row.name)
         data["name"] = format_org_unit_name(current_name, unit_type)
@@ -258,10 +297,10 @@ def patch_template_org_unit(
         setattr(row, k, v)
     db.commit()
     db.refresh(row)
-    return TemplateOrgUnitOut.model_validate(row)
-
-
-@router.delete("/{row_id}", status_code=204)
+    all_rows = db.scalars(
+        select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == row.template_code)
+    ).all()
+    return _template_org_out(row, all_rows)
 def delete_template_org_unit(
     row_id: str,
     mode: str = Query("leaf", pattern="^(leaf|cascade)$"),

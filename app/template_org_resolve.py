@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import TemplateOrgUnitRow
 from app.org_structures import get_template_structure
-from app.org_unit_ops import format_org_unit_name
+from app.org_unit_ops import enrich_structure_with_effective_segments, format_org_unit_name
 
 
 def _order_parents_before_children(rows: list[dict]) -> list[dict]:
@@ -50,8 +50,9 @@ def resolve_template_structure(db: Session, template_code: str) -> list[dict]:
                 "unit_type": r.unit_type,
                 "sort_order": r.sort_order,
                 "log_group": r.log_group,
+                "segment_code": r.segment_code,
             }
             for r in rows
         ]
-        return _order_parents_before_children(specs)
-    return get_template_structure(template_code)
+        return enrich_structure_with_effective_segments(_order_parents_before_children(specs))
+    return enrich_structure_with_effective_segments(get_template_structure(template_code))

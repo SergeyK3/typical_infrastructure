@@ -20,6 +20,7 @@ from app.models import (
     RegulationInstruction,
     RegulationKpi,
     TemplateOrgUnitRow,
+    TemplateSegmentCode,
 )
 from app.utils import new_id32
 
@@ -38,6 +39,22 @@ def get_primary_dept_type_code(db: Session, template_code: str, position_code: s
             PositionDeptType.is_primary == True,
         ).limit(1)
     )
+
+
+def is_template_dept_or_segment_code(db: Session, template_code: str, code: str) -> bool:
+    """Код отделения из оргструктуры или код сегмента из словаря шаблона."""
+    dept_ok = db.scalar(
+        select(func.count())
+        .select_from(TemplateOrgUnitRow)
+        .where(
+            TemplateOrgUnitRow.template_code == template_code,
+            TemplateOrgUnitRow.code == code,
+            TemplateOrgUnitRow.unit_type == "department",
+        )
+    )
+    if dept_ok:
+        return True
+    return db.get(TemplateSegmentCode, (template_code, code)) is not None
 
 
 def set_primary_dept_type(
@@ -61,7 +78,7 @@ def set_primary_dept_type(
             TemplateOrgUnitRow.unit_type == "department",
         )
     )
-    if not dept_ok:
+    if not dept_ok and not db.get(TemplateSegmentCode, (template_code, code)):
         raise HTTPException(status_code=400, detail="dept_type_not_found")
 
     links = list(

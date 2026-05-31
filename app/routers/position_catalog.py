@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import PositionCatalog, PositionDeptType
+from app.models import PositionCatalog, PositionDeptType, TemplateOrgUnitRow, TemplateSegmentCode
+from app.org_unit_ops import effective_segment_from_specs
 from app.position_catalog_ops import (
     clone_position_catalog,
     get_primary_dept_type_code,
@@ -47,13 +48,52 @@ def _get_catalog(db: Session, template_code: str, position_code: str) -> Positio
     return db.get(PositionCatalog, (template_code, position_code))
 
 
-def _catalog_out(db: Session, row: PositionCatalog) -> PositionCatalogOut:
+def _template_dept_segments(db: Session, template_code: str) -> dict[str, str | None]:
+    rows = db.scalars(
+        select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == template_code)
+    ).all()
+    specs = [
+        {
+            "code": r.code,
+            "parent_code": r.parent_code,
+            "unit_type": r.unit_type,
+            "segment_code": r.segment_code,
+        }
+        for r in rows
+    ]
+    return {r.code: effective_segment_from_specs(specs, r.code) for r in rows if r.code}
+
+
+def _segment_for_primary(
+    db: Session,
+    template_code: str,
+    primary: str | None,
+    seg_map: dict[str, str | None],
+) -> str | None:
+    if not primary:
+        return None
+    seg = seg_map.get(primary)
+    if seg:
+        return seg
+    if db.get(TemplateSegmentCode, (template_code, primary)):
+        return primary
+    return None
+
+
+def _catalog_out(
+    db: Session,
+    row: PositionCatalog,
+    seg_map: dict[str, str | None] | None = None,
+) -> PositionCatalogOut:
+    primary = get_primary_dept_type_code(db, row.template_code, row.position_code)
+    if seg_map is None:
+        seg_map = _template_dept_segments(db, row.template_code)
+    segment = _segment_for_primary(db, row.template_code, primary, seg_map)
     base = PositionCatalogOut.model_validate(row)
     return base.model_copy(
         update={
-            "primary_dept_type_code": get_primary_dept_type_code(
-                db, row.template_code, row.position_code
-            ),
+            "primary_dept_type_code": primary,
+            "segment_code": segment,
         }
     )
 
@@ -80,8 +120,9 @@ def list_position_catalog(
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     order = _catalog_order(sort_by, sort_dir)
     rows = db.scalars(q.order_by(*order).limit(limit).offset(offset)).all()
+    seg_map = _template_dept_segments(db, template_code)
     return ListEnvelope[PositionCatalogOut](
-        items=[_catalog_out(db, r) for r in rows],
+        items=[_catalog_out(db, r, seg_map) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -107,12 +148,15 @@ def export_position_catalog_excel(
         q = q.where(PositionCatalog.is_active == is_active)
     order = _catalog_order(sort_by, sort_dir)
     rows = db.scalars(q.order_by(*order).limit(5000)).all()
+    seg_map = _template_dept_segments(db, template_code)
     headers = [
         "template_code",
         "position_code",
         "position_name_ru",
         "position_name_en",
         "function_code",
+        "primary_dept_type_code",
+        "segment_code",
         "position_level",
         "is_managerial",
         "position_family",
@@ -121,23 +165,28 @@ def export_position_catalog_excel(
         "default_regulation_code",
         "notes",
     ]
-    data = [
-        [
-            r.template_code,
-            r.position_code,
-            r.position_name_ru,
-            r.position_name_en,
-            r.function_code,
-            r.position_level,
-            r.is_managerial,
-            r.position_family,
-            r.is_active,
-            r.sort_order,
-            r.default_regulation_code,
-            r.notes,
-        ]
-        for r in rows
-    ]
+    data = []
+    for r in rows:
+        primary = get_primary_dept_type_code(db, r.template_code, r.position_code)
+        segment = _segment_for_primary(db, r.template_code, primary, seg_map)
+        data.append(
+            [
+                r.template_code,
+                r.position_code,
+                r.position_name_ru,
+                r.position_name_en,
+                r.function_code,
+                primary,
+                segment,
+                r.position_level,
+                r.is_managerial,
+                r.position_family,
+                r.is_active,
+                r.sort_order,
+                r.default_regulation_code,
+                r.notes,
+            ]
+        )
     return xlsx_file_response(
         download_name=f"position_catalog_{template_code}.xlsx",
         sheet_title="position_catalog",

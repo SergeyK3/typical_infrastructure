@@ -7,8 +7,10 @@
   <title>Типовые регламенты — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
-  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-2"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
+  <script src="/static/shared/catalog-row-actions.js?v=cra-1"></script>
+  <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
   <style>
     .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
@@ -37,7 +39,7 @@
     .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 21%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 10%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table td:nth-child(3) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-    .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 6%; }
+    .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 8%; min-width: 5.5rem; }
     .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 4%; }
     .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 4.5%; }
     .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 4.5%; }
@@ -75,6 +77,13 @@
     .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
     .header-row .btn { flex-shrink: 0; }
     .hidden { display: none !important; }
+    .dept-mismatch { color: var(--warning, #d29922); font-size: 0.82rem; white-space: nowrap; }
+    .dept-catalog-mismatch-hint {
+      margin: 0.35rem 0 0 0; font-size: 0.8rem; line-height: 1.45;
+      padding: 0.5rem 0.65rem; border-radius: 6px;
+      border: 1px solid rgba(210, 153, 34, 0.35); background: rgba(210, 153, 34, 0.08);
+      color: var(--text);
+    }
     /* Просмотр регламента: акцент на «Закрыть», остальное справа и спокойнее */
     .detail-modal-footer {
       margin-top: 1.25rem;
@@ -117,6 +126,13 @@
     }
     .modal-content input[type="date"]::-webkit-calendar-picker-indicator:hover {
       opacity: 1;
+    }
+    .modal-content label.check-row {
+      display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer;
+      font-size: 0.85rem; color: var(--text-muted);
+    }
+    .modal-content label.check-row input[type=checkbox] {
+      width: auto; max-width: none; margin: 0; padding: 0; flex-shrink: 0;
     }
   </style>
 </head>
@@ -179,6 +195,8 @@
             <select id="filterTemplate" title="Bundle шаблона"><option value="default">default</option></select>
             <label for="filterSearch" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Поиск по реестру:</label>
             <input type="search" id="filterSearch" class="search-input" placeholder="Код, название, должность, тип подразделения, фрагмент цели…" autocomplete="off" title="Общесистемный справочник — все организации видят одни и те же регламенты" />
+            <label for="filterPositionSearch" style="margin:0;font-size:0.9rem;color:var(--text-muted);">Должность:</label>
+            <input type="search" id="filterPositionSearch" class="search-input" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
             <button type="button" class="btn btn-secondary btn-sm" id="btnApply">Найти / применить фильтры</button>
             <label class="th-filter-inline"><input type="checkbox" id="filterCurrent" /> Только действующие</label>
           </div>
@@ -192,17 +210,17 @@
               <th>Код</th>
               <th>Название</th>
               <th><label class="th-filter">Должность<select id="filterPosition" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
-              <th><label class="th-filter">Тип подразделения<select id="filterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
+              <th><label class="th-filter" title="Тип подразделения">Тип отд.<select id="filterDept" title="Фильтр по типу подразделения"><option value="">— все —</option></select></label></th>
               <th>Вер.</th>
               <th title="Ссылка на документ регламента (Google Doc и т.п.)">Регл.</th>
               <th title="Папка с инструкциями (URL)">Инстр.</th>
               <th><label class="th-filter">Статус<select id="filterStatus" title="Фильтр по статусу">
                 <option value="">— все —</option>
-                <option value="draft">draft</option>
-                <option value="on_review">on_review</option>
-                <option value="approved">approved</option>
-                <option value="active">active</option>
-                <option value="archived">archived</option>
+                <option value="draft">Черновик</option>
+                <option value="on_review">На согласовании</option>
+                <option value="approved">Утверждён</option>
+                <option value="active">Действующий</option>
+                <option value="archived">Архив</option>
               </select></label></th>
               <th></th>
             </tr>
@@ -237,33 +255,37 @@
         <p class="meta" id="formGeneratedDraftMeta" style="margin: 0 0 0.5rem 0; line-height: 1.45;">Черновик DOCX сгенерирован — можно скачать до или после сохранения карточки в реестре.</p>
         <a id="formGeneratedDownloadLink" class="btn btn-secondary btn-sm" href="#" download style="text-decoration: none; display: inline-block;">Скачать черновик DOCX</a>
       </div>
-      <div id="formFieldsCreate">
+      <div id="formFieldsIdentity">
         <label>Код регламента *</label>
         <input type="text" id="f_regulation_code" maxlength="64" placeholder="REG_MY_POSITION_V1" title="Уникален в общесистемном реестре; перед вводом проверьте поиск на странице" />
         <p class="meta hidden" id="f_regulation_code_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;"></p>
+        <p class="meta hidden" id="f_regulation_code_edit_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
+          Уникальный код в реестре. При переименовании обновятся KPI и инструкции в этой карточке.
+        </p>
         <label>Версия *</label>
         <input type="text" id="f_version_no" maxlength="16" placeholder="1" />
+        <p class="meta hidden" id="f_version_no_edit_hint" style="margin: 0.25rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
+          Версия участвует в уникальности слота «должность + тип отд. + версия» — не дублируйте существующую комбинацию.
+        </p>
       </div>
       <div id="formFieldsSlot">
         <label>Код должности (справочник) *</label>
-        <select id="f_position_code_pick" title="Подставить код из типового справочника должностей">
+        <select id="f_position_code_pick" title="Выбрать должность из типового справочника">
           <option value="">— выбрать из справочника —</option>
         </select>
-        <input type="text" id="f_position_code" maxlength="64" placeholder="Например: PROC_BUYER" autocomplete="off" style="margin-top: 0.35rem;" />
+        <input type="text" id="f_position_code" maxlength="64" placeholder="Например: HR_HEAD" autocomplete="off" style="margin-top: 0.35rem;" />
         <p class="meta" id="f_position_code_create_hint" style="margin: 0.35rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
-          Выберите должность из списка или введите короткий код вручную (латиница, до 48 символов).
-          <strong>До сохранения</strong> код можно исправить здесь. После сохранения карточки он фиксируется —
-          для смены заведите должность в <a id="f_position_catalog_link" href="/global/positions">типовых должностях</a>
-          или обратитесь к администратору платформы.
+          Выберите должность из списка или введите код вручную. Тип подразделения подставится из
+          <a id="f_position_catalog_link" href="/global/positions">справочника типовых должностей</a>.
         </p>
         <p class="meta hidden" id="f_position_code_hint" style="margin: 0.35rem 0 0 0; font-size: 0.8rem; line-height: 1.45;">
-          Код должности в сохранённой карточке не редактируется. Исправление — через
-          <a id="f_position_catalog_link_edit" href="/global/positions">справочник типовых должностей</a>
-          (переименование кода) или создание новой карточки регламента с правильной должностью.
+          Код должен совпадать с записью в <a id="f_position_catalog_link_edit" href="/global/positions">справочнике типовых должностей</a>
+          (регистр символов сохраняется, например <code>CALL OPERATOR warm</code>).
         </p>
         <label>Тип подразделения *</label>
         <select id="f_dept_type_code"><option value="">— выберите —</option></select>
-        <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Код отделения из типовой оргструктуры шаблона (ADM, HR, SALES и т.д.).</p>
+        <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Сегмент (POLYCLINIC, CLINIC…) или код отделения из типовой оргструктуры (HR, ADM, ADMISSION…).</p>
+        <p class="meta hidden dept-catalog-mismatch-hint" id="f_dept_catalog_mismatch_hint"></p>
       <label>Название *</label>
       <input type="text" id="f_regulation_name" maxlength="256" />
       <label>Цель (кратко)</label>
@@ -279,17 +301,17 @@
       <p class="meta" style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">Общий адрес папки, где хранятся должностные инструкции (отдельные ссылки — в блоке «Инструкции» при просмотре).</p>
       <label>Статус</label>
       <select id="f_status">
-        <option value="draft">draft</option>
-        <option value="on_review">on_review</option>
-        <option value="approved">approved</option>
-        <option value="active">active</option>
-        <option value="archived">archived</option>
+        <option value="draft">Черновик</option>
+        <option value="on_review">На согласовании</option>
+        <option value="approved">Утверждён</option>
+        <option value="active">Действующий</option>
+        <option value="archived">Архив</option>
       </select>
       <label for="f_effective_from">Действует с</label>
       <input type="date" id="f_effective_from" autocomplete="off" />
       <label for="f_effective_to">Действует по</label>
       <input type="date" id="f_effective_to" autocomplete="off" />
-      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;"><input type="checkbox" id="f_is_current" /> Действующий</label>
+      <label class="check-row"><input type="checkbox" id="f_is_current" /> Действующий</label>
       <div id="formOwnerOrgBlock" class="hidden" aria-hidden="true">
         <label>Организация (дерево подразделений)</label>
         <select id="f_owner_client_id" title="Подразделения загружаются для выбранной организации"></select>
@@ -358,7 +380,10 @@
     let editRegulationCode = '';
     let formClientsLoaded = false;
     let formDeptTypeCodes = [];
+    let formDeptSegmentMap = {};
+    let formSegmentLabels = {};
     let formPositionsCache = [];
+    let regulationPositionNameMap = {};
     let lastGeneratedDraft = null;
 
     function showGenerateErr(msg) {
@@ -710,6 +735,20 @@
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    const REGULATION_STATUS_RU = {
+      draft: 'Черновик',
+      on_review: 'На согласовании',
+      approved: 'Утверждён',
+      active: 'Действующий',
+      archived: 'Архив',
+    };
+
+    function regulationStatusLabel(status, isCurrent) {
+      if (isCurrent) return 'Действующий';
+      const key = String(status || '').trim();
+      return REGULATION_STATUS_RU[key] || key || '—';
+    }
+
     function renderRegulationUrlCell(url, openTitle, emptyTitle) {
       const href = url && String(url).trim();
       if (href) {
@@ -718,16 +757,33 @@
       return '<td class="td-url-flag"><span class="url-flag url-flag-no" title="' + escapeHtml(emptyTitle) + '">нет</span></td>';
     }
 
+    function regulationPositionCell(r) {
+      const code = r.position_code || '';
+      const name = window.CatalogPositionSearch
+        ? CatalogPositionSearch.positionDisplayName(regulationPositionNameMap, code, '')
+        : '';
+      if (name && name !== code) {
+        return '<td title="' + escapeHtml(name + ' · ' + code) + '">' +
+          '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(name) + '</div>' +
+          '<code style="font-size:0.78rem;">' + escapeHtml(code) + '</code></td>';
+      }
+      return '<td><code>' + escapeHtml(code) + '</code></td>';
+    }
+
     async function loadRegulations() {
       const tbody = document.getElementById('tbody');
       const meta = document.getElementById('listMeta');
       try {
         const qs = buildFilterParams();
         const data = await fetchApi('/regulations' + (qs ? '?' + qs : '?limit=500'));
-        const items = data.items || [];
+        let items = data.items || [];
+        const posQ = (document.getElementById('filterPositionSearch') && document.getElementById('filterPositionSearch').value.trim()) || '';
+        if (posQ && window.CatalogPositionSearch) {
+          items = items.filter((r) => CatalogPositionSearch.matchesPositionKeyword(regulationPositionNameMap, r.position_code, posQ));
+        }
         const total = typeof data.total === 'number' ? data.total : items.length;
         if (meta) {
-          meta.textContent = 'В реестре по текущим условиям: ' + total + ' записей' + (items.length < total ? ' (показаны первые ' + items.length + ')' : '') + '.';
+          meta.textContent = 'Показано: ' + items.length + (items.length !== total ? ' из ' + total + ' по условиям API' : '') + ' записей.';
           meta.classList.remove('hidden');
         }
         if (!items.length) {
@@ -738,49 +794,39 @@
           const code = r.regulation_code;
           const codeEsc = escapeHtml(code);
           const nameEsc = escapeHtml(r.regulation_name);
-          const statusHtml = escapeHtml(r.status || '') +
-            (r.is_current ? ' <span class="badge current">действующий</span>' : '' );
+          const statusHtml = escapeHtml(regulationStatusLabel(r.status, r.is_current));
           return '<tr>' +
             '<td><code>' + codeEsc + '</code></td>' +
             '<td class="td-name"><a href="#" class="row-title-link" data-code="' + codeEsc + '" title="' + nameEsc + '">' + nameEsc + '</a></td>' +
-            '<td><code>' + escapeHtml(r.position_code) + '</code></td>' +
-            '<td>' + escapeHtml(r.dept_type_code) + '</td>' +
+            regulationPositionCell(r) +
+            renderRegulationDeptCell(r) +
             '<td>' + escapeHtml(String(r.version_no)) + '</td>' +
             renderRegulationUrlCell(r.google_doc_url, 'Открыть регламент', 'Ссылка на регламент не указана') +
             renderRegulationUrlCell(r.instructions_folder_url, 'Открыть папку инструкций', 'Папка инструкций не указана') +
             '<td class="td-status">' + statusHtml + '</td>' +
-            '<td class="row-actions">' +
-            '<button type="button" class="btn btn-primary btn-edit" data-code="' + codeEsc + '">Изменить</button>' +
-            '<button type="button" class="btn btn-secondary btn-clone" data-code="' + codeEsc + '">Копировать</button>' +
-            '<button type="button" class="btn btn-secondary btn-copy-tpl" data-code="' + codeEsc + '" title="В другой шаблон">В шаблон</button>' +
-            '<button type="button" class="btn btn-danger btn-del" data-code="' + codeEsc + '">Удалить</button>' +
-            '</td></tr>';
+            '<td>' + CatalogRowActions.preset('globalCatalog', { code: code }, { rowKey: code, size: 'sm' }) + '</td></tr>';
         }).join('');
         tbody.querySelectorAll('.row-title-link').forEach((a) => {
           a.addEventListener('click', (e) => { e.preventDefault(); openDetail(a.dataset.code); });
         });
-        tbody.querySelectorAll('.btn-edit').forEach((btn) => {
-          btn.addEventListener('click', (e) => { e.stopPropagation(); openEditForm(btn.dataset.code); });
-        });
-        tbody.querySelectorAll('.btn-clone').forEach((btn) => {
-          btn.addEventListener('click', (e) => { e.stopPropagation(); cloneRegulation(btn.dataset.code); });
-        });
-        tbody.querySelectorAll('.btn-copy-tpl').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tpl = document.getElementById('filterTemplate').value || 'default';
-            CatalogCopy.open({
-              entity: 'regulation',
-              mode: 'global_to_global',
-              sourceTemplateCode: tpl,
-              sourceCode: btn.dataset.code,
-              onSuccess: () => loadRegulations(),
-            });
+        if (!tbody._craBound && window.CatalogRowActions) {
+          CatalogRowActions.bind(tbody, (action, wrap) => {
+            const code = wrap.dataset.code;
+            if (action === 'edit') openEditForm(code);
+            else if (action === 'clone') cloneRegulation(code);
+            else if (action === 'copy-to-template') {
+              const tpl = document.getElementById('filterTemplate').value || 'default';
+              CatalogCopy.open({
+                entity: 'regulation',
+                mode: 'global_to_global',
+                sourceTemplateCode: tpl,
+                sourceCode: code,
+                onSuccess: () => loadRegulations(),
+              });
+            } else if (action === 'delete') deleteRegulation(code);
           });
-        });
-        tbody.querySelectorAll('.btn-del').forEach((btn) => {
-          btn.addEventListener('click', (e) => { e.stopPropagation(); deleteRegulation(btn.dataset.code); });
-        });
+          tbody._craBound = true;
+        }
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">Ошибка загрузки: ' + escapeHtml(e.message || 'Неизвестная ошибка') + '. <a href="/regulations">Обновить</a></td></tr>';
       }
@@ -792,6 +838,16 @@
         document.getElementById('detailCode').value = code;
         document.getElementById('detailTitle').textContent = r.regulation_name;
         let html = '<p class="meta">' + r.regulation_code + ' · ' + r.position_code + ' / ' + r.dept_type_code + ' · v' + r.version_no + '</p>';
+        if (r.catalog_dept_type_code && r.catalog_dept_type_code !== r.dept_type_code) {
+          const tpl = document.getElementById('filterTemplate').value || 'default';
+          const posHref = (window.GlobalTemplateContext && GlobalTemplateContext.withTemplateQuery)
+            ? GlobalTemplateContext.withTemplateQuery('/global/positions', tpl)
+            : '/global/positions';
+          html += '<p class="dept-catalog-mismatch-hint">Тип отделения расходится: в регламенте <code>' + escapeHtml(r.dept_type_code) +
+            '</code>, в <a href="' + escapeHtml(posHref) + '" target="_blank" rel="noopener">справочнике должностей</a> для «' +
+            escapeHtml(r.position_code) + '» — <code>' + escapeHtml(r.catalog_dept_type_code) +
+            '</code>. Обновите карточку должности, чтобы значения совпали.</p>';
+        }
         if (r.goal_summary) html += '<p>' + r.goal_summary + '</p>';
         if (r.ckp_short) html += '<div class="section"><div class="section-title">ЦКП</div><p>' + r.ckp_short + '</p></div>';
         if (r.google_doc_url) html += '<div class="section"><div class="section-title">Документ</div><p><a href="' + r.google_doc_url + '" target="_blank" rel="noopener">' + r.google_doc_url + '</a></p></div>';
@@ -851,33 +907,144 @@
       showFormErr('');
     }
 
+    function segmentDisplayForForm(code) {
+      const c = String(code || '').trim();
+      if (!c) return '—';
+      const label = formSegmentLabels[c];
+      return label ? c + ' — ' + label : c;
+    }
+
+    async function loadSegmentLabelsForForm() {
+      const tpl = document.getElementById('filterTemplate').value || 'default';
+      try {
+        const data = await fetchApi('/template-segment-codes?template_code=' + encodeURIComponent(tpl) + '&limit=200');
+        formSegmentLabels = Object.fromEntries(
+          (data.items || []).map((s) => [s.code, s.name_ru || s.name_en || s.code])
+        );
+      } catch (_) {
+        formSegmentLabels = {};
+      }
+    }
+
+    function fillDeptTypeSelect(sel, keepValue) {
+      const keep = (keepValue !== undefined ? keepValue : sel.value).trim();
+      const segmentCodes = Object.keys(formSegmentLabels).sort((a, b) => a.localeCompare(b, 'ru'));
+      let html = '<option value="">— выберите —</option>';
+      if (segmentCodes.length) {
+        html += '<optgroup label="Сегменты (словарь шаблона)">';
+        segmentCodes.forEach((seg) => {
+          html += '<option value="' + escapeHtml(seg) + '">' + escapeHtml(segmentDisplayForForm(seg)) + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      const deptsBySegment = {};
+      formDeptTypeCodes.forEach((code) => {
+        const segKey = formDeptSegmentMap[code] || '';
+        const label = segKey ? segmentDisplayForForm(segKey) : 'Без сегмента';
+        if (!deptsBySegment[label]) deptsBySegment[label] = [];
+        deptsBySegment[label].push(code);
+      });
+      Object.keys(deptsBySegment).sort((a, b) => a.localeCompare(b, 'ru')).forEach((label) => {
+        html += '<optgroup label="Отделения · ' + escapeHtml(label) + '">';
+        deptsBySegment[label].sort((a, b) => a.localeCompare(b, 'ru')).forEach((code) => {
+          html += '<option value="' + escapeHtml(code) + '">' + escapeHtml(code) + '</option>';
+        });
+        html += '</optgroup>';
+      });
+      sel.innerHTML = html;
+      if (keep && ![...sel.options].some((o) => o.value === keep)) {
+        const opt = document.createElement('option');
+        opt.value = keep;
+        opt.textContent = formSegmentLabels[keep] ? segmentDisplayForForm(keep) : keep;
+        sel.appendChild(opt);
+      }
+      if (keep) sel.value = keep;
+    }
+
+    function positionsCatalogHref() {
+      const tpl = document.getElementById('filterTemplate').value || 'default';
+      return (window.GlobalTemplateContext && GlobalTemplateContext.withTemplateQuery)
+        ? GlobalTemplateContext.withTemplateQuery('/global/positions', tpl)
+        : '/global/positions';
+    }
+
+    function catalogDeptForPosition(pos) {
+      const key = (pos || '').trim();
+      if (!key) return null;
+      const row = formPositionsCache.find((p) => p.position_code === key
+        || (p.position_code && key.toLowerCase() === p.position_code.toLowerCase()));
+      return row && row.primary_dept_type_code ? row.primary_dept_type_code : null;
+    }
+
+    function renderRegulationDeptCell(r) {
+      const stored = r.dept_type_code || '';
+      const catalog = r.catalog_dept_type_code || '';
+      if (catalog && catalog !== stored) {
+        const tip = 'В регламенте: ' + stored + '. В справочнике должностей: ' + catalog
+          + '. Исправьте тип подразделения в справочнике типовых должностей.';
+        return '<td class="dept-mismatch" title="' + escapeHtml(tip) + '">' +
+          escapeHtml(stored) + ' <span aria-hidden="true">≠</span> ' + escapeHtml(catalog) + '</td>';
+      }
+      return '<td>' + escapeHtml(stored) + '</td>';
+    }
+
+    function updateDeptCatalogMismatchHint(catalogDept, storedDept) {
+      const hint = document.getElementById('f_dept_catalog_mismatch_hint');
+      if (!hint) return;
+      const cat = (catalogDept || '').trim();
+      const stored = (storedDept !== undefined ? storedDept : document.getElementById('f_dept_type_code').value).trim();
+      if (!cat || cat === stored) {
+        hint.classList.add('hidden');
+        hint.innerHTML = '';
+        return;
+      }
+      const href = positionsCatalogHref();
+      hint.classList.remove('hidden');
+      hint.innerHTML =
+        'Расхождение: в регламенте <code>' + escapeHtml(segmentDisplayForForm(stored)) + '</code>, ' +
+        'в <a href="' + escapeHtml(href) + '" target="_blank" rel="noopener">справочнике должностей</a> — ' +
+        '<code>' + escapeHtml(segmentDisplayForForm(cat)) + '</code>. ' +
+        'Исправьте тип подразделения в карточке должности «' + escapeHtml(document.getElementById('f_position_code').value.trim()) + '».';
+    }
+
+    function refreshDeptCatalogMismatchHint() {
+      const pos = document.getElementById('f_position_code').value.trim();
+      updateDeptCatalogMismatchHint(catalogDeptForPosition(pos));
+    }
+
+    function syncDeptFromSelectedPosition() {
+      if (formMode !== 'create') return;
+      const pos = document.getElementById('f_position_code').value.trim();
+      const row = formPositionsCache.find((p) => p.position_code === pos);
+      if (row && row.primary_dept_type_code) {
+        fillDeptTypeSelect(document.getElementById('f_dept_type_code'), row.primary_dept_type_code);
+      }
+      refreshDeptCatalogMismatchHint();
+    }
+
     async function loadDeptTypeOptionsForForm(keepValue) {
       const tpl = document.getElementById('filterTemplate').value || 'default';
       const sel = document.getElementById('f_dept_type_code');
       const prev = keepValue !== undefined ? keepValue : sel.value;
+      await loadSegmentLabelsForForm();
       try {
         const data = await fetchApi('/template-org-units?template_code=' + encodeURIComponent(tpl) + '&limit=500&offset=0');
-        formDeptTypeCodes = [...new Set((data.items || [])
+        const units = data.items || [];
+        formDeptTypeCodes = [...new Set(units
           .filter((u) => u.unit_type === 'department')
           .map((u) => u.code)
           .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+        formDeptSegmentMap = {};
+        units.forEach((u) => {
+          if (!u.code) return;
+          const seg = u.effective_segment_code || u.segment_code || '';
+          if (seg) formDeptSegmentMap[u.code] = seg;
+        });
       } catch (_) {
         formDeptTypeCodes = [];
+        formDeptSegmentMap = {};
       }
-      sel.innerHTML = '<option value="">— выберите —</option>';
-      formDeptTypeCodes.forEach((code) => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = code;
-        sel.appendChild(opt);
-      });
-      if (prev && ![...sel.options].some((o) => o.value === prev)) {
-        const opt = document.createElement('option');
-        opt.value = prev;
-        opt.textContent = prev;
-        sel.appendChild(opt);
-      }
-      if (prev) sel.value = prev;
+      fillDeptTypeSelect(sel, prev);
     }
 
     function syncPositionCatalogLinks() {
@@ -897,21 +1064,27 @@
       const input = document.getElementById('f_position_code');
       const createHint = document.getElementById('f_position_code_create_hint');
       const editHint = document.getElementById('f_position_code_hint');
-      if (pick) pick.classList.toggle('hidden', !isCreate);
+      if (pick) pick.classList.remove('hidden');
       if (createHint) createHint.classList.toggle('hidden', !isCreate);
       if (editHint) editHint.classList.toggle('hidden', isCreate);
-      if (input) input.readOnly = !isCreate;
+      if (input) input.readOnly = false;
       syncPositionCatalogLinks();
     }
 
-    function syncDeptFromSelectedPosition() {
-      if (formMode !== 'create') return;
-      const pos = document.getElementById('f_position_code').value.trim();
-      const row = formPositionsCache.find((p) => p.position_code === pos);
-      if (row && row.primary_dept_type_code) {
-        loadDeptTypeOptionsForForm(row.primary_dept_type_code);
-      }
+    function setRegulationIdentityFormMode(mode) {
+      const isCreate = mode === 'create';
+      const codeEl = document.getElementById('f_regulation_code');
+      const verEl = document.getElementById('f_version_no');
+      const codeEditHint = document.getElementById('f_regulation_code_edit_hint');
+      const verEditHint = document.getElementById('f_version_no_edit_hint');
+      const codeCreateHint = document.getElementById('f_regulation_code_hint');
+      if (codeEl) codeEl.readOnly = false;
+      if (verEl) verEl.readOnly = false;
+      if (codeEditHint) codeEditHint.classList.toggle('hidden', isCreate);
+      if (verEditHint) verEditHint.classList.toggle('hidden', isCreate);
+      if (codeCreateHint) codeCreateHint.classList.toggle('hidden', !isCreate);
     }
+
 
     async function fillPositionCodePick() {
       const sel = document.getElementById('f_position_code_pick');
@@ -940,7 +1113,7 @@
       formMode = 'create';
       editRegulationCode = '';
       document.getElementById('formTitle').textContent = 'Новый регламент';
-      document.getElementById('formFieldsCreate').style.display = 'block';
+      setRegulationIdentityFormMode('create');
       setPositionCodeFormMode('create');
       document.getElementById('f_position_code').value = '';
       document.getElementById('f_position_code_pick').value = '';
@@ -949,6 +1122,7 @@
       const rh = document.getElementById('f_regulation_code_hint');
       if (rh) { rh.textContent = ''; rh.classList.add('hidden'); }
       document.getElementById('f_dept_type_code').value = '';
+      updateDeptCatalogMismatchHint(null);
       document.getElementById('f_version_no').value = '1';
       document.getElementById('f_regulation_name').value = '';
       document.getElementById('f_goal_summary').value = '';
@@ -981,14 +1155,23 @@
       formMode = 'edit';
       editRegulationCode = code;
       document.getElementById('formTitle').textContent = 'Изменить регламент';
-      document.getElementById('formFieldsCreate').style.display = 'none';
+      setRegulationIdentityFormMode('edit');
       setPositionCodeFormMode('edit');
       showFormErr('');
       try {
         const r = await fetchApi('/regulations/' + encodeURIComponent(code));
+        document.getElementById('f_regulation_code').value = r.regulation_code || '';
+        document.getElementById('f_version_no').value = r.version_no != null ? String(r.version_no) : '';
         await fillPositionCodePick();
         document.getElementById('f_position_code').value = r.position_code || '';
+        const pick = document.getElementById('f_position_code_pick');
+        if (pick && r.position_code && [...pick.options].some((o) => o.value === r.position_code)) {
+          pick.value = r.position_code;
+        } else if (pick) {
+          pick.value = '';
+        }
         await loadDeptTypeOptionsForForm(r.dept_type_code || '');
+        updateDeptCatalogMismatchHint(r.catalog_dept_type_code, r.dept_type_code || '');
         document.getElementById('f_regulation_name').value = r.regulation_name || '';
         document.getElementById('f_goal_summary').value = r.goal_summary || '';
         document.getElementById('f_ckp_short').value = r.ckp_short || '';
@@ -1028,7 +1211,7 @@
       showFormErr('');
       if (formMode === 'create') {
         const regulation_code = document.getElementById('f_regulation_code').value.trim();
-        const position_code = document.getElementById('f_position_code').value.trim().toUpperCase();
+        const position_code = document.getElementById('f_position_code').value.trim();
         const dept_type_code = document.getElementById('f_dept_type_code').value.trim();
         const version_no = document.getElementById('f_version_no').value.trim();
         const regulation_name = document.getElementById('f_regulation_name').value.trim();
@@ -1061,17 +1244,23 @@
           showFormErr(e.message);
         }
       } else {
+        const regulation_code = document.getElementById('f_regulation_code').value.trim();
+        const position_code = document.getElementById('f_position_code').value.trim();
+        const version_no = document.getElementById('f_version_no').value.trim();
         const regulation_name = document.getElementById('f_regulation_name').value.trim();
         const dept_type_code = document.getElementById('f_dept_type_code').value.trim();
         if (!regulation_name) {
           showFormErr('Укажите название регламента.');
           return;
         }
-        if (!dept_type_code) {
-          showFormErr('Укажите тип подразделения.');
+        if (!regulation_code || !position_code || !dept_type_code || !version_no) {
+          showFormErr('Заполните код регламента, должность, тип подразделения и версию.');
           return;
         }
         const patch = {
+          regulation_code,
+          position_code,
+          version_no,
           dept_type_code,
           regulation_name,
           goal_summary: document.getElementById('f_goal_summary').value.trim() || null,
@@ -1087,10 +1276,11 @@
           notes: document.getElementById('f_notes').value.trim() || null,
         };
         try {
-          await fetchApi('/regulations/' + encodeURIComponent(editRegulationCode), {
+          const saved = await fetchApi('/regulations/' + encodeURIComponent(editRegulationCode), {
             method: 'PATCH',
             body: JSON.stringify(patch),
           });
+          editRegulationCode = saved.regulation_code || editRegulationCode;
           closeForm();
           await loadRegulations();
           await loadFilterOptions();
@@ -1105,33 +1295,40 @@
       if (!code) return;
       document.getElementById('f_position_code').value = code;
       syncDeptFromSelectedPosition();
+      refreshDeptCatalogMismatchHint();
       suggestRegulationCodeForPosition(code).catch(() => {});
     });
     document.getElementById('f_position_code').addEventListener('change', () => {
       syncDeptFromSelectedPosition();
+      refreshDeptCatalogMismatchHint();
       const code = document.getElementById('f_position_code').value.trim();
       if (code) suggestRegulationCodeForPosition(code).catch(() => {});
     });
     document.getElementById('f_position_code').addEventListener('blur', () => {
       syncDeptFromSelectedPosition();
+      refreshDeptCatalogMismatchHint();
       const code = document.getElementById('f_position_code').value.trim();
       if (code) suggestRegulationCodeForPosition(code).catch(() => {});
+    });
+    document.getElementById('f_dept_type_code').addEventListener('change', () => {
+      const pos = document.getElementById('f_position_code').value.trim();
+      updateDeptCatalogMismatchHint(catalogDeptForPosition(pos), document.getElementById('f_dept_type_code').value);
     });
 
     async function loadFilterOptions() {
       try {
         const GTC = window.GlobalTemplateContext;
         const tplSelect = document.getElementById('filterTemplate');
+        const templates = await GTC.fetchEnterpriseTemplates(true);
         const tplVal = GTC.resolveTemplateCode(
-          await GTC.fetchEnterpriseTemplates(true),
-          tplSelect.value || GTC.getGlobalEditTemplateCode('default'),
+          templates,
+          GTC.getGlobalEditTemplateCode('default'),
           'default'
         );
         const tplQs = '?template_code=' + encodeURIComponent(tplVal);
-        const [positions, deptTypes, templates] = await Promise.all([
+        const [positions, deptTypes] = await Promise.all([
           fetchApi('/regulations/positions/list' + tplQs),
           fetchApi('/regulations/dept-types/list' + tplQs),
-          GTC.fetchEnterpriseTemplates(true),
         ]);
         tplSelect.innerHTML = (templates || []).map(t =>
           '<option value="' + t.code + '">' + GTC.formatTemplateOptionLabel(t) + '</option>'
@@ -1139,7 +1336,7 @@
         if ([...tplSelect.options].some(o => o.value === tplVal)) tplSelect.value = tplVal;
         GTC.setGlobalEditTemplateCode(tplSelect.value);
         GTC.syncUrl(tplSelect.value);
-        GTC.renderEditHint();
+        GTC.renderEditHint('globalEditTemplateHint', tplSelect);
         const tpl = tplSelect.value || 'default';
         const posSelect = document.getElementById('filterPosition');
         const posVal = posSelect.value;
@@ -1151,6 +1348,10 @@
           posSelect.appendChild(opt);
         });
         if (posVal && [...posSelect.options].some(o => o.value === posVal)) posSelect.value = posVal;
+        regulationPositionNameMap = window.CatalogPositionSearch
+          ? CatalogPositionSearch.buildPositionNameMap(positions || [])
+          : {};
+        formPositionsCache = positions || [];
         const deptSelect = document.getElementById('filterDept');
         const deptVal = deptSelect.value;
         deptSelect.innerHTML = '<option value="">— все —</option>';
@@ -1161,6 +1362,7 @@
           deptSelect.appendChild(opt);
         });
         if (deptVal && [...deptSelect.options].some(o => o.value === deptVal)) deptSelect.value = deptVal;
+        await loadSegmentLabelsForForm();
       } catch (_) {}
     }
 
@@ -1178,6 +1380,9 @@
       await loadRegulations();
     };
     document.getElementById('filterPosition').onchange = loadRegulations;
+    if (window.CatalogPositionSearch) {
+      CatalogPositionSearch.wireSearch(document.getElementById('filterPositionSearch'), loadRegulations);
+    }
     document.getElementById('filterDept').onchange = loadRegulations;
     document.getElementById('filterStatus').onchange = loadRegulations;
     document.getElementById('filterCurrent').onchange = loadRegulations;

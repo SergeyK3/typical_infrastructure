@@ -7,8 +7,10 @@
   <title>Типовые навыки — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
-  <script src="/static/shared/catalog-copy.js?v=catalog-copy-3"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-2"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
+  <script src="/static/shared/catalog-row-actions.js?v=cra-1"></script>
+  <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
   <style>
     .row-actions { display: flex; gap: 0.3rem; flex-wrap: nowrap; }
     .row-actions .btn { padding: 0.18rem 0.45rem; font-size: 0.75rem; white-space: nowrap; }
@@ -19,8 +21,20 @@
     .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .data-table th { color: var(--text-muted); font-weight: 500; }
     .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 2.5rem; }
-    .data-table th:nth-child(6), .data-table td:nth-child(6) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 22rem; min-width: 22rem; white-space: nowrap; }
+    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 9%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 14%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 7%; }
+    .data-table th:nth-child(7), .data-table td:nth-child(7) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th:nth-child(8), .data-table td:nth-child(8) { width: 4.5rem; text-align: center; white-space: nowrap; }
+    .data-table th:nth-child(9), .data-table td:nth-child(9) { width: 22rem; min-width: 22rem; white-space: nowrap; }
+    .th-filter { display: block; margin: 0; font-weight: 500; color: var(--text-muted); font-size: 0.78rem; line-height: 1.25; }
+    .modal-content label.check-row {
+      display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer;
+      font-size: 0.85rem; color: var(--text-muted);
+    }
+    .modal-content label.check-row input[type=checkbox] {
+      width: auto; max-width: none; margin: 0; padding: 0; flex-shrink: 0;
+    }
     .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.4); }
     .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
     .modal.show { display: flex; }
@@ -68,12 +82,14 @@
           <button type="button" class="btn btn-secondary" id="btnReload">Обновить</button>
           <a class="btn btn-secondary" href="/api/skill-assessment/catalog/competency-matrix/export/excel?template_code=default" id="btnExportExcel" style="text-decoration:none;display:inline-block;">Скачать Excel</a>
           <a class="btn btn-secondary" href="/static/global/position-skills-normalized.csv" id="btnExportCsv" style="text-decoration:none;display:inline-block;" title="Legacy CSV">CSV (legacy)</a>
-          <input type="search" id="filterText" placeholder="Поиск по должности, коду или навыку">
-          <select id="filterPosition">
-            <option value="">Все должности</option>
-          </select>
         </div>
         <p id="globalEditTemplateHint" class="meta"></p>
+        <div class="catalog-filter-bar">
+          <label for="filterPositionSearch">Должность</label>
+          <input type="search" id="filterPositionSearch" placeholder="Код или название…" title="Поиск по коду или названию должности" autocomplete="off">
+          <label for="filterSkillSearch">Навык</label>
+          <input type="search" id="filterSkillSearch" placeholder="Название или код…" title="Поиск по названию или коду навыка" autocomplete="off">
+        </div>
         <p id="listMeta" class="meta"></p>
         <div id="listErr" class="err hidden"></div>
         <div style="overflow-x:auto;">
@@ -82,10 +98,12 @@
               <tr>
                 <th class="num">#</th>
                 <th>Код должности</th>
+                <th>Название должности</th>
                 <th>Подразделение</th>
                 <th class="num">Ранг</th>
                 <th>Код навыка</th>
                 <th>Навык</th>
+                <th>Активен</th>
                 <th></th>
               </tr>
             </thead>
@@ -110,7 +128,7 @@
       <label>Навык</label>
       <input type="text" id="fTitle" readonly style="opacity:0.85;">
       <p class="meta" style="margin:0.5rem 0 0 0;font-size:0.82rem;">Формулировка навыка привязана к коду навыка; для другой формулировки создайте копию строки и измените привязку.</p>
-      <label><input type="checkbox" id="fActive" checked> Активен</label>
+      <label class="check-row"><input type="checkbox" id="fActive" checked> Активен</label>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="btnCancel">Отмена</button>
         <button type="button" class="btn btn-primary" id="btnSave">Сохранить</button>
@@ -122,6 +140,19 @@
     const $ = (id) => document.getElementById(id);
     let rows = [];
     let positionsCatalog = [];
+    let positionNameMap = {};
+
+    function rebuildPositionNameMap() {
+      positionNameMap = window.CatalogPositionSearch
+        ? CatalogPositionSearch.buildPositionNameMap(positionsCatalog)
+        : {};
+    }
+
+    function positionNameFor(code) {
+      return window.CatalogPositionSearch
+        ? CatalogPositionSearch.positionDisplayName(positionNameMap, code, code || '—')
+        : (code || '—');
+    }
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -154,6 +185,7 @@
         if (!r.ok) return;
         const data = await r.json();
         positionsCatalog = data.items || [];
+        rebuildPositionNameMap();
       } catch (_) {
         positionsCatalog = [];
       }
@@ -193,16 +225,6 @@
       await load();
     }
 
-    function fillPositionFilter() {
-      const select = $('filterPosition');
-      const current = select.value;
-      const options = Array.from(new Map(rows.map((row) => [row.position_code, row.position_code])).entries());
-      select.innerHTML = '<option value="">Все должности</option>' + options
-        .map(([code]) => '<option value="' + escapeHtml(code) + '">' + escapeHtml(code) + '</option>')
-        .join('');
-      select.value = current;
-    }
-
     function openEdit(rowId) {
       const row = rows.find((x) => x.row_id === rowId);
       if (!row) return;
@@ -234,7 +256,11 @@
     }
 
     async function delRow(rowId) {
-      if (!confirm('Удалить строку из типовой матрицы навыков?')) return;
+      const row = rows.find((x) => x.row_id === rowId);
+      const title = row && row.skill_title_ru
+        ? '«' + row.skill_title_ru + '» (' + (row.skill_code || row.position_code || rowId) + ')'
+        : '«' + (rowId || '—') + '»';
+      if (!confirm('Удалить навык ' + title + ' из типовой матрицы навыков?')) return;
       $('listErr').classList.add('hidden');
       try {
         await skillApi(rowId, { method: 'DELETE' });
@@ -246,14 +272,16 @@
     }
 
     function render() {
-      const q = $('filterText').value.trim().toLowerCase();
-      const pos = $('filterPosition').value;
+      const posQ = $('filterPositionSearch').value.trim();
+      const skillQ = $('filterSkillSearch').value.trim().toLowerCase();
       const filtered = rows.filter((row) => {
-        if (pos && row.position_code !== pos) return false;
-        if (!q) return true;
-        return [row.position_code, row.department_code, row.skill_code, row.skill_title_ru].some(
-          (value) => String(value || '').toLowerCase().includes(q)
-        );
+        if (window.CatalogPositionSearch && posQ && !CatalogPositionSearch.matchesPositionKeyword(positionNameMap, row.position_code, posQ)) {
+          return false;
+        }
+        if (skillQ && !CatalogPositionSearch.matchesAnyKeyword([row.skill_code, row.skill_title_ru, row.department_code], skillQ)) {
+          return false;
+        }
+        return true;
       });
       $('listMeta').textContent = 'Записей: ' + filtered.length + ' из ' + rows.length + ' · шаблон ' + templateCode();
       $('tbody').innerHTML = filtered.map((row, idx) => {
@@ -262,44 +290,44 @@
         '<tr>' +
           '<td class="num">' + (idx + 1) + '</td>' +
           '<td><code>' + escapeHtml(row.position_code) + '</code></td>' +
+          '<td title="' + escapeHtml(positionNameFor(row.position_code)) + '">' + escapeHtml(positionNameFor(row.position_code)) + '</td>' +
           '<td><code>' + escapeHtml(row.department_code || '') + '</code></td>' +
           '<td class="num">' + row.skill_rank + '</td>' +
           '<td><code>' + escapeHtml(row.skill_code || '') + '</code></td>' +
           '<td title="' + escapeHtml(row.skill_title_ru || '') + '">' + escapeHtml(row.skill_title_ru || '') + '</td>' +
+          '<td>' + (row.is_active !== false ? 'да' : 'нет') + '</td>' +
           '<td class="row-actions">' +
             (rowId
-              ? '<button type="button" class="btn btn-secondary btn-edit" data-id="' + escapeHtml(rowId) + '">Изменить</button>' +
-                '<button type="button" class="btn btn-secondary btn-clone" data-id="' + escapeHtml(rowId) + '">Копировать</button>' +
-                '<button type="button" class="btn btn-secondary btn-copy-skill" data-pos="' + escapeHtml(row.position_code) + '" data-dept="' + escapeHtml(row.department_code || '') + '" data-rank="' + row.skill_rank + '" title="В другой шаблон">В шаблон</button>' +
-                '<button type="button" class="btn btn-danger btn-del" data-id="' + escapeHtml(rowId) + '">Удалить</button>'
+              ? CatalogRowActions.preset('globalCatalog', {
+                  id: rowId,
+                  positionCode: row.position_code,
+                  departmentCode: row.department_code || '',
+                  skillRank: row.skill_rank,
+                }, { rowKey: rowId, size: 'sm' })
               : '') +
           '</td>' +
         '</tr>'
         );
       }).join('');
-      $('tbody').querySelectorAll('.btn-edit').forEach((btn) => {
-        btn.onclick = () => openEdit(btn.dataset.id);
-      });
-      $('tbody').querySelectorAll('.btn-clone').forEach((btn) => {
-        btn.onclick = () => cloneRow(btn.dataset.id);
-      });
-      $('tbody').querySelectorAll('.btn-del').forEach((btn) => {
-        btn.onclick = () => delRow(btn.dataset.id);
-      });
-      $('tbody').querySelectorAll('.btn-copy-skill').forEach((btn) => {
-        btn.onclick = () => {
-          if (!window.CatalogCopy) return;
-          CatalogCopy.open({
-            entity: 'skill',
-            mode: 'global_to_global',
-            sourceTemplateCode: templateCode(),
-            positionCode: btn.dataset.pos,
-            departmentCode: btn.dataset.dept,
-            skillRank: parseInt(btn.dataset.rank, 10) || 1,
-            onSuccess: () => load(),
-          });
-        };
-      });
+      if (!$('tbody')._craBound && window.CatalogRowActions) {
+        CatalogRowActions.bind($('tbody'), (action, wrap) => {
+          const id = wrap.dataset.id;
+          if (action === 'edit') openEdit(id);
+          else if (action === 'clone') cloneRow(id);
+          else if (action === 'copy-to-template' && window.CatalogCopy) {
+            CatalogCopy.open({
+              entity: 'skill',
+              mode: 'global_to_global',
+              sourceTemplateCode: templateCode(),
+              positionCode: wrap.dataset.positionCode,
+              departmentCode: wrap.dataset.departmentCode,
+              skillRank: parseInt(wrap.dataset.skillRank, 10) || 1,
+              onSuccess: () => load(),
+            });
+          } else if (action === 'delete') delRow(id);
+        });
+        $('tbody')._craBound = true;
+      }
     }
 
     async function load() {
@@ -311,7 +339,6 @@
         const r = await fetch('/api/skill-assessment/catalog/competency-matrix?template_code=' + encodeURIComponent(tpl), { cache: 'no-store' });
         if (!r.ok) throw new Error('Не удалось загрузить матрицу навыков (HTTP ' + r.status + ')');
         rows = await r.json();
-        fillPositionFilter();
         render();
       } catch (e) {
         $('listErr').textContent = e.message || String(e);
@@ -320,8 +347,10 @@
     }
 
     $('btnReload').onclick = load;
-    $('filterText').oninput = render;
-    $('filterPosition').onchange = render;
+    if (window.CatalogPositionSearch) {
+      CatalogPositionSearch.wireSearch($('filterPositionSearch'), render);
+      CatalogPositionSearch.wireSearch($('filterSkillSearch'), render);
+    }
     $('btnCancel').onclick = closeModal;
     $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
     $('btnSave').onclick = async () => {

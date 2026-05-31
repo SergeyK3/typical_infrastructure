@@ -18,7 +18,11 @@ from app.org_unit_ops import (
     delete_local_org_unit_cascade,
     delete_local_org_unit_leaf,
     format_org_unit_name,
+    normalize_template_segment_code,
+    resolve_org_unit_effective_segment,
+    SEGMENT_UNIT_TYPES,
 )
+from app.client_org_segment_sync import sync_segments_from_template
 from app.template_org_resolve import resolve_template_structure
 from app.schemas import (
     ListEnvelope,
@@ -31,10 +35,18 @@ from app.schemas import (
     OrgUnitOut,
     OrgUnitPatch,
     OrgUnitReorderItem,
+    SegmentSyncOut,
 )
 from app.utils import new_id32
 
 router = APIRouter(prefix="/org-units", tags=["org_units"])
+
+
+def _org_unit_out(db: Session, row: OrgUnit) -> OrgUnitOut:
+    base = OrgUnitOut.model_validate(row)
+    return base.model_copy(
+        update={"effective_segment_code": resolve_org_unit_effective_segment(db, row)}
+    )
 
 
 def _get_unit(db: Session, unit_id: str) -> OrgUnit | None:
@@ -92,7 +104,7 @@ def list_org_units(
         q.order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc()).limit(limit).offset(offset)
     ).all()
     return ListEnvelope[OrgUnitOut](
-        items=[OrgUnitOut.model_validate(r) for r in rows],
+        items=[_org_unit_out(db, r) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -106,7 +118,8 @@ def tree_org_units(client_id: str = Query(...), db: Session = Depends(get_db)) -
     ).all()
     nodes: dict[str, OrgUnitNode] = {}
     for r in rows:
-        nodes[r.id] = OrgUnitNode.model_validate(r).model_copy(update={"children": []})
+        base = _org_unit_out(db, r)
+        nodes[r.id] = OrgUnitNode.model_validate(base).model_copy(update={"children": []})
 
     roots: list[OrgUnitNode] = []
     for n in nodes.values():
@@ -149,6 +162,7 @@ def export_org_units_excel(
         "sort_order",
         "catalog_source_code",
         "is_detached",
+        "segment_code",
         "created_at",
         "updated_at",
     ]
@@ -164,6 +178,7 @@ def export_org_units_excel(
             r.sort_order,
             r.catalog_source_code,
             r.is_detached,
+            r.segment_code,
             r.created_at,
             r.updated_at,
         ]
@@ -221,11 +236,32 @@ def add_org_unit_from_template(
         sort_order=int(spec.get("sort_order", 0)),
         catalog_source_code=spec["code"],
         is_detached=True,
+        segment_code=spec.get("segment_code") if spec["unit_type"] == "department" else None,
     )
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return OrgUnitOut.model_validate(obj)
+    return _org_unit_out(db, obj)
+
+
+@router.post("/sync-segments-from-template", response_model=SegmentSyncOut)
+def sync_org_segments_from_template(
+    client_id: str = Query(...),
+    update_positions: bool = Query(True, description="Обновить segment_code у должностей"),
+    db: Session = Depends(get_db),
+) -> SegmentSyncOut:
+    """Перенести segment_code из типовой оргструктуры в локальные подразделения и должности."""
+    if not db.get(Client, client_id):
+        raise HTTPException(status_code=404, detail="client_not_found")
+    template_code = _resolve_client_template_code(db, client_id)
+    result = sync_segments_from_template(
+        db, client_id, template_code, update_positions=update_positions
+    )
+    db.commit()
+    return SegmentSyncOut(
+        org_units_updated=result.org_units_updated,
+        positions_updated=result.positions_updated,
+    )
 
 
 @router.post("/deploy-template", response_model=list[OrgUnitOut])
@@ -255,13 +291,14 @@ def deploy_template(
     rows = db.scalars(
         select(OrgUnit).where(OrgUnit.client_id == client_id).order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc())
     ).all()
-    return [OrgUnitOut.model_validate(r) for r in rows]
+    return [_org_unit_out(db, r) for r in rows]
 
 
 @router.post("", response_model=OrgUnitOut)
 def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> OrgUnitOut:
     assert_valid_unit_type(payload.unit_type)
     _assert_parent_ok(db, payload.client_id, payload.id, payload.parent_id)
+    segment_code = normalize_template_segment_code(payload.unit_type, payload.segment_code)
     dup = db.scalar(
         select(OrgUnit).where(OrgUnit.client_id == payload.client_id, OrgUnit.code == payload.code)
     )
@@ -278,11 +315,12 @@ def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> Or
         sort_order=payload.sort_order,
         catalog_source_code=payload.catalog_source_code,
         is_detached=payload.is_detached,
+        segment_code=segment_code,
     )
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return OrgUnitOut.model_validate(obj)
+    return _org_unit_out(db, obj)
 
 
 @router.patch("/{unit_id}", response_model=OrgUnitOut)
@@ -294,13 +332,17 @@ def patch_org_unit(unit_id: str, payload: OrgUnitPatch, db: Session = Depends(ge
     if "parent_id" in data:
         _assert_parent_ok(db, obj.client_id, unit_id, data["parent_id"])
     unit_type = data.get("unit_type", obj.unit_type)
+    if "segment_code" in data:
+        data["segment_code"] = normalize_template_segment_code(unit_type, data["segment_code"])
+    elif "unit_type" in data and unit_type not in SEGMENT_UNIT_TYPES:
+        data["segment_code"] = None
     if "name" in data or "unit_type" in data:
         data["name"] = format_org_unit_name(data.get("name", obj.name), unit_type)
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
-    return OrgUnitOut.model_validate(obj)
+    return _org_unit_out(db, obj)
 
 
 @router.post("/{unit_id}/clone", response_model=OrgUnitCloneOut, status_code=201)
@@ -333,7 +375,7 @@ def clone_org_unit(
     db.commit()
     db.refresh(result.org_unit)
     return OrgUnitCloneOut(
-        org_unit=OrgUnitOut.model_validate(result.org_unit),
+        org_unit=_org_unit_out(db, result.org_unit),
         positions_created=result.positions_created,
         sections_skipped=result.sections_skipped,
     )
@@ -356,7 +398,7 @@ def bulk_clone_org_units(body: OrgUnitBulkCloneIn, db: Session = Depends(get_db)
         db.refresh(result.org_unit)
         out.append(
             OrgUnitCloneOut(
-                org_unit=OrgUnitOut.model_validate(result.org_unit),
+                org_unit=_org_unit_out(db, result.org_unit),
                 positions_created=result.positions_created,
                 sections_skipped=result.sections_skipped,
             )
@@ -380,7 +422,7 @@ def reorder_org_units(
         _assert_parent_ok(db, client_id, it.id, it.parent_id)
         obj.parent_id = it.parent_id
         obj.sort_order = it.sort_order
-        out.append(OrgUnitOut.model_validate(obj))
+        out.append(_org_unit_out(db, obj))
     db.commit()
     return out
 
@@ -439,7 +481,7 @@ def bulk_upsert_org_units(items: list[OrgUnitCreate], db: Session = Depends(get_
             )
             db.add(obj)
         db.flush()
-        out.append(OrgUnitOut.model_validate(obj))
+        out.append(_org_unit_out(db, obj))
     db.commit()
     return out
 

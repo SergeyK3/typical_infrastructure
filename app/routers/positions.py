@@ -13,6 +13,7 @@ from app.models import Client, OrgUnit, Position, PositionCatalog
 from app.template_bundle_clone import resolve_client_template_code
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 from app.position_catalog_ops import _unique_code
+from app.org_unit_ops import resolve_org_unit_effective_segment
 from app.schemas import (
     ListEnvelope,
     PositionCloneIn,
@@ -30,6 +31,17 @@ def _assert_org_unit(db: Session, client_id: str, org_unit_id: str) -> None:
     ou = db.get(OrgUnit, org_unit_id)
     if not ou or ou.client_id != client_id:
         raise HTTPException(status_code=400, detail="org_unit_not_found")
+
+
+def _segment_for_org_unit(
+    db: Session, org_unit_id: str, explicit: str | None = None
+) -> str | None:
+    if explicit is not None:
+        return explicit
+    ou = db.get(OrgUnit, org_unit_id)
+    if not ou:
+        return None
+    return resolve_org_unit_effective_segment(db, ou)
 
 
 @router.get("", response_model=ListEnvelope[PositionOut])
@@ -139,6 +151,7 @@ def create_position_from_catalog(
         position_level=cat.position_level,
         is_managerial=cat.is_managerial,
         is_detached=True,
+        segment_code=_segment_for_org_unit(db, body.org_unit_id),
     )
     db.add(obj)
     db.commit()
@@ -170,6 +183,7 @@ def create_position(payload: PositionCreate, db: Session = Depends(get_db)) -> P
         position_level=payload.position_level,
         is_managerial=payload.is_managerial,
         is_detached=payload.is_detached,
+        segment_code=_segment_for_org_unit(db, payload.org_unit_id, payload.segment_code),
     )
     db.add(obj)
     db.commit()
@@ -205,6 +219,7 @@ def clone_position(
         raise HTTPException(status_code=409, detail="position_code_already_exists")
 
     copy_name = source.name if body.name_suffix in source.name else f"{source.name} ({body.name_suffix})"
+    segment = source.segment_code if org_unit_id == source.org_unit_id else None
     obj = Position(
         id=new_id32(),
         client_id=source.client_id,
@@ -218,6 +233,7 @@ def clone_position(
         position_level=source.position_level,
         is_managerial=source.is_managerial,
         is_detached=True,
+        segment_code=_segment_for_org_unit(db, org_unit_id, segment),
     )
     db.add(obj)
     db.commit()
@@ -233,6 +249,8 @@ def patch_position(position_id: str, payload: PositionPatch, db: Session = Depen
     data = payload.model_dump(exclude_unset=True)
     if "org_unit_id" in data and data["org_unit_id"] is not None:
         _assert_org_unit(db, obj.client_id, data["org_unit_id"])
+    if "org_unit_id" in data and "segment_code" not in data:
+        data["segment_code"] = _segment_for_org_unit(db, data["org_unit_id"])
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()

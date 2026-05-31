@@ -60,6 +60,8 @@ class OrgUnitBase(BaseModel):
     sort_order: int = 0
     catalog_source_code: str | None = None
     is_detached: bool = True
+    segment_code: str | None = None
+    effective_segment_code: str | None = None
 
 
 class OrgUnitCreate(OrgUnitBase):
@@ -74,6 +76,7 @@ class OrgUnitPatch(BaseModel):
     is_active: bool | None = None
     sort_order: int | None = None
     is_detached: bool | None = None
+    segment_code: str | None = Field(default=None, max_length=64)
 
 
 class OrgUnitOut(OrgUnitBase):
@@ -122,6 +125,7 @@ class PositionBase(BaseModel):
     position_level: str | None = None
     is_managerial: bool | None = None
     is_detached: bool = True
+    segment_code: str | None = None
 
 
 class PositionCreate(PositionBase):
@@ -139,6 +143,7 @@ class PositionPatch(BaseModel):
     position_level: str | None = None
     is_managerial: bool | None = None
     is_detached: bool | None = None
+    segment_code: str | None = None
 
 
 class PositionCloneIn(BaseModel):
@@ -172,6 +177,10 @@ class PositionCatalogBase(BaseModel):
 class PositionCatalogOut(PositionCatalogBase):
     model_config = ConfigDict(from_attributes=True)
     primary_dept_type_code: str | None = None
+    segment_code: str | None = Field(
+        default=None,
+        description="Сегмент деятельности — наследуется от типа подразделения в типовой оргструктуре",
+    )
 
 
 class PositionDeptTypeOut(BaseModel):
@@ -225,6 +234,8 @@ class TemplateOrgUnitOut(BaseModel):
     unit_type: str
     sort_order: int
     log_group: str | None = None
+    segment_code: str | None = None
+    effective_segment_code: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -241,6 +252,11 @@ class TemplateOrgUnitCreate(BaseModel):
         max_length=64,
         description="Логическая группа; допустимо для unit_type=department или section",
     )
+    segment_code: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Сегмент деятельности; только для unit_type=department",
+    )
 
 
 class TemplateOrgUnitPatch(BaseModel):
@@ -254,6 +270,11 @@ class TemplateOrgUnitPatch(BaseModel):
         max_length=64,
         description="Логическая группа; допустимо для unit_type=department или section",
     )
+    segment_code: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Сегмент деятельности; только для unit_type=department",
+    )
 
 
 class TemplateOrgUnitNode(TemplateOrgUnitOut):
@@ -265,6 +286,40 @@ class TemplateOrgUnitCloneOut(BaseModel):
     row: TemplateOrgUnitOut
     position_links_created: int
     sections_skipped: int
+
+
+class TemplateSegmentCodeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    template_code: str
+    code: str
+    label_ru: str
+    label_en: str | None = None
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class TemplateSegmentCodeCreate(BaseModel):
+    template_code: str = Field(min_length=1, max_length=64)
+    code: str = Field(min_length=1, max_length=64)
+    label_ru: str = Field(min_length=1, max_length=128)
+    label_en: str | None = Field(default=None, max_length=128)
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class TemplateSegmentCodePatch(BaseModel):
+    label_ru: str | None = Field(default=None, min_length=1, max_length=128)
+    label_en: str | None = Field(default=None, max_length=128)
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class SegmentSyncOut(BaseModel):
+    org_units_updated: int
+    positions_updated: int
 
 
 class EmployeeBase(BaseModel):
@@ -633,6 +688,9 @@ class PositionRegulationCreate(PositionRegulationBase):
 
 
 class PositionRegulationPatch(BaseModel):
+    regulation_code: str | None = Field(default=None, max_length=64)
+    position_code: str | None = Field(default=None, max_length=64)
+    version_no: str | None = Field(default=None, max_length=16)
     dept_type_code: str | None = Field(default=None, max_length=32)
     regulation_name: str | None = None
     goal_summary: str | None = None
@@ -653,6 +711,10 @@ class PositionRegulationOut(PositionRegulationBase):
     id: str
     created_at: datetime
     updated_at: datetime
+    catalog_dept_type_code: str | None = Field(
+        default=None,
+        description="Тип подразделения из справочника типовых должностей (наследование)",
+    )
 
 
 class PositionRegulationDetailOut(PositionRegulationOut):
@@ -698,6 +760,7 @@ class ClientRegulationKpiIn(BaseModel):
     period_type: str = "month"
     weight: float | None = None
     is_required: bool = True
+    is_active: bool = True
 
 
 class ClientRegulationInstructionIn(BaseModel):
@@ -717,6 +780,7 @@ class ClientRegulationKpiOut(BaseModel):
     period_type: str
     weight: float | None
     is_required: bool
+    is_active: bool
 
 
 class ClientRegulationInstructionOut(BaseModel):
@@ -737,6 +801,7 @@ class ClientStandaloneKpiCreate(BaseModel):
     period_type: str = "month"
     weight: float | None = None
     is_required: bool = True
+    is_active: bool = True
     position_code: str | None = Field(default=None, max_length=64)
     notes: str | None = Field(default=None, max_length=512)
 
@@ -746,6 +811,7 @@ class ClientStandaloneKpiPatch(BaseModel):
     period_type: str | None = None
     weight: float | None = None
     is_required: bool | None = None
+    is_active: bool | None = None
     position_code: str | None = Field(default=None, max_length=64)
     notes: str | None = Field(default=None, max_length=512)
 
@@ -759,6 +825,7 @@ class ClientStandaloneKpiOut(BaseModel):
     period_type: str
     weight: float | None
     is_required: bool
+    is_active: bool
     position_code: str | None
     notes: str | None
     created_at: datetime
@@ -881,7 +948,9 @@ class CatalogCopyKpiIn(BaseModel):
 
 
 class CatalogCopyOrgUnitIn(BaseModel):
-    client_id: str
+    mode: str = Field(default="local_to_global", description="local_to_global | global_to_global")
+    source_template_code: str = "default"
+    client_id: str | None = None
     source_org_unit_id: str = Field(min_length=1, max_length=32)
     target_template_code: str | None = None
     target_code: str | None = Field(default=None, max_length=64)

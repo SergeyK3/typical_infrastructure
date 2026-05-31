@@ -7,7 +7,7 @@
   <title>Типовая оргструктура — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-1"></script>
+  <script src="/static/shared/global-template-context.js?v=global-tpl-ctx-2"></script>
   <style>
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
     .toolbar label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
@@ -53,6 +53,11 @@
     .err { color: var(--error); font-size: 0.88rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
     .log-group-field.hidden { display: none !important; }
+    .segment-field.hidden { display: none !important; }
+    .segment-inherited-box {
+      margin-top: 0.35rem; padding: 0.45rem 0.65rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.9rem; color: var(--text);
+    }
     .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); border: 1px solid rgba(248,81,73,0.45); }
     .btn-danger:hover { border-color: var(--error); }
     .meta { color: var(--text-muted); font-size: 0.88rem; }
@@ -74,10 +79,10 @@
     .org-data-table .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .org-data-table .org-ou-name--department { font-weight: 700; }
     .org-data-table .td-log-group { font-family: inherit; font-size: 0.85rem; color: var(--text-muted); }
-    .org-data-table .td-actions { overflow: visible; white-space: nowrap; }
-    .org-data-table .org-table-actions { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 0.25rem; }
-    .org-data-table .org-act-btn { padding: 0.15rem 0.35rem; font-size: 0.72rem; line-height: 1.2; min-width: 0; }
-    .org-data-table .org-act-btn.btn-danger { padding: 0.15rem 0.35rem; }
+    .org-data-table .td-actions { overflow: visible; white-space: normal; min-width: 7rem; }
+    .org-data-table .org-table-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+    .org-data-table .org-act-btn { padding: 0.18rem 0.45rem; font-size: 0.75rem; line-height: 1.2; min-width: 0; }
+    .org-data-table .org-act-btn.btn-danger { padding: 0.18rem 0.45rem; }
     .org-data-table tr:hover td { background: var(--surface-hover); }
     .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
     .list-toolbar label.table-sort-label { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
@@ -163,6 +168,12 @@
         <option value="department" selected>department</option>
         <option value="section">section</option>
       </select>
+      <label id="lblSegment" class="segment-field">Сегмент деятельности <span class="meta">(segment_code)</span></label>
+      <select id="fSegment" class="segment-field"><option value="">— не задан —</option></select>
+      <p id="segmentHint" class="meta segment-field">Только для отделений. Значения из словаря шаблона (для hosp: CLINIC, PARACLINIC, …).</p>
+      <label id="lblSegmentInherited" class="segment-inherited-wrap hidden">Сегмент (наследуется)</label>
+      <div id="fSegmentInherited" class="segment-inherited-box segment-inherited-wrap hidden">—</div>
+      <p id="segmentInheritedHint" class="meta segment-inherited-wrap hidden">Секция наследует segment_code родительского отделения.</p>
       <label id="lblLogGroup" class="log-group-field">Логическая группа <span class="meta">(log_group)</span></label>
       <input type="text" id="fLogGroup" class="log-group-field" placeholder="например hr_ops" maxlength="64" />
       <p id="logGroupHint" class="meta log-group-field">Для отделений и секций. Пустое значение — сброс группы.</p>
@@ -219,7 +230,9 @@
     </div>
   </div>
 
-  <script src="/static/shared/org-tree.js?v=org-tree-20260526"></script>
+  <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
+  <script src="/static/shared/catalog-row-actions.js?v=cra-1"></script>
+  <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     let treeData = [];
@@ -237,6 +250,28 @@
       } catch (_) { return 'tree'; }
     })();
     let editSnapshot = null;
+    let segmentOptions = [];
+
+    async function loadSegmentOptions() {
+      try {
+        const data = await api('GET', '/template-segment-codes?template_code=' + encodeURIComponent(tpl()) + '&limit=200');
+        segmentOptions = data.items || [];
+      } catch (_) {
+        segmentOptions = [];
+      }
+      const sel = $('fSegment');
+      if (!sel) return;
+      const keep = sel.value;
+      sel.innerHTML = '<option value="">— не задан —</option>' +
+        segmentOptions.map((s) =>
+          '<option value="' + escapeHtml(s.code) + '">' + escapeHtml(s.code) + ' — ' + escapeHtml(s.label_ru) + '</option>'
+        ).join('');
+      if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     function errText(j, fallback) {
       if (j && j.error) return j.error.message || j.error.code || fallback;
@@ -288,12 +323,12 @@
       sel.value = cur;
       GTC.setGlobalEditTemplateCode(cur);
       GTC.syncUrl(cur);
-      GTC.renderEditHint();
+      GTC.renderEditHint('globalEditTemplateHint', sel);
       sel.onchange = () => {
         $('tplCode').value = sel.value;
         GTC.setGlobalEditTemplateCode(sel.value);
         GTC.syncUrl(sel.value);
-        GTC.renderEditHint();
+        GTC.renderEditHint('globalEditTemplateHint', sel);
         load();
       };
       updateTemplateActionButtons();
@@ -356,12 +391,13 @@
       if (orgViewMode === 'tree') {
         mount.innerHTML = '<div class="org-tree">' + OrgTreeShared.renderOrgTreeHtml({
           nodes: treeData,
+          copyToTemplate: true,
           extraBadges: (n) => n.position_count ? '<span class="pos-badge">' + n.position_count + ' должн.</span>' : '',
         }) + '</div>';
         OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-tree'), handleAction);
         return;
       }
-      mount.innerHTML = OrgTreeShared.renderOrgTableHtml({ rows: getTableRows() });
+      mount.innerHTML = OrgTreeShared.renderOrgTableHtml({ rows: getTableRows(), copyToTemplate: true });
       OrgTreeShared.bindOrgTreeActions(mount.querySelector('.org-table-wrap'), handleAction);
     }
 
@@ -369,6 +405,7 @@
       $('listErr').classList.add('hidden');
       flatRows = [];
       try {
+        await loadSegmentOptions();
         treeData = await api('GET', '/template-org-units/tree?template_code=' + encodeURIComponent(tpl()));
         flattenTree(treeData, flatRows);
         await loadPreviewMeta();
@@ -389,19 +426,40 @@
       return unitType === 'department' || unitType === 'section';
     }
 
-    function syncLogGroupField() {
+    function syncSegmentField(inheritedCode) {
+      const unitType = $('fType').value;
+      const isDept = unitType === 'department';
+      const isSection = unitType === 'section';
+      document.querySelectorAll('.segment-field').forEach((el) => {
+        el.classList.toggle('hidden', !isDept);
+      });
+      document.querySelectorAll('.segment-inherited-wrap').forEach((el) => {
+        el.classList.toggle('hidden', !isSection);
+      });
+      if (!isDept) $('fSegment').value = '';
+      if (isSection) {
+        const inherited = inheritedCode || '—';
+        $('fSegmentInherited').textContent = inherited;
+        $('segmentInheritedHint').textContent = inherited && inherited !== '—'
+          ? 'Секция наследует сегмент «' + inherited + '» от родительского отделения.'
+          : 'У родительского отделения segment_code не задан.';
+      }
+    }
+
+    function syncLogGroupField(inheritedSegment) {
       const show = supportsLogGroup($('fType').value);
       document.querySelectorAll('.log-group-field').forEach((el) => {
         el.classList.toggle('hidden', !show);
       });
       if (!show) $('fLogGroup').value = '';
+      syncSegmentField(inheritedSegment);
     }
 
     async function handleAction(action, node) {
       const row = findRow(node.id);
       if (!row) return;
       if (action === 'rename') {
-        openEdit(row.id);
+        openEdit(row.id).catch((e) => alert(e.message));
         return;
       }
       if (action === 'add-section') {
@@ -435,12 +493,29 @@
         }
         return;
       }
+      if (action === 'copy-to-template') {
+        if (!window.CatalogCopy) return;
+        CatalogCopy.open({
+          entity: 'templateOrgUnit',
+          mode: 'global_to_global',
+          sourceTemplateCode: tpl(),
+          sourceOrgUnitId: row.id,
+          orgUnitCode: row.code,
+          orgUnitName: row.name,
+          orgUnitType: row.unit_type,
+          onSuccess: async (res) => {
+            const target = (res && res.row) ? res.row.code : '';
+            alert(target ? 'Узел скопирован в шаблон как «' + target + '».' : 'Готово.');
+          },
+        });
+        return;
+      }
       if (action === 'delete') {
         await delRow(row.id, row);
       }
     }
 
-    function openAdd() {
+    async function openAdd() {
       editSnapshot = null;
       $('modalTitle').textContent = 'Новый узел';
       $('rowId').value = '';
@@ -452,11 +527,14 @@
       $('fType').value = 'department';
       $('fSort').value = '0';
       $('fLogGroup').value = '';
+      $('fSegment').value = '';
+      $('segmentHint').textContent = 'Только для отделений. Значения из словаря шаблона (для hosp: CLINIC, PARACLINIC, …).';
+      await loadSegmentOptions();
       syncLogGroupField();
       $('modal').classList.add('show');
     }
 
-    function openEdit(id) {
+    async function openEdit(id) {
       const row = findRow(id);
       if (!row) return;
       editSnapshot = {
@@ -467,6 +545,8 @@
         unit_type: row.unit_type,
         sort_order: Number(row.sort_order),
         log_group: row.log_group || null,
+        segment_code: row.segment_code || null,
+        effective_segment_code: row.effective_segment_code || null,
       };
       $('modalTitle').textContent = 'Изменить узел';
       $('rowId').value = row.id;
@@ -478,7 +558,16 @@
       $('fType').value = row.unit_type;
       $('fSort').value = String(row.sort_order);
       $('fLogGroup').value = row.log_group || '';
-      syncLogGroupField();
+      await loadSegmentOptions();
+      const segVal = row.segment_code || '';
+      if (segVal && ![...$('fSegment').options].some((o) => o.value === segVal)) {
+        const opt = document.createElement('option');
+        opt.value = segVal;
+        opt.textContent = segVal + ' (сохранённый)';
+        $('fSegment').appendChild(opt);
+      }
+      $('fSegment').value = segVal;
+      syncLogGroupField(row.effective_segment_code || '');
       $('modal').classList.add('show');
     }
 
@@ -511,7 +600,7 @@
       const GTC = window.GlobalTemplateContext;
       GTC.setGlobalEditTemplateCode(tpl());
       GTC.syncUrl(tpl());
-      GTC.renderEditHint();
+      GTC.renderEditHint('globalEditTemplateHint', $('tplSelect'));
       load();
     }
     $('btnViewTable').onclick = () => setOrgViewMode('table');
@@ -523,11 +612,11 @@
     };
     $('btnLoad').onclick = applyTemplateFromInputs;
     $('tplCode').onchange = applyTemplateFromInputs;
-    $('btnAdd').onclick = openAdd;
+    $('btnAdd').onclick = () => { openAdd().catch((e) => alert(e.message)); };
     $('btnExportXlsx').onclick = () => {
       window.location.href = '/api/template-org-units/export/excel?template_code=' + encodeURIComponent(tpl());
     };
-    $('fType').onchange = syncLogGroupField;
+    $('fType').onchange = () => syncLogGroupField(editSnapshot && editSnapshot.effective_segment_code);
     $('btnCancel').onclick = closeModal;
 
     function buildSavePayload(forEdit) {
@@ -537,6 +626,7 @@
       const parentCode = parentRaw ? parentRaw : null;
       const sortOrder = parseInt($('fSort').value, 10) || 0;
       const logGroup = supportsLogGroup(unitType) ? ($('fLogGroup').value.trim() || null) : null;
+      const segmentCode = unitType === 'department' ? ($('fSegment').value.trim() || null) : null;
       if (!forEdit) {
         return {
           name,
@@ -544,16 +634,18 @@
           unit_type: unitType,
           sort_order: sortOrder,
           log_group: logGroup,
+          segment_code: segmentCode,
         };
       }
       const row = editSnapshot || findRow($('rowId').value);
-      if (!row) return { name, parent_code: parentCode, unit_type: unitType, sort_order: sortOrder, log_group: logGroup };
+      if (!row) return { name, parent_code: parentCode, unit_type: unitType, sort_order: sortOrder, log_group: logGroup, segment_code: segmentCode };
       const payload = {};
       if (name !== row.name) payload.name = name;
       if (parentCode !== (row.parent_code || null)) payload.parent_code = parentCode;
       if (unitType !== row.unit_type) payload.unit_type = unitType;
       if (sortOrder !== Number(row.sort_order)) payload.sort_order = sortOrder;
       if (supportsLogGroup(unitType) && logGroup !== (row.log_group || null)) payload.log_group = logGroup;
+      if (unitType === 'department' && segmentCode !== (row.segment_code || null)) payload.segment_code = segmentCode;
       const newCode = $('fCode').value.trim();
       if (newCode && !$('fCode').disabled && newCode !== row.code) payload.code = newCode;
       return payload;

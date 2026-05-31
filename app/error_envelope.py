@@ -53,6 +53,7 @@ _ERROR_MESSAGES: dict[str, str] = {
     "regulation_slot_already_exists": (
         "Регламент для этой должности, типа подразделения и версии уже существует в шаблоне."
     ),
+    "segment_code_only_for_department": "Сегмент деятельности допустим только для отделений (department).",
 }
 
 

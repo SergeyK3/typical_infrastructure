@@ -243,7 +243,67 @@ a:hover { text-decoration: underline; }
 }
 .err { color: var(--error); font-size: 0.9rem; }
 
+/* Dropdown «Действия» в строках справочников */
+.cra-wrap { position: relative; display: inline-block; }
+.cra-toggle { white-space: nowrap; }
+.cra-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 10.5rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow-color); padding: 0.25rem 0;
+}
+.cra-item {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  color: var(--text); padding: 0.45rem 0.75rem; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.cra-item:hover { background: var(--surface-hover); }
+.cra-item--danger { color: var(--error); }
+.cra-item--primary { color: var(--accent); font-weight: 500; }
+td .cra-wrap, .row-actions.cra-wrap { vertical-align: middle; }
+
+/* Keyword-поиск по должности: одна панель над таблицей во всех справочниках */
+.catalog-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  margin: 0 0 0.75rem 0;
+}
+.catalog-filter-bar label {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.catalog-filter-bar input[type="search"] {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+
 /* Print-friendly (economy toner; works in any theme) */
+.th-filter input[type="search"],
+.th-filter input.th-filter-search,
+.cr-th-filter input[type="search"] {
+  margin-top: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.78rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+
 @media print {
   :root,
   [data-theme="light"],

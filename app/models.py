@@ -44,6 +44,22 @@ class EnterpriseTemplate(Base, TimestampMixin):
     cloned_from_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
+class TemplateSegmentCode(Base, TimestampMixin):
+    """Словарь значений segment_code для шаблона (CLINIC, PARACLINIC, … — по template_code)."""
+
+    __tablename__ = "template_segment_codes"
+    __table_args__ = (
+        Index("ix_template_segment_codes_tpl_code", "template_code", "code", unique=True),
+    )
+
+    template_code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label_ru: Mapped[str] = mapped_column(String(128), nullable=False)
+    label_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class TemplateOrgUnitRow(Base, TimestampMixin):
     """Глобальная типовая оргструктура (шаблон) в БД — подразделения для onboarding / deploy-template."""
 
@@ -59,6 +75,8 @@ class TemplateOrgUnitRow(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     #: Логическая группа — только для отделений (unit_type=department).
     log_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Сегмент деятельности — только для отделений; секции наследуют от родительского отделения.
+    segment_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Client(Base, TimestampMixin):
@@ -96,6 +114,8 @@ class OrgUnit(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     catalog_source_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_detached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Сегмент деятельности (department); у секций — null, effective — от родителя.
+    segment_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class PositionCatalog(Base, TimestampMixin):
@@ -165,6 +185,8 @@ class Position(Base, TimestampMixin):
     position_level: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_managerial: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     is_detached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Наследуется от отделения (effective segment org_unit) при deploy / sync, если не задано явно.
+    segment_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Employee(Base, TimestampMixin):
@@ -351,6 +373,7 @@ class ClientRegulationKpi(Base):
     period_type: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
     weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class ClientStandaloneKpi(Base, TimestampMixin):
@@ -366,6 +389,7 @@ class ClientStandaloneKpi(Base, TimestampMixin):
     period_type: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
     weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     position_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 

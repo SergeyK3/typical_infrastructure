@@ -711,6 +711,49 @@ def _ensure_template_parent_exists(db: Session, template_code: str, parent_code:
         )
 
 
+def copy_template_org_unit_global_to_global(
+    db: Session,
+    source_template_code: str,
+    target_template_code: str,
+    source_org_unit_id: str,
+    target_code: str | None = None,
+) -> TemplateOrgUnitCopyResult:
+    src = db.get(TemplateOrgUnitRow, source_org_unit_id)
+    if not src or src.template_code != source_template_code:
+        raise HTTPException(status_code=404, detail="template_org_unit_not_found")
+    if src.code in PROTECTED_ORG_CODES:
+        raise HTTPException(status_code=400, detail="org_unit_copy_not_allowed")
+    if source_template_code == target_template_code:
+        raise HTTPException(status_code=400, detail="same_template")
+
+    code = (target_code or src.code).strip()
+    existing = db.scalar(
+        select(TemplateOrgUnitRow).where(
+            TemplateOrgUnitRow.template_code == target_template_code,
+            TemplateOrgUnitRow.code == code,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="template_org_unit_code_exists")
+
+    _ensure_template_parent_exists(db, target_template_code, src.parent_code)
+
+    row = TemplateOrgUnitRow(
+        id=new_id32(),
+        template_code=target_template_code,
+        code=code,
+        name=format_org_unit_name(src.name, src.unit_type),
+        parent_code=src.parent_code,
+        unit_type=src.unit_type,
+        sort_order=src.sort_order,
+        log_group=src.log_group,
+        segment_code=src.segment_code if src.unit_type == "department" else None,
+    )
+    db.add(row)
+    db.flush()
+    return TemplateOrgUnitCopyResult(row=row, created=True)
+
+
 def copy_org_unit_local_to_global(
     db: Session,
     client_id: str,

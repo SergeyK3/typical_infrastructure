@@ -20,6 +20,7 @@ from app.routers.positions import router as positions_router
 from app.routers.regulations import router as regulations_router
 from app.routers.roles import router as roles_router
 from app.routers.template_org_units import router as template_org_units_router
+from app.routers.template_segment_codes import router as template_segment_codes_router
 from app.routers.users import router as users_router
 
 router = APIRouter()
@@ -40,6 +41,7 @@ router.include_router(positions_router)
 router.include_router(regulations_router)
 router.include_router(roles_router)
 router.include_router(template_org_units_router)
+router.include_router(template_segment_codes_router)
 router.include_router(users_router)
 
 

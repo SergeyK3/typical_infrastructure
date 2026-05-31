@@ -47,61 +47,43 @@
   function buildOrgMenuItems(n, opts) {
     opts = opts || {};
     const menuItems = [];
-    if (opts.toGlobal && n.code !== 'company') {
-      menuItems.push({ action: 'to-global', label: 'В глоб. шаблон' });
-    }
     if (n.unit_type === 'department') {
       menuItems.push({ action: 'add-section', label: 'Создать секцию' });
-      menuItems.push({ action: 'clone', label: 'Копировать' });
-    }
-    if (n.unit_type === 'section') {
-      menuItems.push({ action: 'clone', label: 'Копировать' });
     }
     if (n.code !== 'company') {
       menuItems.push({ action: 'rename', label: 'Изменить' });
+    }
+    if (n.unit_type === 'department' || n.unit_type === 'section') {
+      menuItems.push({ action: 'clone', label: 'Копировать', title: 'Копировать в этом шаблоне' });
+    }
+    if (opts.copyToTemplate && n.code !== 'company') {
+      menuItems.push({ action: 'copy-to-template', label: 'В шаблон', title: 'Скопировать в другой шаблон' });
+    }
+    if (opts.toGlobal && n.code !== 'company') {
+      menuItems.push({ action: 'to-global', label: 'В шаблон', title: 'Скопировать в глобальный шаблон' });
+    }
+    if (n.code !== 'company') {
       menuItems.push({ action: 'delete', label: 'Удалить', danger: true });
     }
     return menuItems;
   }
 
-  function renderOrgMenuHtml(n, opts) {
-    return buildOrgMenuItems(n, opts)
-      .map(function (m) {
-        return (
-          '<button type="button" class="org-ctx-item' +
-          (m.danger ? ' org-ctx-item--danger' : '') +
-          '" data-action="' +
-          m.action +
-          '" data-id="' +
-          escapeHtml(n.id) +
-          '">' +
-          escapeHtml(m.label) +
-          '</button>'
-        );
-      })
-      .join('');
+  function renderOrgActionsDropdown(n, opts) {
+    const CRA = global.CatalogRowActions;
+    const items = buildOrgMenuItems(n, opts);
+    if (!CRA) return '<span class="meta">—</span>';
+    return CRA.render(items, {
+      rowKey: n.id,
+      size: 'sm',
+      attrs: { id: n.id, unitCode: n.code, unitType: n.unit_type || '' },
+    });
   }
 
-  function renderOrgActionsCell(n, opts) {
-    opts = opts || {};
-    if (!buildOrgMenuItems(n, opts).length) return '<span class="meta">—</span>';
-    const inlineGlobal = opts.toGlobal && n.code !== 'company'
-      ? '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="to-global" data-id="' +
-        escapeHtml(n.id) +
-        '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>'
-      : '';
-    return (
-      '<span class="org-row-actions">' +
-      inlineGlobal +
-      '<button type="button" class="btn btn-sm btn-secondary org-menu-btn" data-id="' +
-      escapeHtml(n.id) +
-      '" title="Действия">⋯</button>' +
-      '<div class="org-ctx-menu hidden" data-for="' +
-      escapeHtml(n.id) +
-      '">' +
-      renderOrgMenuHtml(n, opts) +
-      '</div></span>'
-    );
+  function segmentDisplayHtml(n) {
+    const eff = n.effective_segment_code || n.segment_code || '';
+    if (!eff) return '<span class="meta">—</span>';
+    if (n.unit_type === 'department') return '<code>' + escapeHtml(eff) + '</code>';
+    return '<code>' + escapeHtml(eff) + '</code> <span class="meta" title="наследуется от отделения">↳</span>';
   }
 
   function compareOrgRowsLogGroup(a, b) {
@@ -131,38 +113,7 @@
   }
 
   function renderOrgTableActionsCell(n, opts) {
-    opts = opts || {};
-    const parts = [];
-    if (n.code !== 'company') {
-      parts.push(
-        '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="rename" data-id="' +
-          escapeHtml(n.id) +
-          '" title="Изменить">Изм.</button>'
-      );
-    }
-    if (opts.toGlobal && n.code !== 'company') {
-      parts.push(
-        '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="to-global" data-id="' +
-          escapeHtml(n.id) +
-          '" title="Скопировать в глобальный шаблон">↑ Глоб.</button>'
-      );
-    }
-    if (n.unit_type === 'department' || n.unit_type === 'section') {
-      parts.push(
-        '<button type="button" class="btn btn-sm btn-secondary org-act-btn" data-action="clone" data-id="' +
-          escapeHtml(n.id) +
-          '" title="Копировать">Коп.</button>'
-      );
-    }
-    if (n.code !== 'company') {
-      parts.push(
-        '<button type="button" class="btn btn-sm btn-danger org-act-btn" data-action="delete" data-id="' +
-          escapeHtml(n.id) +
-          '" title="Удалить">Уд.</button>'
-      );
-    }
-    if (!parts.length) return '<span class="meta">—</span>';
-    return '<span class="org-table-actions">' + parts.join('') + '</span>';
+    return renderOrgActionsDropdown(n, opts);
   }
 
   /**
@@ -228,6 +179,9 @@
           '<td class="td-log-group">' +
           lg +
           '</td>' +
+          '<td class="td-segment">' +
+          segmentDisplayHtml(n) +
+          '</td>' +
           '<td class="td-sort num">' +
           escapeHtml(String(n.sort_order != null ? n.sort_order : 0)) +
           '</td>' +
@@ -246,6 +200,7 @@
       '<th>Код родителя</th>' +
       '<th>Тип</th>' +
       '<th>Лог. группа</th>' +
+      '<th>Сегмент</th>' +
       '<th class="num">Сорт.</th>' +
       '<th class="th-actions">Действия</th>' +
       '</tr></thead><tbody>' +
@@ -272,7 +227,11 @@
           const badges =
             (supportsLogGroup(n.unit_type) && n.log_group
               ? ' <span class="unit-type" title="Логическая группа">[' + escapeHtml(n.log_group) + ']</span>'
-              : '') + extraBadges(n);
+              : '') +
+            ((n.effective_segment_code || n.segment_code)
+              ? ' <span class="unit-type" title="Сегмент деятельности">{seg:' + escapeHtml(n.effective_segment_code || n.segment_code) + '}</span>'
+              : '') +
+            extraBadges(n);
           const menuHtml = renderOrgMenuHtml(n, opts);
           const row =
             '<div class="tree-row">' +
@@ -285,7 +244,7 @@
             ')</span>' +
             badges +
             '<span class="card-actions">' +
-            renderOrgActionsCell(n, opts) +
+            renderOrgActionsDropdown(n, opts) +
             '</span></div>';
           return (
             '<div class="tree-item" data-unit-id="' +
@@ -306,63 +265,24 @@
     return render(opts.nodes || [], 0);
   }
 
-  var activeOrgMenuContainer = null;
-  var orgMenuOutsideListenerReady = false;
-
-  function closeAllOrgMenus() {
-    if (!activeOrgMenuContainer) return;
-    activeOrgMenuContainer.querySelectorAll('.org-ctx-menu').forEach(function (m) {
-      m.classList.add('hidden');
-    });
-  }
-
-  function ensureOrgMenuOutsideListener() {
-    if (orgMenuOutsideListenerReady) return;
-    orgMenuOutsideListenerReady = true;
-    document.addEventListener('click', function (e) {
-      if (document.querySelector('.modal.show')) return;
-      if (e.target.closest('.org-row-actions')) return;
-      closeAllOrgMenus();
-    });
-  }
-
   function bindOrgTreeActions(container, onAction) {
     if (!container) return;
-    ensureOrgMenuOutsideListener();
-    activeOrgMenuContainer = container;
-    if (container._orgTreeClickHandler) {
-      container.removeEventListener('click', container._orgTreeClickHandler);
-    }
-    container._orgTreeClickHandler = function (e) {
-      const menuBtn = e.target.closest('.org-menu-btn');
-      if (menuBtn) {
-        e.stopPropagation();
-        const id = menuBtn.dataset.id;
-        const menu = container.querySelector('.org-ctx-menu[data-for="' + id + '"]');
-        container.querySelectorAll('.org-ctx-menu').forEach(function (m) {
-          if (m !== menu) m.classList.add('hidden');
-        });
-        if (menu) menu.classList.toggle('hidden');
-        return;
-      }
-      const item = e.target.closest('.org-ctx-item, .org-act-btn');
-      if (!item) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const id = item.dataset.id;
-      const action = item.dataset.action;
+    const CRA = global.CatalogRowActions;
+    if (!CRA) return;
+    CRA.bind(container, function (action, wrap) {
+      if (!wrap || !onAction) return;
+      const id = wrap.dataset.id;
+      if (!id) return;
       const nodeEl = container.querySelector('[data-unit-id="' + id + '"]');
       const node = nodeEl
         ? {
             id: id,
-            code: nodeEl.dataset.unitCode,
-            unit_type: nodeEl.dataset.unitType,
+            code: nodeEl.dataset.unitCode || wrap.dataset.unitCode,
+            unit_type: nodeEl.dataset.unitType || wrap.dataset.unitType,
           }
-        : { id: id };
-      if (onAction) onAction(action, node);
-      closeAllOrgMenus();
-    };
-    container.addEventListener('click', container._orgTreeClickHandler);
+        : { id: id, code: wrap.dataset.unitCode, unit_type: wrap.dataset.unitType };
+      onAction(action, node);
+    });
   }
 
   global.OrgTreeShared = {
