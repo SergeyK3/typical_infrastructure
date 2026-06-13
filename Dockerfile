@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Application code
 COPY app/ ./app/
 COPY skill_assessment/ ./skill_assessment/
+COPY psychological_testing/ ./psychological_testing/
 COPY static/ ./static/
 
 # SQLite DB path (override via env)
