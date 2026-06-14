@@ -1158,6 +1158,63 @@ def migrate_backfill_position_name_en() -> None:
         db.close()
 
 
+def migrate_accounts_nullable_employee_id() -> None:
+    """Allow NULL employee_id for platform system_admin; normalize legacy empty strings."""
+    if not _table_exists("accounts"):
+        return
+
+    def _employee_id_is_nullable() -> bool:
+        with engine.connect() as conn:
+            for row in conn.execute(text("PRAGMA table_info(accounts)")):
+                if row[1] == "employee_id":
+                    return row[3] == 0
+        return False
+
+    if not _employee_id_is_nullable():
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE accounts_new (
+                        id VARCHAR(32) NOT NULL PRIMARY KEY,
+                        employee_id VARCHAR(32) NULL,
+                        login VARCHAR(256) NOT NULL,
+                        password_hash VARCHAR(256) NOT NULL,
+                        status VARCHAR(16) NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO accounts_new (
+                        id, employee_id, login, password_hash, status, created_at, updated_at
+                    )
+                    SELECT
+                        id,
+                        NULLIF(TRIM(employee_id), ''),
+                        login,
+                        password_hash,
+                        status,
+                        created_at,
+                        updated_at
+                    FROM accounts
+                    """
+                )
+            )
+            conn.execute(text("DROP TABLE accounts"))
+            conn.execute(text("ALTER TABLE accounts_new RENAME TO accounts"))
+            conn.commit()
+        return
+
+    with engine.connect() as conn:
+        conn.execute(text("UPDATE accounts SET employee_id = NULL WHERE employee_id = ''"))
+        conn.commit()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -1185,3 +1242,4 @@ def run_migrations() -> None:
     migrate_client_standalone_kpis()
     migrate_client_kpi_is_active()
     migrate_backfill_position_name_en()
+    migrate_accounts_nullable_employee_id()

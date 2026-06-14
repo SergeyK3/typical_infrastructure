@@ -1,0 +1,58 @@
+<!-- route: /login | file: static/login/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход — Typical Infrastructure</title>
+  <link rel="stylesheet" href="/static/shared/layout.css">
+  <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <style>
+    .login-wrap { max-width: 420px; margin: 4rem auto; padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+    .login-wrap h1 { margin: 0 0 1rem 0; font-size: 1.25rem; }
+    .login-wrap label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+    .login-wrap input { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    .login-wrap .btn { width: 100%; margin-top: 1.25rem; }
+    .error { color: var(--error); margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <h1>Вход в Typical Infrastructure</h1>
+    <form id="loginForm">
+      <label>Логин<input type="text" id="login" name="login" autocomplete="username" required></label>
+      <label>Пароль<input type="password" id="password" name="password" autocomplete="current-password" required></label>
+      <div class="error" id="error"></div>
+      <button type="submit" class="btn btn-primary">Войти</button>
+    </form>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const nextUrl = params.get('next') || '';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('error');
+      err.textContent = '';
+      const login = document.getElementById('login').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ login, password }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          err.textContent = data.message || data.detail || 'Неверный логин или пароль';
+          return;
+        }
+        window.location.href = nextUrl || data.redirect_url || '/';
+      } catch {
+        err.textContent = 'Ошибка сети';
+      }
+    });
+  </script>
+</body>
+</html>

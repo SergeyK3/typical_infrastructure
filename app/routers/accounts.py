@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_system_admin
+from app.auth.context import CurrentAccount
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import Account, AccountRole, Client, Employee, OrgUnit, Position, Role
@@ -201,8 +203,11 @@ class EncodePasswordOut(BaseModel):
 
 
 @router.post("/encode-password", response_model=EncodePasswordOut)
-def encode_password(payload: EncodePasswordIn) -> EncodePasswordOut:
-    """Encode plain password for account creation (client cannot hash bcrypt)."""
+def encode_password(
+    payload: EncodePasswordIn,
+    _ctx: CurrentAccount = Depends(require_system_admin),
+) -> EncodePasswordOut:
+    """Encode plain password for account creation (system_admin only)."""
     return EncodePasswordOut(password_hash=hash_password(payload.password))
 
 

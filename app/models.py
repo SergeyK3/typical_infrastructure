@@ -210,7 +210,7 @@ class Account(Base, TimestampMixin):
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    employee_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     login: Mapped[str] = mapped_column(String(256), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)

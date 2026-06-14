@@ -345,9 +345,11 @@ def run_onboarding_bootstrap(
                     status_code=409,
                     detail={"code": ERROR_LOGIN_ALREADY_EXISTS, "message": "Пользователь с таким логином уже существует."},
                 )
+            if not admin:
+                raise RuntimeError("admin_employee_not_found")
             acc = Account(
                 id=new_id32(),
-                employee_id=admin.id if admin else "",
+                employee_id=admin.id,
                 login=admin_login,
                 password_hash=password_hash_val,
                 status="active",

@@ -7,6 +7,8 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_account, require_client_access, require_system_admin
+from app.auth.context import CurrentAccount
 from app.db import get_db
 from app.models import Account, AccountRole, Client, Employee, EnterpriseTemplate, OrgUnit, Position
 from app.schemas import ClientCreate, ClientOut, ClientPatch, ListEnvelope
@@ -39,11 +41,18 @@ def _client_out(db: Session, obj: Client) -> ClientOut:
 @router.get("", response_model=ListEnvelope[ClientOut])
 def list_clients(
     db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[ClientOut]:
-    total = db.scalar(select(func.count()).select_from(Client)) or 0
-    rows = db.scalars(select(Client).order_by(Client.created_at.desc()).limit(limit).offset(offset)).all()
+    if not ctx.is_system:
+        if not ctx.allowed_clients:
+            return ListEnvelope[ClientOut](items=[], total=0, limit=limit, offset=offset)
+        base = select(Client).where(Client.id.in_(ctx.allowed_clients))
+    else:
+        base = select(Client)
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    rows = db.scalars(base.order_by(Client.created_at.desc()).limit(limit).offset(offset)).all()
     return ListEnvelope[ClientOut](
         items=[_client_out(db, r) for r in rows],
         total=total,
@@ -53,7 +62,11 @@ def list_clients(
 
 
 @router.get("/{client_id}", response_model=ClientOut)
-def get_client(client_id: str, db: Session = Depends(get_db)) -> ClientOut:
+def get_client(
+    client_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(require_client_access),
+) -> ClientOut:
     obj = db.get(Client, client_id)
     if not obj:
         raise HTTPException(status_code=404, detail="client_not_found")
@@ -61,7 +74,11 @@ def get_client(client_id: str, db: Session = Depends(get_db)) -> ClientOut:
 
 
 @router.post("", response_model=ClientOut)
-def create_client(payload: ClientCreate, db: Session = Depends(get_db)) -> ClientOut:
+def create_client(
+    payload: ClientCreate,
+    db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_system_admin),
+) -> ClientOut:
     template_id = payload.template_id
     if payload.template_code and not template_id:
         template_id = _resolve_template_id(db, payload.template_code)
@@ -80,7 +97,12 @@ def create_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Clien
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
-def patch_client(client_id: str, payload: ClientPatch, db: Session = Depends(get_db)) -> ClientOut:
+def patch_client(
+    client_id: str,
+    payload: ClientPatch,
+    db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_system_admin),
+) -> ClientOut:
     obj = db.get(Client, client_id)
     if not obj:
         raise HTTPException(status_code=404, detail="client_not_found")
@@ -96,7 +118,11 @@ def patch_client(client_id: str, payload: ClientPatch, db: Session = Depends(get
 
 
 @router.delete("/{client_id}", status_code=204)
-def delete_client(client_id: str, db: Session = Depends(get_db)) -> Response:
+def delete_client(
+    client_id: str,
+    db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_system_admin),
+) -> Response:
     obj = db.get(Client, client_id)
     if not obj:
         raise HTTPException(status_code=404, detail="client_not_found")

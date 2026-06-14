@@ -377,13 +377,17 @@ class RoleOut(BaseModel):
 
 
 class AccountBase(BaseModel):
-    employee_id: str
+    employee_id: str | None
     login: str
     password_hash: str = Field(min_length=1)
     status: str = Field(default="active", min_length=1)
 
 
-class AccountCreate(AccountBase):
+class AccountCreate(BaseModel):
+    employee_id: str
+    login: str
+    password_hash: str = Field(min_length=1)
+    status: str = Field(default="active", min_length=1)
     id: str | None = None
     role_codes: list[str] = Field(default_factory=list, max_length=20)
 
@@ -407,7 +411,7 @@ class AccountListItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     id: str
-    employee_id: str
+    employee_id: str | None
     login: str
     status: str
     created_at: datetime

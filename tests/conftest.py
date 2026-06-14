@@ -10,8 +10,36 @@ from fastapi.testclient import TestClient
 
 # Use in-memory SQLite for tests
 os.environ["SQLITE_PATH"] = ":memory:"
+os.environ["AUTH_SECRET_KEY"] = "test-auth-secret-key-for-pytest-only!!"
 
 from app.main import app  # noqa: E402 — after env
+
+TEST_SYSTEM_LOGIN = "test_system_admin"
+TEST_SYSTEM_PASSWORD = "TestSysAdmin123!"
+
+
+def bootstrap_test_system_admin() -> None:
+    from app.db import SessionLocal
+    from app.seed import seed_roles
+    from app.system_admin import bootstrap_system_admin
+
+    db = SessionLocal()
+    try:
+        seed_roles(db)
+        bootstrap_system_admin(db, login=TEST_SYSTEM_LOGIN, password=TEST_SYSTEM_PASSWORD)
+    finally:
+        db.close()
+
+
+def auth_login(client: TestClient, login: str, password: str):
+    return client.post("/api/auth/login", json={"login": login, "password": password})
+
+
+@pytest.fixture(autouse=True)
+def _auto_system_admin_login(client: TestClient) -> None:
+    """Most API tests expect an authenticated system_admin session."""
+    bootstrap_test_system_admin()
+    auth_login(client, TEST_SYSTEM_LOGIN, TEST_SYSTEM_PASSWORD)
 
 
 @pytest.fixture(autouse=True)

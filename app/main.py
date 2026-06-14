@@ -4,14 +4,16 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
-
+from fastapi import Depends, FastAPI, HTTPException, Request
+from app.auth.deps import get_optional_account
+from app.db import get_db
 from app.error_envelope import http_exception_handler
 from app.logging_middleware import RequestTracingMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
 from app import models  # noqa: F401 — register models with Base.metadata
 from app.api import router as api_router
@@ -52,6 +54,7 @@ except ImportError:
     run_plugin_startup = None
 
 app = FastAPI(title=settings.app_name)
+app.add_middleware(SessionMiddleware, secret_key=settings.auth_secret_key, same_site="lax")
 app.add_middleware(RequestTracingMiddleware)
 
 
@@ -114,9 +117,24 @@ def validation_exception_handler(request, exc: RequestValidationError) -> JSONRe
 
 
 @app.get("/")
-def root():
-    """Redirect to clients list."""
-    return RedirectResponse(url="/clients", status_code=302)
+def root(request: Request, db: Session = Depends(get_db)):
+    """Redirect authenticated users to their home; others to login."""
+    ctx = get_optional_account(request, db)
+    if ctx is None:
+        return RedirectResponse(url="/login", status_code=302)
+    if ctx.is_system:
+        return RedirectResponse(url="/clients", status_code=302)
+    if ctx.client_id:
+        return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
+    return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/login")
+def login_page() -> FileResponse:
+    login_path = static_dir / "login" / "index.html"
+    if not login_path.exists():
+        raise HTTPException(status_code=404, detail="login_page_not_found")
+    return _html_file_response(login_path)
 
 
 @app.get("/health/ready", tags=["health"])
@@ -147,9 +165,18 @@ def wizard_page() -> FileResponse:
     return _html_file_response(wizard_path)
 
 
-@app.get("/client/{client_id}")
-def client_workspace_page(client_id: str) -> FileResponse:
+@app.get("/client/{client_id}", response_model=None)
+def client_workspace_page(
+    client_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Response:
     """Client workspace — manage org structure, positions, employees, accounts."""
+    ctx = get_optional_account(request, db)
+    if ctx is None:
+        return RedirectResponse(url=f"/login?next=/client/{client_id}", status_code=302)
+    if not ctx.can_access_client(client_id):
+        raise HTTPException(status_code=403, detail="client_access_denied")
     workspace_path = static_dir / "workspace" / "index.html"
     if not workspace_path.exists():
         raise HTTPException(status_code=404, detail="workspace_page_not_found")
@@ -215,9 +242,19 @@ def global_kpi_templates_page() -> FileResponse:
     return _html_file_response(p)
 
 
-@app.get("/clients")
-def clients_page() -> FileResponse:
-    """Clients list — view organizations after onboarding."""
+@app.get("/clients", response_model=None)
+def clients_page(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Response:
+    """Clients list — view organizations (system_admin only)."""
+    ctx = get_optional_account(request, db)
+    if ctx is None:
+        return RedirectResponse(url="/login?next=/clients", status_code=302)
+    if not ctx.is_system:
+        if ctx.client_id:
+            return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
+        raise HTTPException(status_code=403, detail="system_admin_required")
     clients_path = static_dir / "clients" / "index.html"
     if not clients_path.exists():
         raise HTTPException(status_code=404, detail="clients_page_not_found")

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Typical infrastructure"
     sqlite_path: str = "app.db"
+    auth_secret_key: str = "dev-insecure-auth-secret-change-me"
 
 
 settings = Settings()
