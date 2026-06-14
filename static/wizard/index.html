@@ -113,26 +113,7 @@
     .hidden { display: none !important; }
     .save-draft { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
     .save-draft.saved { color: var(--success); }
-    .mode-choice {
-      display: grid; gap: 0.6rem; margin-top: 0.75rem;
-    }
-    .mode-choice label {
-      display: flex; gap: 0.55rem; align-items: flex-start; margin: 0;
-      padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
-      background: rgba(255,255,255,0.02);
-    }
-    .mode-choice label.mode-choice-alt {
-      border-style: dashed;
-      opacity: 0.92;
-    }
-    .mode-choice input { width: auto; margin-top: 0.15rem; }
-    .mode-choice span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.35; }
-    .wizard-warning {
-      margin-top: 0.75rem; padding: 0.75rem; border: 1px solid rgba(210,153,34,0.45);
-      border-radius: 8px; background: rgba(210,153,34,0.12); color: var(--text);
-      font-size: 0.88rem; line-height: 1.45;
-    }
-    .wizard-warning strong { color: var(--warning); }
+    .wizard-step2-alt { margin-top: 1rem; font-size: 0.82rem; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     .wizard-help {
@@ -198,17 +179,6 @@
     <div class="panel" id="panel2" data-step="2">
       <h2>2. Данные клиента</h2>
       <p class="wizard-help" id="createModeHint">Вы создаёте <strong>новую организацию</strong> на основе выбранной типовой инфраструктуры (шаг 1). Укажите код и название клиента ниже.</p>
-      <label>Режим onboarding</label>
-      <div class="mode-choice">
-        <label>
-          <input type="radio" name="onboardingMode" value="create" checked>
-          <div><strong>Создать новую организацию</strong><br><span>Будет создан клиент, типовая структура, должности и первый администратор.</span></div>
-        </label>
-        <label class="mode-choice-alt">
-          <input type="radio" name="onboardingMode" value="apply_existing">
-          <div><strong>Альтернатива: применить шаблон к существующей организации</strong><br><span>Будут добавлены только отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.</span></div>
-        </label>
-      </div>
       <div id="newClientFields">
         <label>Код клиента *</label>
         <input type="text" id="clientCode" placeholder="TOO_ALFA" maxlength="64" />
@@ -217,19 +187,10 @@
         <input type="text" id="clientName" placeholder="ТОО Альфа" maxlength="256" />
         <p class="field-error hidden" id="errClientName"></p>
       </div>
-      <div id="existingClientFields" class="hidden">
-        <label>Существующая организация *</label>
-        <select id="existingClientId">
-          <option value="">— Загрузка организаций... —</option>
-        </select>
-        <p class="field-error hidden" id="errExistingClient"></p>
-        <p class="wizard-help" style="margin-top:0.75rem;">Повторное применение шаблона безопасно дополняет структуру: существующие подразделения и должности остаются на месте.</p>
-        <div class="wizard-warning">
-          <strong>Внимание:</strong> Вы применяете шаблон к уже существующей организации.
-          Некоторые элементы оргструктуры, должности, регламенты, KPI и связанные настройки
-          могут быть обновлены или перезаписаны. Перед продолжением рекомендуется создать резервную копию данных.
-        </div>
-      </div>
+      <p class="wizard-help wizard-step2-alt">
+        Нужно применить шаблон к существующей организации?
+        <a href="/clients">Перейдите в список клиентов</a> и нажмите «Применить шаблон» на карточке организации.
+      </p>
     </div>
 
     <!-- Step 3: Org structure preview -->
@@ -312,7 +273,6 @@
 
     let currentStep = 1;
     let templates = [];
-    let clients = [];
     let structurePreview = null;
     let runId = null;
     let runSubmitted = false;
@@ -320,13 +280,6 @@
 
     function $(id) { return document.getElementById(id); }
     function wizardPanels() { return document.querySelectorAll('.wizard-container > .panel[data-step]'); }
-    function onboardingMode() {
-      return document.querySelector('input[name="onboardingMode"]:checked')?.value || 'create';
-    }
-    function selectedExistingClient() {
-      const id = $('existingClientId').value;
-      return clients.find(c => c.id === id) || null;
-    }
     function showErr(id, msg) {
       const el = $(id);
       if (!el) return;
@@ -354,18 +307,15 @@
 
     function applyWizardUrlParams() {
       const url = readWizardUrlParams();
+      if (url.mode === 'apply_existing') {
+        globalThis.location.href = '/clients';
+        return;
+      }
       if (url.template_code && $('templateCode').querySelector('option[value="' + url.template_code + '"]')) {
         $('templateCode').value = url.template_code;
       }
       if (url.client_code) $('clientCode').value = url.client_code;
       if (url.client_name) $('clientName').value = url.client_name;
-      if (url.mode === 'apply_existing') {
-        const modeInput = document.querySelector('input[name="onboardingMode"][value="apply_existing"]');
-        if (modeInput) modeInput.checked = true;
-      } else if (url.mode === 'create') {
-        const modeInput = document.querySelector('input[name="onboardingMode"][value="create"]');
-        if (modeInput) modeInput.checked = true;
-      }
       if (url.template_code || url.client_code || url.client_name) saveDraft();
     }
 
@@ -375,13 +325,8 @@
         if (s) {
           const d = JSON.parse(s);
           $('templateCode').value = d.template_code || '';
-          const mode = d.action === 'apply_existing' ? 'apply_existing' : 'create';
-          const modeInput = document.querySelector(`input[name="onboardingMode"][value="${mode}"]`);
-          if (modeInput) modeInput.checked = true;
           $('clientCode').value = d.client_code || '';
           $('clientName').value = d.client_name || '';
-          $('existingClientId').value = d.existing_client_id || '';
-          $('existingClientId').dataset.pendingValue = d.existing_client_id || '';
           $('adminLastName').value = d.admin_last_name || '';
           $('adminFirstName').value = d.admin_first_name || '';
           $('adminLogin').value = d.admin_login || '';
@@ -394,10 +339,9 @@
     function saveDraft() {
       const d = {
         template_code: $('templateCode').value,
-        action: onboardingMode(),
+        action: 'create',
         client_code: $('clientCode').value,
         client_name: $('clientName').value,
-        existing_client_id: $('existingClientId').value,
         admin_last_name: $('adminLastName').value,
         admin_first_name: $('adminFirstName').value,
         admin_login: $('adminLogin').value,
@@ -420,19 +364,12 @@
         setInputError('templateCode', 'errTemplate', !v ? 'Выберите типовую инфраструктуру' : null);
         ok = !!v;
       } else if (step === 2) {
-        if (onboardingMode() === 'apply_existing') {
-          const existingClientId = $('existingClientId').value;
-          showErr('errExistingClient', !existingClientId ? 'Выберите существующую организацию' : null);
-          ok = !!existingClientId;
-        } else {
-          const code = ($('clientCode').value || '').trim();
-          const name = ($('clientName').value || '').trim();
-          setInputError('clientCode', 'errClientCode', !code ? 'Код обязателен' : null);
-          setInputError('clientName', 'errClientName', !name ? 'Название обязательно' : null);
-          ok = !!code && !!name;
-        }
+        const code = ($('clientCode').value || '').trim();
+        const name = ($('clientName').value || '').trim();
+        setInputError('clientCode', 'errClientCode', !code ? 'Код обязателен' : null);
+        setInputError('clientName', 'errClientName', !name ? 'Название обязательно' : null);
+        ok = !!code && !!name;
       } else if (step === 5) {
-        if (onboardingMode() === 'apply_existing') return true;
         const ln = ($('adminLastName').value || '').trim();
         const fn = ($('adminFirstName').value || '').trim();
         const login = ($('adminLogin').value || '').trim();
@@ -458,17 +395,6 @@
       }
       if (Array.isArray(detail)) return detail.map(d => d.msg || JSON.stringify(d)).join('; ');
       return JSON.stringify(detail);
-    }
-
-    function updateModeUi() {
-      const existingMode = onboardingMode() === 'apply_existing';
-      $('newClientFields').classList.toggle('hidden', existingMode);
-      $('existingClientFields').classList.toggle('hidden', !existingMode);
-      $('createModeHint').classList.toggle('hidden', existingMode);
-      $('panel5').classList.toggle('hidden', existingMode && currentStep !== 5);
-      $('panel6').classList.toggle('hidden', existingMode && currentStep !== 6);
-      if (existingMode && (currentStep === 5 || currentStep === 6)) goToStep(7);
-      saveDraft();
     }
 
     async function fetchApi(path, opts = {}) {
@@ -504,22 +430,6 @@
       if (sel.value) loadStructurePreview();
     }
 
-    async function loadClients() {
-      try {
-        const data = await fetchApi('/clients?limit=500');
-        clients = data.items || [];
-      } catch (_) {
-        clients = [];
-      }
-      const sel = $('existingClientId');
-      const selected = sel.value || sel.dataset.pendingValue || '';
-      sel.innerHTML = clients.length
-        ? '<option value="">— Выберите организацию —</option>' + clients.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('')
-        : '<option value="">Нет организаций</option>';
-      if (selected) sel.value = selected;
-      sel.dataset.pendingValue = '';
-    }
-
     async function loadStructurePreview() {
       const code = $('templateCode').value;
       if (!code) return;
@@ -540,28 +450,23 @@
     }
 
     function renderConfirmSummary() {
-      const existingMode = onboardingMode() === 'apply_existing';
-      const existingClient = selectedExistingClient();
       const html = `
         <ul class="preview-list">
           <li><strong>Шаблон:</strong> ${$('templateCode').value}</li>
-          <li><strong>Режим:</strong> ${existingMode ? 'Применить к существующей организации' : 'Создать новую организацию'}</li>
-          <li><strong>Клиент:</strong> ${existingMode && existingClient ? existingClient.code + ' — ' + existingClient.name : $('clientCode').value + ' — ' + $('clientName').value}</li>
-          <li><strong>Действие:</strong> ${existingMode ? 'Будут добавлены отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.' : 'Будет создан клиент, структура и первый администратор.'}</li>
-          ${existingMode ? '<li><strong>Предупреждение:</strong> Вы применяете шаблон к уже существующей организации. Некоторые элементы оргструктуры, должности, регламенты, KPI и связанные настройки могут быть обновлены или перезаписаны. Перед продолжением рекомендуется создать резервную копию данных.</li>' : ''}
-          ${existingMode ? '' : `<li><strong>Администратор:</strong> ${$('adminLastName').value} ${$('adminFirstName').value} (${$('adminLogin').value})</li>`}
+          <li><strong>Режим:</strong> Создать новую организацию</li>
+          <li><strong>Клиент:</strong> ${$('clientCode').value} — ${$('clientName').value}</li>
+          <li><strong>Действие:</strong> Будет создан клиент, структура и первый администратор.</li>
+          <li><strong>Администратор:</strong> ${$('adminLastName').value} ${$('adminFirstName').value} (${$('adminLogin').value})</li>
         </ul>
       `;
       $('confirmSummary').innerHTML = html;
     }
 
     function nextStepFrom(step) {
-      if (onboardingMode() === 'apply_existing' && step === 4) return 7;
       return step + 1;
     }
 
     function prevStepFrom(step) {
-      if (onboardingMode() === 'apply_existing' && step === 7) return 4;
       return step - 1;
     }
 
@@ -587,11 +492,6 @@
         d.classList.toggle('done', i + 1 < currentStep);
       });
       updateWizardNav();
-      if (onboardingMode() === 'apply_existing' && (currentStep === 5 || currentStep === 6)) {
-        currentStep = 7;
-        goToStep(7);
-        return;
-      }
       if (currentStep === 7) {
         renderConfirmSummary();
         if (!runSubmitted) {
@@ -625,24 +525,19 @@
       updateWizardNav();
       showErr('errRun', '');
 
-      const existingMode = onboardingMode() === 'apply_existing';
       const payload = {
-        action: onboardingMode(),
+        action: 'create',
         template_code: $('templateCode').value,
         idempotency_key: 'wizard-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
-      };
-      if (existingMode) {
-        payload.existing_client_id = $('existingClientId').value;
-      } else {
-        payload.client = { code: ($('clientCode').value || '').trim(), name: ($('clientName').value || '').trim() };
-        payload.admin = {
+        client: { code: ($('clientCode').value || '').trim(), name: ($('clientName').value || '').trim() },
+        admin: {
           last_name: ($('adminLastName').value || '').trim(),
           first_name: ($('adminFirstName').value || '').trim(),
           login: ($('adminLogin').value || '').trim(),
           password: $('adminPassword').value || null,
           email: ($('adminEmail').value || '').trim() || null,
-        };
-      }
+        },
+      };
 
       try {
         const bodyStr = JSON.stringify(payload);
@@ -666,7 +561,7 @@
         } else {
           statusEl.innerHTML = `
             <p><span class="status-badge status-running">running</span></p>
-            <p class="wizard-help" style="margin-top:0.75rem;">${existingMode ? 'Идёт безопасное повторное применение шаблона к выбранной организации.' : 'Идёт создание клиента и развёртывание оргструктуры (подразделения, должности, учётная запись администратора).' } Дождитесь статуса <code>completed</code> и журнала шагов ниже.</p>
+            <p class="wizard-help" style="margin-top:0.75rem;">Идёт создание клиента и развёртывание оргструктуры (подразделения, должности, учётная запись администратора). Дождитесь статуса <code>completed</code> и журнала шагов ниже.</p>
           `;
         }
         stepsEl.classList.remove('hidden');
@@ -751,8 +646,6 @@
     }
 
     $('templateCode').addEventListener('change', () => { loadStructurePreview(); saveDraft(); });
-    document.querySelectorAll('input[name="onboardingMode"]').forEach(el => el.addEventListener('change', updateModeUi));
-    $('existingClientId').addEventListener('change', saveDraft);
     ['clientCode','clientName','adminLastName','adminFirstName','adminLogin','adminPassword','adminEmail'].forEach(id => {
       $(id)?.addEventListener('input', saveDraft);
     });
@@ -783,10 +676,7 @@
       dots.appendChild(d);
     }
 
-    Promise.all([loadTemplates(), loadClients()]).then(() => {
-      updateModeUi();
-      goToStep(1);
-    });
+    loadTemplates().then(() => goToStep(1));
   </script>
 </body>
 </html>

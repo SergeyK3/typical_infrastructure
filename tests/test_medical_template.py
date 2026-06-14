@@ -164,8 +164,11 @@ def test_wizard_dry_run_allows_create_after_success(client):
     assert "run.status === 'dry_run'" in html
 
 
-def test_wizard_step2_create_mode_hint(client):
+def test_wizard_step2_create_only_linear_flow(client):
     html = Path("static/wizard/index.html").read_text(encoding="utf-8")
     assert "Вы создаёте" in html and "новую организацию" in html
-    assert "mode-choice-alt" in html
-    assert "Альтернатива:" in html
+    assert 'name="onboardingMode"' not in html
+    assert "mode-choice-alt" not in html
+    assert "Режим onboarding" not in html
+    assert "Применить шаблон" in html
+    assert 'href="/clients"' in html
