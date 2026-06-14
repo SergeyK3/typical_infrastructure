@@ -140,6 +140,8 @@
     }
     .wizard-help strong { color: var(--text); font-weight: 600; }
     .wizard-help code { font-size: 0.85em; background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+    .completion-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+    .completion-actions a.btn { text-decoration: none; display: inline-block; text-align: center; }
   </style>
 </head>
 <body>
@@ -267,11 +269,11 @@
     <div class="panel" id="panel7" data-step="7">
       <h2>7. Подтверждение</h2>
       <p class="wizard-help"><strong>Шаблон</strong> (например, default) — готовый сценарий развёртывания типовой оргструктуры из справочников; отдельная сущность «шаблон организации» не копируется — создаётся сама организация по этому шаблону.</p>
-      <p class="wizard-help">Нажатие любой из кнопок ниже запускает <strong>предварительные проверки готовности</strong> введённых данных к развёртыванию (код клиента, шаблон, уникальность логина и т.д.). <strong>Запустить Dry-Run</strong> — только эти проверки, <em>без</em> записи в базу: оргструктура для клиента не создаётся. <strong>Запустить Onboarding</strong> — те же проверки и затем <strong>развёртывание структуры для клиента</strong>: запись клиента, подразделений, должностей, сотрудника и учётной записи администратора. После нажатия откроется шаг 8 с ходом выполнения.</p>
+      <p class="wizard-help">Нажатие любой из кнопок ниже запускает <strong>предварительные проверки готовности</strong> введённых данных к развёртыванию (код клиента, шаблон, уникальность логина и т.д.). <strong>Запустить Dry-Run</strong> — только эти проверки, <em>без</em> записи в базу: оргструктура для клиента не создаётся. <strong>Создать организацию</strong> — те же проверки и затем <strong>развёртывание структуры для клиента</strong>: запись клиента, подразделений, должностей, сотрудника и учётной записи администратора. После нажатия откроется шаг 8 с ходом выполнения.</p>
       <div id="confirmSummary"></div>
       <div class="actions">
         <button class="btn btn-primary" id="btnDryRun">Запустить Dry-Run</button>
-        <button class="btn btn-primary" id="btnRun">Запустить Onboarding</button>
+        <button class="btn btn-primary" id="btnRun">Создать организацию</button>
       </div>
       <p class="field-error hidden" id="errRun"></p>
     </div>
@@ -279,7 +281,8 @@
     <!-- Step 8: Progress & Result -->
     <div class="panel" id="panel8" data-step="8">
       <h2>8. Прогресс и результат</h2>
-      <p class="wizard-help" id="runHelpStatic">Ниже — статус запуска и список шагов. Сразу после нажатия кнопки на шаге 7 здесь появится сообщение о том, что идёт проверка или развёртывание. Для Dry-Run все шаги затем помечаются как пропущенные: данных в базе нет — это нормально. Для успешного Onboarding появится идентификатор клиента и ссылки внизу.</p>
+      <p class="wizard-help">Dry Run — это проверка сценария без внесения изменений в систему.</p>
+      <p class="wizard-help" id="runHelpStatic">Ниже — статус запуска и список шагов. Сразу после нажатия кнопки на шаге 7 здесь появится сообщение о том, что идёт проверка или развёртывание. Для Dry-Run все шаги затем помечаются как пропущенные: данных в базе нет — это нормально. Для успешного создания организации появится идентификатор клиента и кнопки перехода внизу.</p>
       <div id="runStatus"></div>
       <div id="runSteps" class="log hidden"></div>
     </div>
@@ -305,6 +308,7 @@
     let structurePreview = null;
     let runId = null;
     let runSubmitted = false;
+    let onboardingCompleted = false;
 
     function $(id) { return document.getElementById(id); }
     function wizardPanels() { return document.querySelectorAll('.wizard-container > .panel[data-step]'); }
@@ -552,7 +556,17 @@
       return step - 1;
     }
 
+    function updateWizardNav() {
+      const hideBack = currentStep === TOTAL_STEPS && onboardingCompleted;
+      const hideNext = currentStep === TOTAL_STEPS || (currentStep === 7 && runSubmitted);
+      $('btnPrev').classList.toggle('hidden', currentStep === 1 || hideBack);
+      $('btnNext').classList.toggle('hidden', hideNext);
+      $('btnNext').textContent = currentStep === 7 ? 'Создать организацию' : 'Далее';
+      $('btnNext').disabled = currentStep === 7 && runSubmitted;
+    }
+
     function goToStep(s) {
+      if (onboardingCompleted && s === 7) return;
       currentStep = Math.max(1, Math.min(TOTAL_STEPS, s));
       wizardPanels().forEach(p => {
         const isActive = parseInt(p.dataset.step) === currentStep;
@@ -563,10 +577,7 @@
         d.classList.toggle('active', i + 1 === currentStep);
         d.classList.toggle('done', i + 1 < currentStep);
       });
-      $('btnPrev').classList.toggle('hidden', currentStep === 1);
-      $('btnNext').classList.toggle('hidden', currentStep === TOTAL_STEPS);
-      $('btnNext').textContent = 'Далее';
-      $('btnNext').disabled = currentStep === 7 && runSubmitted;
+      updateWizardNav();
       if (onboardingMode() === 'apply_existing' && (currentStep === 5 || currentStep === 6)) {
         currentStep = 7;
         goToStep(7);
@@ -574,19 +585,34 @@
       }
       if (currentStep === 7) {
         renderConfirmSummary();
-        runSubmitted = false;
-        $('btnDryRun').disabled = false;
-        $('btnRun').disabled = false;
-        $('btnNext').disabled = false;
+        if (!runSubmitted) {
+          onboardingCompleted = false;
+        }
+        $('btnDryRun').disabled = runSubmitted;
+        $('btnRun').disabled = runSubmitted;
       }
+    }
+
+    function renderCompletionActions(clientId) {
+      const orgLink = clientId
+        ? `<a class="btn btn-primary" href="/client/${clientId}">Перейти в организацию</a>`
+        : '';
+      return `
+        <div class="completion-actions">
+          ${orgLink}
+          <a class="btn btn-secondary" href="/clients">Список клиентов</a>
+          <a class="btn btn-secondary" href="/wizard">Создать ещё организацию</a>
+        </div>
+      `;
     }
 
     async function submitRun(dryRun) {
       if (runSubmitted) return;
       runSubmitted = true;
+      onboardingCompleted = false;
       $('btnDryRun').disabled = true;
       $('btnRun').disabled = true;
-      $('btnNext').disabled = true;
+      updateWizardNav();
       showErr('errRun', '');
 
       const existingMode = onboardingMode() === 'apply_existing';
@@ -640,7 +666,7 @@
         runSubmitted = false;
         $('btnDryRun').disabled = false;
         $('btnRun').disabled = false;
-        $('btnNext').disabled = false;
+        updateWizardNav();
         showErr('errRun', userFriendlyError(e.detail));
       }
     }
@@ -659,20 +685,22 @@
       const run = data.run || data;
       const steps = data.steps || [];
       const statusClass = 'status-' + (run.status || 'running');
-      const navLinks = terminal.includes(run.status) ? `
+      const navLinks = run.status === 'completed'
+        ? renderCompletionActions(run.client_id)
+        : (terminal.includes(run.status) ? `
         <p style="margin-top:1rem;">
-          <a href="/clients" style="color:var(--accent);">Список клиентов</a> — просмотр организаций
+          <a href="/clients" style="color:var(--accent);">Список клиентов</a>
           &nbsp;|&nbsp;
-          <a href="/wizard" style="color:var(--accent);">Создать ещё клиента</a>
+          <a href="/wizard" style="color:var(--accent);">Создать ещё организацию</a>
         </p>
-      ` : '';
+      ` : '');
       let explain = '';
       if (run.status === 'running') {
-        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Выполняется: проверки и (при полном Onboarding) запись структуры клиента в базу. Ниже обновляется журнал шагов.</p>';
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Выполняется: проверки и (при создании организации) запись структуры клиента в базу. Ниже обновляется журнал шагов.</p>';
       } else if (run.status === 'dry_run') {
-        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Пробный запуск: в базу ничего не записано. Строки вида «skipped — dry_run» — ожидаемое поведение (шаги намеренно не выполнялись).</p>';
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Dry Run — это проверка сценария без внесения изменений в систему. В базу ничего не записано. Строки вида «skipped — dry_run» — ожидаемое поведение (шаги намеренно не выполнялись).</p>';
       } else if (run.status === 'completed') {
-        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Клиент и оргструктура созданы. Войти можно под логином администратора с шага 5; сохраните Client ID при интеграциях.</p>';
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Организация создана. Войти можно под логином администратора с шага 5. Выберите действие ниже.</p>';
       } else if (run.status === 'failed') {
         explain = '<p class="wizard-help" style="margin-top:0.75rem;">Создание не завершилось. Исправьте указанную ошибку и повторите запуск (при необходимости сначала Dry-Run).</p>';
       }
@@ -685,6 +713,10 @@
       `;
       stepsEl.classList.remove('hidden');
       stepsEl.textContent = steps.map(s => `${s.step_code}: ${s.status}${s.detail ? ' — ' + s.detail : ''}`).join('\n');
+      if (run.status === 'completed') {
+        onboardingCompleted = true;
+        updateWizardNav();
+      }
       if (!terminal.includes(run.status)) {
         setTimeout(pollRunStatus, 1500);
       }
