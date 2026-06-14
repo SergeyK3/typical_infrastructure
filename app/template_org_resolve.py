@@ -33,6 +33,9 @@ def _order_parents_before_children(rows: list[dict]) -> list[dict]:
 
 def resolve_template_structure(db: Session, template_code: str) -> list[dict]:
     """Список узлов шаблона для развёртывания и превью. Если в БД есть строки — они, иначе org_structures."""
+    from app.template_constants import normalize_template_code
+
+    template_code = normalize_template_code(template_code)
     cnt = db.scalar(
         select(func.count()).select_from(TemplateOrgUnitRow).where(
             TemplateOrgUnitRow.template_code == template_code

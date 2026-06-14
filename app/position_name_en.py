@@ -51,6 +51,8 @@ def position_name_en_for(template_code: str, position_code: str) -> str | None:
     code = (position_code or "").strip()
     if not code:
         return None
-    if template_code == "hosp":
+    from app.template_constants import is_medical_template
+
+    if is_medical_template(template_code):
         return HOSP_POSITION_NAME_EN.get(code)
     return DEFAULT_POSITION_NAME_EN.get(code)

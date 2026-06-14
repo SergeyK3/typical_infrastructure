@@ -43,11 +43,18 @@ ROLE_SEEDS: list[tuple[str, str]] = [
 TEMPLATE_SEEDS: list[dict] = [
     {
         "code": "default",
-        "name": "Default enterprise template",
+        "name": "Общая инфраструктура",
         "version": "1",
-        "description": "Baseline template",
+        "description": "Типовая B2B оргструктура: продажи, HR, производство",
         "is_active": True,
-    }
+    },
+    {
+        "code": "medical",
+        "name": "Медицинская организация",
+        "version": "1",
+        "description": "Медицинский центр: амбулатория, стационар, колл-центр",
+        "is_active": True,
+    },
 ]
 
 def _position_catalog_seed(
@@ -514,22 +521,16 @@ def seed_template_org_units(db: Session) -> int:
     return changed
 
 
-HOSP_SEGMENT_CODE_SEEDS: list[tuple[str, str, str, int]] = [
-    ("hosp", "CLINIC", "Клиника (стационар)", 10),
-    ("hosp", "PARACLINIC", "Параклиника", 20),
-    ("hosp", "POLYCLINIC", "Поликлиника", 30),
-    ("hosp", "AUXILIARY", "Вспомогательные службы", 40),
-    ("hosp", "SERVICE", "Сервисные подразделения", 50),
-    ("hosp", "ADMINISTRATIVE", "Управление", 60),
-]
+HOSP_SEGMENT_CODE_SEEDS: list[tuple[str, str, str, int]] = []  # legacy; migrate_hosp_template_code_to_medical
 
 
 def seed_template_segment_codes(db: Session) -> int:
-    """Словарь segment_code для шаблонов (medical hosp — базовый набор)."""
+    """Словарь segment_code для шаблонов (medical — базовый набор)."""
+    from app.medical_template_data import MEDICAL_SEGMENT_CODE_SEEDS
     from app.models import TemplateSegmentCode
 
     created = 0
-    for template_code, code, label_ru, sort_order in HOSP_SEGMENT_CODE_SEEDS:
+    for template_code, code, label_ru, sort_order in MEDICAL_SEGMENT_CODE_SEEDS:
         if db.get(TemplateSegmentCode, (template_code, code)):
             continue
         db.add(
@@ -545,6 +546,109 @@ def seed_template_segment_codes(db: Session) -> int:
     if created:
         db.commit()
     return created
+
+
+def seed_medical_template_bundle(db: Session) -> int:
+    """Каталог должностей, оргструктура и регламенты шаблона medical (для Docker / fresh DB)."""
+    from app.medical_template_data import (
+        MEDICAL_ORG_UNITS,
+        MEDICAL_POSITION_SPECS,
+        MEDICAL_REGULATION_SPECS,
+        MEDICAL_TEMPLATE_CODE,
+    )
+    from app.position_name_en import position_name_en_for
+
+    template_code = MEDICAL_TEMPLATE_CODE
+    changed = 0
+
+    existing_ou = {
+        r.code
+        for r in db.scalars(
+            select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == template_code)
+        ).all()
+    }
+    for spec in MEDICAL_ORG_UNITS:
+        if spec["code"] in existing_ou:
+            continue
+        db.add(_template_org_unit_row(template_code, spec))
+        changed += 1
+
+    existing_pc = {
+        (r.template_code, r.position_code)
+        for r in db.scalars(
+            select(PositionCatalog).where(PositionCatalog.template_code == template_code)
+        ).all()
+    }
+    for p in MEDICAL_POSITION_SPECS:
+        key = (template_code, p["position_code"])
+        if key in existing_pc:
+            continue
+        db.add(
+            PositionCatalog(
+                template_code=template_code,
+                position_code=p["position_code"],
+                position_name_ru=p["position_name_ru"],
+                position_name_en=position_name_en_for(template_code, p["position_code"]),
+                function_code=p["function_code"],
+                position_level=p["position_level"],
+                is_managerial=p["is_managerial"],
+                is_active=True,
+            )
+        )
+        changed += 1
+
+    existing_links = {
+        (r.template_code, r.position_code, r.dept_type_code)
+        for r in db.scalars(
+            select(PositionDeptType).where(PositionDeptType.template_code == template_code)
+        ).all()
+    }
+    for p in MEDICAL_POSITION_SPECS:
+        key = (template_code, p["position_code"], p["dept_type_code"])
+        if key in existing_links:
+            continue
+        db.add(
+            PositionDeptType(
+                template_code=template_code,
+                position_code=p["position_code"],
+                dept_type_code=p["dept_type_code"],
+                is_primary=True,
+            )
+        )
+        changed += 1
+
+    existing_regs = {
+        (r.template_code, r.regulation_code)
+        for r in db.scalars(
+            select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+        ).all()
+    }
+    for r in MEDICAL_REGULATION_SPECS:
+        key = (template_code, r["regulation_code"])
+        if key in existing_regs:
+            continue
+        db.add(
+            PositionRegulation(
+                id=_id("regulation", f"{template_code}_{r['regulation_code']}"),
+                template_code=template_code,
+                regulation_code=r["regulation_code"],
+                position_code=r["position_code"],
+                dept_type_code=r["dept_type_code"],
+                regulation_name=r["regulation_name"],
+                goal_summary=None,
+                ckp_short=None,
+                ckp_full=None,
+                google_doc_url=None,
+                version_no="1",
+                status="active",
+                is_current=True,
+            )
+        )
+        changed += 1
+
+    if changed:
+        db.commit()
+    return changed
 
 
 def seed_all(db: Session) -> dict[str, int]:

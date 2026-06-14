@@ -37,7 +37,7 @@ def test_apply_template_syncs_org_unit_types_from_template(client):
         client_row = db.scalars(select(Client).where(Client.code == "mmc")).first()
         if not client_row:
             return
-        tpl = db.scalar(select(EnterpriseTemplate).where(EnterpriseTemplate.code == "hosp"))
+        tpl = db.scalar(select(EnterpriseTemplate).where(EnterpriseTemplate.code == "medical"))
         if not tpl:
             return
         company = db.scalars(
@@ -63,7 +63,7 @@ def test_apply_template_syncs_org_unit_types_from_template(client):
             ou.parent_id = adm.id
         db.commit()
 
-        apply_template_to_client(db, client_row.id, "hosp")
+        apply_template_to_client(db, client_row.id, "medical")
         db.commit()
 
         for code in ("ECON", "FACILITY"):
@@ -92,14 +92,14 @@ def test_apply_template_cleans_misplaced_positions(client):
         if not client_row:
             return
         tpl = db.scalar(
-            select(EnterpriseTemplate).where(EnterpriseTemplate.code == "hosp")
+            select(EnterpriseTemplate).where(EnterpriseTemplate.code == "medical")
         )
         if not tpl:
             return
         client_row.template_id = tpl.id
         db.commit()
 
-        apply_template_to_client(db, client_row.id, "hosp")
+        apply_template_to_client(db, client_row.id, "medical")
         db.commit()
 
         rows = db.scalars(

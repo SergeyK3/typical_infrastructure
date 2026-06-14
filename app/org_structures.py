@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.position_name_en import DEFAULT_POSITION_NAME_EN
+from app.template_constants import DEFAULT_TEMPLATE_CODE, is_medical_template
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -63,7 +64,11 @@ def get_template_structure(template_code: str) -> list[dict]:
     """Возвращает структуру оргподразделений для шаблона."""
     from app.org_unit_ops import format_org_unit_name
 
-    if template_code == "default":
+    if is_medical_template(template_code):
+        from app.medical_template_data import MEDICAL_ORG_UNITS
+
+        units = MEDICAL_ORG_UNITS.copy()
+    elif template_code == DEFAULT_TEMPLATE_CODE:
         units = DEFAULT_ORG_UNITS.copy()
     else:
         units = DEFAULT_ORG_UNITS.copy()
@@ -77,9 +82,6 @@ def get_template_positions(template_code: str, org_unit_ids_by_code: dict[str, s
     else:
         positions = DEFAULT_POSITIONS.copy()
     return positions
-
-
-from app.template_constants import DEFAULT_TEMPLATE_CODE
 
 
 def list_positions_from_position_catalog(db: "Session", template_code: str = DEFAULT_TEMPLATE_CODE) -> list[dict]:

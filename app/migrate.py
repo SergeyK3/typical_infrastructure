@@ -1134,7 +1134,7 @@ def migrate_client_kpi_is_active() -> None:
 
 
 def migrate_backfill_position_name_en() -> None:
-    """Заполнить position_name_en в каталоге должностей (default, hosp)."""
+    """Заполнить position_name_en в каталоге должностей (default, medical)."""
     if not _table_exists("position_catalog"):
         return
     from app.db import SessionLocal
@@ -1156,6 +1156,83 @@ def migrate_backfill_position_name_en() -> None:
             db.commit()
     finally:
         db.close()
+
+
+_TEMPLATE_CODE_TABLES = (
+    "template_segment_codes",
+    "template_org_units",
+    "position_catalog",
+    "position_dept_types",
+    "kpi_templates",
+    "position_regulations",
+    "regulation_kpis",
+    "regulation_instructions",
+)
+
+
+def migrate_hosp_template_code_to_medical() -> None:
+    """Переименовать legacy bundle template_code=hosp в medical для существующих БД."""
+    if not _table_exists("enterprise_templates"):
+        return
+    with engine.connect() as conn:
+        med_row = conn.execute(
+            text("SELECT id FROM enterprise_templates WHERE code='medical' LIMIT 1")
+        ).fetchone()
+        hosp_row = conn.execute(
+            text("SELECT id FROM enterprise_templates WHERE code='hosp' LIMIT 1")
+        ).fetchone()
+        if hosp_row and not med_row:
+            conn.execute(
+                text(
+                    """
+                    UPDATE enterprise_templates
+                    SET code='medical', name='Медицинская организация'
+                    WHERE code='hosp'
+                    """
+                )
+            )
+        elif hosp_row and med_row:
+            conn.execute(text("UPDATE enterprise_templates SET is_active=0 WHERE code='hosp'"))
+            if _table_exists("clients"):
+                conn.execute(
+                    text("UPDATE clients SET template_id=:med WHERE template_id=:hosp"),
+                    {"med": med_row[0], "hosp": hosp_row[0]},
+                )
+        for table in _TEMPLATE_CODE_TABLES:
+            if not _table_exists(table) or not _column_exists(table, "template_code"):
+                continue
+            conn.execute(
+                text(f"UPDATE {table} SET template_code='medical' WHERE template_code='hosp'")
+            )
+        conn.commit()
+
+
+def migrate_enterprise_template_display_names() -> None:
+    """Обновить отображаемые имена шаблонов default/medical после UX polish."""
+    if not _table_exists("enterprise_templates"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE enterprise_templates
+                SET name='Общая инфраструктура'
+                WHERE code='default'
+                  AND name IN ('Default enterprise template', 'Default template')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE enterprise_templates
+                SET name='Медицинская организация'
+                WHERE code='medical'
+                  AND (name IS NULL OR TRIM(name) = '' OR name = 'hosp')
+                """
+            )
+        )
+        conn.commit()
 
 
 def migrate_accounts_nullable_employee_id() -> None:
@@ -1242,4 +1319,6 @@ def run_migrations() -> None:
     migrate_client_standalone_kpis()
     migrate_client_kpi_is_active()
     migrate_backfill_position_name_en()
+    migrate_hosp_template_code_to_medical()
+    migrate_enterprise_template_display_names()
     migrate_accounts_nullable_employee_id()

@@ -41,19 +41,19 @@ def test_normalize_template_position_dept_links_keeps_one_primary(client):
 
     db = SessionLocal()
     try:
-        has_hosp = db.scalar(
+        has_medical = db.scalar(
             select(PositionDeptType).where(
-                PositionDeptType.template_code == "hosp",
+                PositionDeptType.template_code == "medical",
                 PositionDeptType.position_code == "MAIN_NURSE",
             ).limit(1)
         )
-        if not has_hosp:
+        if not has_medical:
             return
-        normalize_template_position_dept_links(db, "hosp")
+        normalize_template_position_dept_links(db, "medical")
         db.commit()
         rows = db.scalars(
             select(PositionDeptType).where(
-                PositionDeptType.template_code == "hosp",
+                PositionDeptType.template_code == "medical",
                 PositionDeptType.position_code == "MAIN_NURSE",
             )
         ).all()

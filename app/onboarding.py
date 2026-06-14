@@ -34,6 +34,7 @@ from app.onboarding_constants import (
     STEP_STATUS_SKIPPED,
 )
 from app.org_structures import ADMIN_ORG_UNIT_CODE
+from app.template_constants import normalize_template_code
 from app.utils import generate_temp_password, hash_password, new_id32
 
 
@@ -164,6 +165,7 @@ def run_onboarding_bootstrap(
         client_name = target_client.name
     elif action != "create":
         raise HTTPException(status_code=422, detail={"code": "invalid_onboarding_action", "message": "Некорректный режим onboarding."})
+    template_code = normalize_template_code(template_code)
     existing_client = db.scalar(select(Client).where(Client.code == client_code))
     if action == "create" and existing_client:
         raise HTTPException(

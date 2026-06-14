@@ -22,6 +22,7 @@ from app.migrate import run_migrations
 from app.seed import (
     seed_enterprise_templates,
     seed_kpi_templates,
+    seed_medical_template_bundle,
     seed_position_catalog,
     seed_regulations,
     seed_roles,
@@ -282,6 +283,7 @@ def _startup() -> None:
         link_regulation_kpis_from_templates(db)
         seed_template_org_units(db)
         seed_template_segment_codes(db)
+        seed_medical_template_bundle(db)
         # seed_clients отключён — удалённые клиенты не восстанавливаются
     finally:
         db.close()

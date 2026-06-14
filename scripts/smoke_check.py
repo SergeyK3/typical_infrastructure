@@ -48,6 +48,7 @@ def main() -> int:
         ("/api/clients", 200),
         ("/api/enterprise-templates", 200),
         ("/api/enterprise-templates/default/structure-preview", 200),
+        ("/api/enterprise-templates/medical/structure-preview", 200),
         ("/api/onboarding-runs", 200),
     ]
 

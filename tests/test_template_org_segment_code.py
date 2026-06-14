@@ -49,7 +49,7 @@ def test_segment_code_for_department_only(client):
 
 
 def test_template_segment_codes_list(client):
-    listed = client.get("/api/template-segment-codes?template_code=hosp")
+    listed = client.get("/api/template-segment-codes?template_code=medical")
     assert listed.status_code == 200
     codes = {x["code"] for x in listed.json()["items"]}
     assert "CLINIC" in codes
