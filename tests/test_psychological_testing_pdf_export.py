@@ -196,6 +196,7 @@ def test_update_session_ai_enrichment_persists(
 
 def test_build_session_refs_for_employee(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PSYCH_TESTING_PERSIST_JSON", "1")
+    monkeypatch.setenv("PSYCH_TESTING_PERSIST_DB", "0")
     monkeypatch.setenv("PSYCH_TESTING_SESSIONS_DIR", str(tmp_path))
 
     persist_session_result(

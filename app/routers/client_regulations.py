@@ -371,7 +371,6 @@ def copy_regulation_from_global(
                 period_type=k.period_type,
                 weight=k.weight,
                 is_required=k.is_required,
-                is_active=k.is_active,
             )
         )
     for ins in db.scalars(

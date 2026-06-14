@@ -301,6 +301,9 @@ def patch_template_org_unit(
         select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == row.template_code)
     ).all()
     return _template_org_out(row, all_rows)
+
+
+@router.delete("/{row_id}", status_code=204)
 def delete_template_org_unit(
     row_id: str,
     mode: str = Query("leaf", pattern="^(leaf|cascade)$"),
