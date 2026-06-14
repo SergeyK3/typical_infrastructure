@@ -474,7 +474,37 @@ def _template_org_unit_row(template_code: str, spec: dict) -> TemplateOrgUnitRow
         unit_type=spec["unit_type"],
         sort_order=int(spec.get("sort_order", 0)),
         log_group=spec.get("log_group"),
+        segment_code=spec.get("segment_code"),
     )
+
+
+def _sync_template_org_unit_row_from_spec(row: TemplateOrgUnitRow, spec: dict) -> bool:
+    """Выровнять строку template_org_units по canonical spec (только типовой шаблон в БД)."""
+    changed = False
+    expected_parent = spec.get("parent_code")
+    if row.parent_code != expected_parent:
+        row.parent_code = expected_parent
+        changed = True
+    expected_sort = int(spec.get("sort_order", 0))
+    if row.sort_order != expected_sort:
+        row.sort_order = expected_sort
+        changed = True
+    formatted_name = format_org_unit_name(spec["name"], spec["unit_type"])
+    if row.name != formatted_name:
+        row.name = formatted_name
+        changed = True
+    if row.unit_type != spec["unit_type"]:
+        row.unit_type = spec["unit_type"]
+        changed = True
+    expected_log_group = spec.get("log_group")
+    if row.log_group != expected_log_group:
+        row.log_group = expected_log_group
+        changed = True
+    expected_segment = spec.get("segment_code")
+    if row.segment_code != expected_segment:
+        row.segment_code = expected_segment
+        changed = True
+    return changed
 
 
 def seed_template_org_units(db: Session) -> int:
@@ -549,29 +579,31 @@ def seed_template_segment_codes(db: Session) -> int:
 
 
 def seed_medical_template_bundle(db: Session) -> int:
-    """Каталог должностей, оргструктура и регламенты шаблона medical (для Docker / fresh DB)."""
+    """Каталог должностей, оргструктура и регламенты шаблона medical (default + medical)."""
     from app.medical_template_data import (
-        MEDICAL_ORG_UNITS,
         MEDICAL_POSITION_SPECS,
         MEDICAL_REGULATION_SPECS,
         MEDICAL_TEMPLATE_CODE,
+        merged_medical_org_units,
     )
     from app.position_name_en import position_name_en_for
 
     template_code = MEDICAL_TEMPLATE_CODE
     changed = 0
 
-    existing_ou = {
-        r.code
+    existing_ou_rows = {
+        r.code: r
         for r in db.scalars(
             select(TemplateOrgUnitRow).where(TemplateOrgUnitRow.template_code == template_code)
         ).all()
     }
-    for spec in MEDICAL_ORG_UNITS:
-        if spec["code"] in existing_ou:
-            continue
-        db.add(_template_org_unit_row(template_code, spec))
-        changed += 1
+    for spec in merged_medical_org_units():
+        row = existing_ou_rows.get(spec["code"])
+        if row is None:
+            db.add(_template_org_unit_row(template_code, spec))
+            changed += 1
+        elif _sync_template_org_unit_row_from_spec(row, spec):
+            changed += 1
 
     existing_pc = {
         (r.template_code, r.position_code)
@@ -579,6 +611,73 @@ def seed_medical_template_bundle(db: Session) -> int:
             select(PositionCatalog).where(PositionCatalog.template_code == template_code)
         ).all()
     }
+    for p in POSITION_CATALOG_SEEDS:
+        key = (template_code, p["position_code"])
+        if key in existing_pc:
+            continue
+        db.add(
+            PositionCatalog(
+                template_code=template_code,
+                position_code=p["position_code"],
+                position_name_ru=p["position_name_ru"],
+                position_name_en=position_name_en_for(template_code, p["position_code"]),
+                function_code=p["function_code"],
+                position_level=p["position_level"],
+                is_managerial=p["is_managerial"],
+                is_active=True,
+            )
+        )
+        changed += 1
+
+    existing_links = {
+        (r.template_code, r.position_code, r.dept_type_code)
+        for r in db.scalars(
+            select(PositionDeptType).where(PositionDeptType.template_code == template_code)
+        ).all()
+    }
+    for pos_code, dept_code, is_primary in POSITION_DEPT_TYPE_SEEDS:
+        key = (template_code, pos_code, dept_code)
+        if key in existing_links:
+            continue
+        db.add(
+            PositionDeptType(
+                template_code=template_code,
+                position_code=pos_code,
+                dept_type_code=dept_code,
+                is_primary=is_primary,
+            )
+        )
+        changed += 1
+
+    existing_regs = {
+        (r.template_code, r.regulation_code)
+        for r in db.scalars(
+            select(PositionRegulation).where(PositionRegulation.template_code == template_code)
+        ).all()
+    }
+    for r in POSITION_REGULATION_SEEDS:
+        key = (template_code, r["regulation_code"])
+        if key in existing_regs:
+            continue
+        db.add(
+            PositionRegulation(
+                id=_id("regulation", f"{template_code}_{r['regulation_code']}"),
+                template_code=template_code,
+                regulation_code=r["regulation_code"],
+                position_code=r["position_code"],
+                dept_type_code=r["dept_type_code"],
+                regulation_name=r["regulation_name"],
+                goal_summary=r.get("goal_summary"),
+                ckp_short=r.get("ckp_short"),
+                ckp_full=None,
+                google_doc_url=r.get("google_doc_url"),
+                version_no=r.get("version_no", "1"),
+                status=r.get("status", "active"),
+                is_current=r.get("is_current", True),
+            )
+        )
+        changed += 1
+
     for p in MEDICAL_POSITION_SPECS:
         key = (template_code, p["position_code"])
         if key in existing_pc:

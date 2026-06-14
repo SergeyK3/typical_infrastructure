@@ -65,9 +65,9 @@ def get_template_structure(template_code: str) -> list[dict]:
     from app.org_unit_ops import format_org_unit_name
 
     if is_medical_template(template_code):
-        from app.medical_template_data import MEDICAL_ORG_UNITS
+        from app.medical_template_data import merged_medical_org_units
 
-        units = MEDICAL_ORG_UNITS.copy()
+        units = merged_medical_org_units()
     elif template_code == DEFAULT_TEMPLATE_CODE:
         units = DEFAULT_ORG_UNITS.copy()
     else:

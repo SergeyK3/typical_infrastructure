@@ -121,6 +121,10 @@
       padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
       background: rgba(255,255,255,0.02);
     }
+    .mode-choice label.mode-choice-alt {
+      border-style: dashed;
+      opacity: 0.92;
+    }
     .mode-choice input { width: auto; margin-top: 0.15rem; }
     .mode-choice span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.35; }
     .wizard-warning {
@@ -142,6 +146,9 @@
     .wizard-help code { font-size: 0.85em; background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
     .completion-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
     .completion-actions a.btn { text-decoration: none; display: inline-block; text-align: center; }
+    .completion-secondary { margin-top: 0.75rem; font-size: 0.9rem; }
+    .completion-secondary a { color: var(--accent); text-decoration: none; }
+    .completion-secondary a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -190,15 +197,16 @@
     <!-- Step 2: Client -->
     <div class="panel" id="panel2" data-step="2">
       <h2>2. Данные клиента</h2>
+      <p class="wizard-help" id="createModeHint">Вы создаёте <strong>новую организацию</strong> на основе выбранной типовой инфраструктуры (шаг 1). Укажите код и название клиента ниже.</p>
       <label>Режим onboarding</label>
       <div class="mode-choice">
         <label>
           <input type="radio" name="onboardingMode" value="create" checked>
           <div><strong>Создать новую организацию</strong><br><span>Будет создан клиент, типовая структура, должности и первый администратор.</span></div>
         </label>
-        <label>
+        <label class="mode-choice-alt">
           <input type="radio" name="onboardingMode" value="apply_existing">
-          <div><strong>Применить шаблон к существующей организации</strong><br><span>Будут добавлены только отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.</span></div>
+          <div><strong>Альтернатива: применить шаблон к существующей организации</strong><br><span>Будут добавлены только отсутствующие типовые подразделения, должности и регламенты. Удаление и опасная перезапись не выполняются.</span></div>
         </label>
       </div>
       <div id="newClientFields">
@@ -456,6 +464,7 @@
       const existingMode = onboardingMode() === 'apply_existing';
       $('newClientFields').classList.toggle('hidden', existingMode);
       $('existingClientFields').classList.toggle('hidden', !existingMode);
+      $('createModeHint').classList.toggle('hidden', existingMode);
       $('panel5').classList.toggle('hidden', existingMode && currentStep !== 5);
       $('panel6').classList.toggle('hidden', existingMode && currentStep !== 6);
       if (existingMode && (currentStep === 5 || currentStep === 6)) goToStep(7);
@@ -600,9 +609,10 @@
       return `
         <div class="completion-actions">
           ${orgLink}
-          <a class="btn btn-secondary" href="/clients">Список клиентов</a>
-          <a class="btn btn-secondary" href="/wizard">Создать ещё организацию</a>
         </div>
+        <p class="completion-secondary">
+          <a href="/clients">Вернуться к списку клиентов</a>
+        </p>
       `;
     }
 
@@ -687,18 +697,29 @@
       const statusClass = 'status-' + (run.status || 'running');
       const navLinks = run.status === 'completed'
         ? renderCompletionActions(run.client_id)
-        : (terminal.includes(run.status) ? `
+        : (run.status === 'dry_run' ? `
+        <div class="completion-actions" style="margin-top:1rem;">
+          <button type="button" class="btn btn-primary" id="btnCreateAfterDryRun">Создать организацию</button>
+          <a class="btn btn-secondary" href="/clients">Список клиентов</a>
+        </div>
+      ` : (terminal.includes(run.status) ? `
         <p style="margin-top:1rem;">
           <a href="/clients" style="color:var(--accent);">Список клиентов</a>
           &nbsp;|&nbsp;
           <a href="/wizard" style="color:var(--accent);">Создать ещё организацию</a>
         </p>
-      ` : '');
+      ` : ''));
       let explain = '';
       if (run.status === 'running') {
         explain = '<p class="wizard-help" style="margin-top:0.75rem;">Выполняется: проверки и (при создании организации) запись структуры клиента в базу. Ниже обновляется журнал шагов.</p>';
       } else if (run.status === 'dry_run') {
-        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Dry Run — это проверка сценария без внесения изменений в систему. В базу ничего не записано. Строки вида «skipped — dry_run» — ожидаемое поведение (шаги намеренно не выполнялись).</p>';
+        explain = '<p class="wizard-help" style="margin-top:0.75rem;">Dry Run — это проверка сценария без внесения изменений в систему. В базу ничего не записано. Строки вида «skipped — dry_run» — ожидаемое поведение (шаги намеренно не выполнялись).</p><p class="wizard-help" style="margin-top:0.5rem;">Можно вернуться на шаг 7 и нажать <strong>Создать организацию</strong> или воспользоваться кнопкой ниже.</p>';
+        runSubmitted = false;
+        if (currentStep === 7) {
+          $('btnDryRun').disabled = false;
+          $('btnRun').disabled = false;
+          updateWizardNav();
+        }
       } else if (run.status === 'completed') {
         explain = '<p class="wizard-help" style="margin-top:0.75rem;">Организация создана. Войти можно под логином администратора с шага 5. Выберите действие ниже.</p>';
       } else if (run.status === 'failed') {
@@ -713,6 +734,13 @@
       `;
       stepsEl.classList.remove('hidden');
       stepsEl.textContent = steps.map(s => `${s.step_code}: ${s.status}${s.detail ? ' — ' + s.detail : ''}`).join('\n');
+      const afterDry = $('btnCreateAfterDryRun');
+      if (afterDry) {
+        afterDry.onclick = () => {
+          goToStep(7);
+          submitRun(false);
+        };
+      }
       if (run.status === 'completed') {
         onboardingCompleted = true;
         updateWizardNav();

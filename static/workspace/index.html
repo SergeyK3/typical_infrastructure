@@ -249,10 +249,14 @@
       <div class="org-actions">
         <button class="btn btn-primary" id="btnAddOrg">+ Добавить подразделение</button>
         <button class="btn btn-secondary" id="btnDeployTemplate">Развернуть типовую оргструктуру</button>
-        <button class="btn btn-secondary" id="btnSyncOrgSegments" title="Перенести segment_code из типового шаблона в локальные подразделения и должности">Синхронизировать сегменты</button>
+        <button class="btn btn-secondary" id="btnSyncOrgSegments" title="Сегменты используются для группировки подразделений и должностей по логическим блокам. Обычно они назначаются автоматически при создании организации. Эту кнопку используют, если шаблон был обновлён и нужно дозаполнить отсутствующие сегменты.">Обновить сегменты из шаблона</button>
         <button class="btn btn-secondary" id="btnSaveOrgTemplate" title="Сохранить текущую структуру как новый типовой шаблон">Сохранить как шаблон</button>
         <a class="btn btn-secondary" id="exportOrgXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
+      <p class="meta sync-segments-help" style="margin: 0.35rem 0 0.75rem; max-width: 52rem; line-height: 1.45; font-size: 0.82rem; color: var(--text-muted);">
+        Сегменты используются для группировки подразделений и должностей по логическим блокам. Обычно они назначаются автоматически при создании организации.
+        Кнопка «Обновить сегменты из шаблона» нужна, если типовой шаблон был обновлён и требуется дозаполнить отсутствующие сегменты.
+      </p>
       <p id="orgListMeta" class="meta" style="margin: 0.75rem 0 0;"></p>
       <div class="list-toolbar">
         <span class="meta">Вид:</span>
@@ -2344,10 +2348,12 @@
           '/org-units/sync-segments-from-template?client_id=' + encodeURIComponent(clientId) + '&update_positions=true',
           { method: 'POST' }
         );
-        showWorkspaceToast(
-          'Сегменты синхронизированы: подразделений ' + res.org_units_updated + ', должностей ' + res.positions_updated + '.',
-          'success'
-        );
+        const ou = res.org_units_updated || 0;
+        const pos = res.positions_updated || 0;
+        const msg = (ou === 0 && pos === 0)
+          ? 'Сегменты уже актуальны. Изменений не требуется.'
+          : 'Сегменты обновлены: подразделений ' + ou + ', должностей ' + pos + '.';
+        showWorkspaceToast(msg, ou === 0 && pos === 0 ? 'info' : 'success');
         await loadOrgTree();
         if (document.getElementById('panel-positions').classList.contains('active')) loadPositions();
       } catch (e) {
