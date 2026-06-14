@@ -11,7 +11,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "skill_assessment.runner:app",
         host="127.0.0.1",
-        port=8000,
+        port=8100,
         reload=True,
         reload_dirs=uvicorn_reload_dir_list(),
     )

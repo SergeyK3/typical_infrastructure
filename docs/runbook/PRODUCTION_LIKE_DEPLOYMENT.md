@@ -21,7 +21,7 @@ docker build -t typical-infra-mvp:latest .
 ```bash
 docker run -d \
   --name typical-infra \
-  -p 8000:8000 \
+  -p 8100:8000 \
   -e APP_NAME="Typical infrastructure" \
   -e SQLITE_PATH=/app/data/app.db \
   -v typical_data:/app/data \
@@ -44,7 +44,7 @@ docker compose up -d --build
 |------------|----------|--------------|
 | `APP_NAME` | Имя сервиса | Typical infrastructure |
 | `SQLITE_PATH` | Путь к SQLite БД | app.db (в контейнере: /app/data/app.db) |
-| `APP_PORT` | Порт (только для compose) | 8000 |
+| `APP_PORT` | Хост-порт (compose / браузер) | 8100 |
 
 ### Файл .env
 
@@ -53,7 +53,7 @@ docker compose up -d --build
 ```env
 APP_NAME=Typical infrastructure
 SQLITE_PATH=/app/data/app.db
-APP_PORT=8000
+APP_PORT=8100
 ```
 
 ---
@@ -87,7 +87,7 @@ echo "my_secret_value" | docker secret create app_secret -
 Readiness endpoint:
 
 ```bash
-curl http://localhost:8000/health/ready
+curl http://localhost:8100/health/ready
 # {"status":"ready","service":"Typical infrastructure"}
 ```
 
@@ -98,7 +98,7 @@ curl http://localhost:8000/health/ready
 ## 5. Smoke-проверка после деплоя
 
 ```bash
-python scripts/smoke_check.py --url http://<your-host>:8000
+python scripts/smoke_check.py --url http://<your-host>:8100
 ```
 
 Или для удалённого staging:

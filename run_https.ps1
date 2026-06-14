@@ -8,4 +8,4 @@ Set-Location $root
 if (-not (Test-Path ".dev\key.pem")) {
     python scripts/gen_ssl_cert.py
 }
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --ssl-keyfile=.dev/key.pem --ssl-certfile=.dev/cert.pem
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8100 --ssl-keyfile=.dev/key.pem --ssl-certfile=.dev/cert.pem

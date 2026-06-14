@@ -105,14 +105,14 @@ cd "D:\path\to\10 Typical_infrastructure"
 git pull origin main
 # обновить .env на prod (см. §4)
 .\run_http.ps1
-# или Windows Service / IIS reverse proxy → uvicorn app.main:app --host 0.0.0.0 --port 8000
+# или Windows Service / IIS reverse proxy → uvicorn app.main:app --host 0.0.0.0 --port 8100
 ```
 
 После рестарта:
 
 ```powershell
-curl http://127.0.0.1:8000/health/ready
-curl http://127.0.0.1:8000/api/psychological-testing/status
+curl http://127.0.0.1:8100/health/ready
+curl http://127.0.0.1:8100/api/psychological-testing/status
 ```
 
 Ожидаемый `/status`:

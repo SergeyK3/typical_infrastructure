@@ -39,7 +39,7 @@ def check(url: str, path: str, expected_status: int = 200) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke checks after deploy")
-    parser.add_argument("--url", default="http://127.0.0.1:8000", help="Base URL")
+    parser.add_argument("--url", default="http://127.0.0.1:8100", help="Base URL")
     args = parser.parse_args()
     url = args.url.rstrip("/")
 

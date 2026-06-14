@@ -5,21 +5,21 @@
 Запуск **из любого cwd**, если задан корень ядра::
 
     set TYPICAL_INFRA_ROOT=D:\\path\\to\\typical_infrastructure
-    uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8000
+    uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8100
 
-Либо из **корня клона ядра** (там же лежит пакет ``app``), чтобы он попал в PYTHONPATH::
+    Либо из **корня клона ядра** (там же лежит пакет ``app``), чтобы он попал в PYTHONPATH::
 
     cd D:\\path\\to\\typical_infrastructure
     .venv\\Scripts\\activate
     pip install -e D:\\path\\to\\skill_assessment
-    uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8000
+    uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8100
 
     Либо: ``python -m skill_assessment`` (тот же хост/порт).
 
     Если все пути плагина дают 404, а ``GET /health/ready`` от ядра открывается: на Windows
-    в браузере открывайте **http://127.0.0.1:8000/...**, а не ``http://localhost:8000/...``
+    в браузере открывайте **http://127.0.0.1:8100/...**, а не ``http://localhost:8100/...``
     — ``localhost`` может уйти на другой процесс по IPv6 (``::1``), а uvicorn слушает IPv4.
-    Проверка: ``netstat -ano | findstr :8000`` (несколько LISTENING — разные стеки).
+    Проверка: ``netstat -ano | findstr :8100`` (несколько LISTENING — разные стеки).
 
 Ядро в upstream не меняется; зависимость на skill_assessment в requirements ядра не добавляется.
 """
@@ -642,9 +642,9 @@ def run_plugin_startup() -> None:
         "рабочий UI: GET /api/skill-assessment/workspace (GET /ui → 307 на workspace), health: GET /api/skill-assessment/health"
     )
     _log.info(
-        "skill_assessment: в браузере используйте http://127.0.0.1:8000/api/skill-assessment/health "
+        "skill_assessment: в браузере используйте http://127.0.0.1:8100/api/skill-assessment/health "
         "(не localhost — на Windows возможен другой процесс на IPv6). "
-        "Проверка порта: netstat -ano | findstr :8000"
+        "Проверка порта: netstat -ano | findstr :8100"
     )
     apply_skill_assessment_database_migrations()
     db = SessionLocal()

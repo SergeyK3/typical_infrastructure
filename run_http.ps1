@@ -25,9 +25,9 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyC
   }
 Start-Sleep -Seconds 1
 
-Write-Host "Stopping any process still listening on port 8000..." -ForegroundColor DarkYellow
+Write-Host "Stopping any process still listening on port 8100..." -ForegroundColor DarkYellow
 for ($attempt = 1; $attempt -le 4; $attempt++) {
-  $listeners = @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)
+  $listeners = @(Get-NetTCPConnection -LocalPort 8100 -State Listen -ErrorAction SilentlyContinue)
   if (-not $listeners.Count) { break }
   $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
   foreach ($procId in $pids) {
@@ -40,16 +40,16 @@ for ($attempt = 1; $attempt -le 4; $attempt++) {
   }
   Start-Sleep -Seconds 1
 }
-$left = @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)
+$left = @(Get-NetTCPConnection -LocalPort 8100 -State Listen -ErrorAction SilentlyContinue)
 if ($left.Count) {
-  Write-Host "WARNING: port 8000 still in use by PID(s): $($left.OwningProcess -join ', ')" -ForegroundColor Red
-  Write-Host "Run: Get-NetTCPConnection -LocalPort 8000 | Select OwningProcess; Stop-Process -Id <pid> -Force" -ForegroundColor Red
+  Write-Host "WARNING: port 8100 still in use by PID(s): $($left.OwningProcess -join ', ')" -ForegroundColor Red
+  Write-Host "Run: Get-NetTCPConnection -LocalPort 8100 | Select OwningProcess; Stop-Process -Id <pid> -Force" -ForegroundColor Red
 } else {
-  Write-Host "Port 8000 is free." -ForegroundColor Green
+  Write-Host "Port 8100 is free." -ForegroundColor Green
 }
 
 $python = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $python)) {
     throw "Virtualenv not found: $python. Create it: python -m venv .venv; then .\.venv\Scripts\pip install -r requirements.txt"
 }
-& $python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+& $python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8100

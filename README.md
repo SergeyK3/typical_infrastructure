@@ -6,14 +6,14 @@
 
 ```bash
 python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
-**Важно — номер порта:** команда выше поднимает сервер на порту **`8000`** (это значение по умолчанию у uvicorn). Тогда в браузере нужно открывать **`http://127.0.0.1:8000/`**, а не `:8080`. Сообщение вроде «сайт localhost не позволяет установить соединение» на **8080** при запущенном обычном uvicorn почти всегда значит: процесс слушает **8000**, а в адресной строке указан другой порт.
+**Важно — номер порта:** по умолчанию проект использует **`8100`** (см. `APP_PORT` в `.env` / `.env.example`). В браузере открывайте **`http://127.0.0.1:8100/`**. Docker Compose пробрасывает тот же хост-порт: `${APP_PORT:-8100}` → `8000` внутри контейнера.
 
-Open docs at `http://127.0.0.1:8000/docs`. UI wizard: `http://127.0.0.1:8000/wizard`. Рабочее пространство клиента: `http://127.0.0.1:8000/client/{client_id}`.
+Open docs at `http://127.0.0.1:8100/docs`. UI wizard: `http://127.0.0.1:8100/wizard`. Рабочее пространство клиента: `http://127.0.0.1:8100/client/{client_id}`.
 
-**Порт 8080** — только если вы **отдельно** запускаете `.\run_http_8080.ps1`; тогда URL будет **`http://127.0.0.1:8080/`**. Порт в адресе браузера и порт в команде запуска должны совпадать.
+**Порт 8080** — только если вы **отдельно** запускаете `.\run_http_8080.ps1` (например, когда второй проект уже занял 8100). Порт в адресе браузера и порт в команде запуска должны совпадать.
 
 Если по **`localhost`** соединение не устанавливается, а сервер точно запущен, попробуйте **`127.0.0.1`** вместо `localhost` (на Windows имя иногда резолвится в IPv6 `::1`, куда процесс может не слушать).
 
@@ -33,7 +33,7 @@ python scripts/gen_ssl_cert.py
 python -m uvicorn app.main:app --reload --ssl-keyfile=.dev/key.pem --ssl-certfile=.dev/cert.pem
 ```
 
-Then open **https://127.0.0.1:8000** (accept the self-signed cert warning once).
+Then open **https://127.0.0.1:8100** (accept the self-signed cert warning once).
 
 Health check: `GET /health/ready` — readiness probe for deployment.
 

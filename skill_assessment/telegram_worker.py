@@ -16,7 +16,7 @@
 
      cd path/to/typical_infrastructure
      .venv\\Scripts\\activate
-     uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8000
+     uvicorn skill_assessment.runner:app --reload --host 127.0.0.1 --port 8100
 
 3. Терминал B — только бот::
 

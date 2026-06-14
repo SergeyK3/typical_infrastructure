@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 
-DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:8100"
 
 
 def _normalized_base_url(value: str | None) -> str | None:

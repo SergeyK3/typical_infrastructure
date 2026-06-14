@@ -5,7 +5,7 @@ services:
   app:
     build: .
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "${APP_PORT:-8100}:8000"
     environment:
       - APP_NAME=${APP_NAME:-Typical infrastructure}
       - SQLITE_PATH=/app/data/app.db

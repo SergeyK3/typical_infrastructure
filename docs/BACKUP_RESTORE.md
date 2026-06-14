@@ -172,7 +172,7 @@ docker compose cp "$RESTORE_FILE" "app:/app/data/app.db"
 ```bash
 docker compose start app
 docker compose ps
-curl -sf "http://127.0.0.1:${APP_PORT:-8000}/health/ready"
+curl -sf "http://127.0.0.1:${APP_PORT:-8100}/health/ready"
 ```
 
 Ожидается HTTP 200. При ошибках — логи: `docker compose logs --tail=50 app`.

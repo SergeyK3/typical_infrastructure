@@ -7,7 +7,7 @@
 ## Требования
 
 - Docker и Docker Compose
-- Доступ к порту 8000 (или настраиваемому)
+- Доступ к порту 8100 (или настраиваемому `APP_PORT`)
 
 ## Быстрый старт
 
@@ -19,20 +19,20 @@ git clone <repo> && cd 10_Typical_infrastructure
 docker compose up -d --build
 
 # Проверка
-curl http://localhost:8000/health/ready
+curl http://localhost:8100/health/ready
 ```
 
 ## Smoke-проверка после деплоя
 
 ```bash
 # Python (кросс-платформенно)
-python scripts/smoke_check.py --url http://localhost:8000
+python scripts/smoke_check.py --url http://localhost:8100
 
 # Или вручную
-curl http://localhost:8000/health/ready
-curl http://localhost:8000/api/clients
-curl http://localhost:8000/api/enterprise-templates
-curl http://localhost:8000/wizard
+curl http://localhost:8100/health/ready
+curl http://localhost:8100/api/clients
+curl http://localhost:8100/api/enterprise-templates
+curl http://localhost:8100/wizard
 ```
 
 Ожидаемый результат smoke_check: все проверки `OK`.
@@ -40,7 +40,7 @@ curl http://localhost:8000/wizard
 Psych testing (если включён в `.env`):
 
 ```bash
-python scripts/smoke_psych_pilot.py --url http://localhost:8000 --status-only
+python scripts/smoke_psych_pilot.py --url http://localhost:8100 --status-only
 # на сервере с app.db: python scripts/smoke_psych_pilot.py
 ```
 
@@ -50,10 +50,10 @@ python scripts/smoke_psych_pilot.py --url http://localhost:8000 --status-only
 
 | URL | Описание |
 |-----|----------|
-| http://localhost:8000/health/ready | Readiness probe |
-| http://localhost:8000/docs | Swagger UI |
-| http://localhost:8000/wizard | UI-мастер onboarding |
-| http://localhost:8000/api/* | REST API |
+| http://localhost:8100/health/ready | Readiness probe |
+| http://localhost:8100/docs | Swagger UI |
+| http://localhost:8100/wizard | UI-мастер onboarding |
+| http://localhost:8100/api/* | REST API |
 
 ## Данные
 

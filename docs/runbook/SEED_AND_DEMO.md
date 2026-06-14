@@ -29,7 +29,7 @@
 Полный запуск через API:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
+curl -X POST "http://127.0.0.1:8100/api/onboarding-runs" \
   -H "Content-Type: application/json" \
   -d '{
     "template_code": "default",
@@ -50,7 +50,7 @@ curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
 ### Dry-run (без создания сущностей)
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/onboarding-runs?dry_run=true" \
+curl -X POST "http://127.0.0.1:8100/api/onboarding-runs?dry_run=true" \
   -H "Content-Type: application/json" \
   -d '{
     "template_code": "default",
@@ -65,12 +65,12 @@ curl -X POST "http://127.0.0.1:8000/api/onboarding-runs?dry_run=true" \
 ### Проверка статуса run
 
 ```bash
-curl "http://127.0.0.1:8000/api/onboarding-runs/{run_id}"
+curl "http://127.0.0.1:8100/api/onboarding-runs/{run_id}"
 ```
 
 ## Демо-сценарий 2: Через UI Wizard
 
-1. Откройте http://127.0.0.1:8000/wizard
+1. Откройте http://127.0.0.1:8100/wizard
 2. Выберите шаблон `default`
 3. Введите данные клиента (код, название)
 4. Просмотрите оргструктуру и должности
@@ -84,7 +84,7 @@ curl "http://127.0.0.1:8000/api/onboarding-runs/{run_id}"
 
 ```bash
 KEY="demo-idem-001"
-curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
+curl -X POST "http://127.0.0.1:8100/api/onboarding-runs" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $KEY" \
   -d '{
@@ -94,7 +94,7 @@ curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
   }'
 
 # Повторный тот же запрос — вернёт тот же run_id
-curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
+curl -X POST "http://127.0.0.1:8100/api/onboarding-runs" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $KEY" \
   -d '...'
@@ -106,19 +106,19 @@ curl -X POST "http://127.0.0.1:8000/api/onboarding-runs" \
 
 ```bash
 # Список клиентов
-curl "http://127.0.0.1:8000/api/clients"
+curl "http://127.0.0.1:8100/api/clients"
 
 # Оргструктура клиента
-curl "http://127.0.0.1:8000/api/org-units?client_id={client_id}"
+curl "http://127.0.0.1:8100/api/org-units?client_id={client_id}"
 
 # Должности
-curl "http://127.0.0.1:8000/api/positions?client_id={client_id}"
+curl "http://127.0.0.1:8100/api/positions?client_id={client_id}"
 
 # Сотрудники
-curl "http://127.0.0.1:8000/api/employees?client_id={client_id}"
+curl "http://127.0.0.1:8100/api/employees?client_id={client_id}"
 
 # Аккаунты
-curl "http://127.0.0.1:8000/api/accounts?client_id={client_id}"
+curl "http://127.0.0.1:8100/api/accounts?client_id={client_id}"
 ```
 
 ## Сброс данных

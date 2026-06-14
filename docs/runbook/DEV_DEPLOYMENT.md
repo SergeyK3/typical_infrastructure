@@ -36,27 +36,27 @@ SQLITE_PATH=app.db
 ### 3. Запуск приложения
 
 ```bash
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
-Сервис будет доступен по адресу `http://127.0.0.1:8000`.
+Сервис будет доступен по адресу `http://127.0.0.1:8100`.
 
 ### 4. Проверка готовности
 
 ```bash
-curl http://127.0.0.1:8000/health/ready
+curl http://127.0.0.1:8100/health/ready
 ```
 
 Ожидаемый ответ: `{"status": "ready", "service": "Typical infrastructure"}`.
 
 ### 5. OpenAPI документация
 
-- Swagger UI: http://127.0.0.1:8000/docs
-- ReDoc: http://127.0.0.1:8000/redoc
+- Swagger UI: http://127.0.0.1:8100/docs
+- ReDoc: http://127.0.0.1:8100/redoc
 
 ### 6. UI Wizard
 
-Мастер one-click onboarding: http://127.0.0.1:8000/wizard
+Мастер one-click onboarding: http://127.0.0.1:8100/wizard
 
 ## При запуске
 
@@ -68,7 +68,7 @@ curl http://127.0.0.1:8000/health/ready
 
 | Проблема | Решение |
 |----------|---------|
-| Порт 8000 занят | Используйте `--port 8001` | 
+| Порт 8100 занят | Задайте другой `--port` (например `8000` для второго проекта) или измените `APP_PORT` в `.env` | 
 | Ошибка импорта | Проверьте активацию venv и `pip install` |
 | Ошибка БД | Удалите `app.db` и перезапустите (данные будут потеряны) |
 

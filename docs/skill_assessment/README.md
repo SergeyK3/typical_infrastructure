@@ -29,7 +29,7 @@ pip install -e D:\path\to\skill_assessment
 | `TELEGRAM_BOT_TOKEN` | Токен от @BotFather (dev-бот отдельно от прода). |
 | `TELEGRAM_ENABLE_POLLING` | `1` — при старте uvicorn запускается **long polling**; бот отвечает на `/start` (удобно в разработке). В тестах и CI не включать. |
 | `SKILL_ASSESSMENT_PUBLIC_BASE_URL` | Внешний базовый URL сервиса. Из него собираются персональные ссылки из Telegram, включая страницу оценки руководителя. |
-| `SKILL_ASSESSMENT_HR_BASE_URL` | Базовый URL для HR/протокольных ссылок в браузере. По умолчанию используется `http://127.0.0.1:8000`, чтобы старый tunnel URL не открывался как `503 Tunnel Unavailable`. |
+| `SKILL_ASSESSMENT_HR_BASE_URL` | Базовый URL для HR/протокольных ссылок в браузере. По умолчанию используется `http://127.0.0.1:8100`, чтобы старый tunnel URL не открывался как `503 Tunnel Unavailable`. |
 | `SKILL_ASSESSMENT_MANAGER_REVIEW_DEADLINE_HOURS` | Через сколько часов после завершения кейсов ставить дедлайн руководителю на `Part 3`. По умолчанию `72`. |
 
 При старте `runner` подхватывает **`.env`** из корня пакета (даже если текущий каталог — ядро `typical_infrastructure`).
@@ -39,7 +39,7 @@ pip install -e D:\path\to\skill_assessment
 ```powershell
 cd D:\path\to\typical_infrastructure
 .\.venv\Scripts\Activate.ps1
-uvicorn skill_assessment.runner:app --host 0.0.0.0 --port 8000 --reload
+uvicorn skill_assessment.runner:app --host 0.0.0.0 --port 8100 --reload
 ```
 
 Или скрипт из корня пакета (подставьте пути):
