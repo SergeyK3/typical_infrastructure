@@ -142,6 +142,7 @@
         method: opts.method || 'GET',
         headers: opts.headers || {},
         body: opts.body,
+        credentials: 'same-origin',
       });
       const text = await r.text();
       if (!r.ok) {

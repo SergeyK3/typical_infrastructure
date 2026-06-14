@@ -159,3 +159,60 @@ def test_unauthenticated_clients_api_returns_401(client):
     _logout(client)
     r = client.get("/api/clients")
     assert r.status_code == 401
+
+
+def test_unauthenticated_tenant_apis_return_401(client):
+    _logout(client)
+    for path in (
+        "/api/employees?client_id=x",
+        "/api/org-units?client_id=x",
+        "/api/accounts?client_id=x",
+        "/api/positions?client_id=x",
+        "/api/roles",
+    ):
+        assert client.get(path).status_code == 401, path
+
+
+def test_client_admin_cannot_access_another_client_tenant_data(client):
+    _logout(client)
+    client_a = _onboard_client(client, code="auth_tenant_data_a", admin_login="auth_tenant_data_a_admin")
+    client_b = _onboard_client(client, code="auth_tenant_data_b", admin_login="auth_tenant_data_b_admin")
+    auth_login(client, "auth_tenant_data_a_admin", "TempPass123!")
+
+    for path in (
+        f"/api/employees?client_id={client_b}",
+        f"/api/org-units?client_id={client_b}",
+        f"/api/accounts?client_id={client_b}",
+        f"/api/positions?client_id={client_b}",
+    ):
+        assert client.get(path).status_code == 403, path
+
+    own = client.get(f"/api/employees?client_id={client_a}")
+    assert own.status_code == 200
+
+
+def test_org_admin_can_create_account_with_plain_password(client):
+    _logout(client)
+    client_id = _onboard_client(client, code="auth_acc_create", admin_login="auth_acc_create_admin")
+    auth_login(client, "auth_acc_create_admin", "TempPass123!")
+
+    employees = client.get(f"/api/employees?client_id={client_id}&limit=10").json()["items"]
+    assert employees
+    emp_id = employees[0]["id"]
+
+    r = client.post(
+        "/api/accounts",
+        json={
+            "employee_id": emp_id,
+            "login": "new_employee_user",
+            "password": "NewUserPass123!",
+            "status": "active",
+            "role_codes": ["employee"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["login"] == "new_employee_user"
+
+    _logout(client)
+    login_r = auth_login(client, "new_employee_user", "NewUserPass123!")
+    assert login_r.status_code == 200

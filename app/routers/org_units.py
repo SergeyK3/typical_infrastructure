@@ -7,6 +7,9 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.context import CurrentAccount
+from app.auth.deps import get_current_account
+from app.auth.tenant import assert_client_access, load_org_unit_for_ctx, require_client_query_access
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import Client, Employee, EnterpriseTemplate, OrgUnit
@@ -95,6 +98,7 @@ def _resolve_client_template_code(db: Session, client_id: str) -> str:
 def list_org_units(
     client_id: str = Query(...),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[OrgUnitOut]:
@@ -112,7 +116,11 @@ def list_org_units(
 
 
 @router.get("/tree", response_model=list[OrgUnitNode])
-def tree_org_units(client_id: str = Query(...), db: Session = Depends(get_db)) -> list[OrgUnitNode]:
+def tree_org_units(
+    client_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
+) -> list[OrgUnitNode]:
     rows = db.scalars(
         select(OrgUnit).where(OrgUnit.client_id == client_id).order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc())
     ).all()
@@ -144,6 +152,7 @@ def tree_org_units(client_id: str = Query(...), db: Session = Depends(get_db)) -
 def export_org_units_excel(
     client_id: str = Query(...),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> Response:
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
@@ -194,9 +203,12 @@ def export_org_units_excel(
 
 @router.post("/from-template-node", response_model=OrgUnitOut, status_code=201)
 def add_org_unit_from_template(
-    body: OrgUnitFromTemplateNode, db: Session = Depends(get_db)
+    body: OrgUnitFromTemplateNode,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> OrgUnitOut:
     """Создать одно подразделение по узлу типового шаблона (родитель должен уже существовать у клиента)."""
+    assert_client_access(ctx, body.client_id)
     if not db.get(Client, body.client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
     structure = resolve_template_structure(db, body.template_code)
@@ -249,6 +261,7 @@ def sync_org_segments_from_template(
     client_id: str = Query(...),
     update_positions: bool = Query(True, description="Обновить segment_code у должностей"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> SegmentSyncOut:
     """Перенести segment_code из типовой оргструктуры в локальные подразделения и должности."""
     if not db.get(Client, client_id):
@@ -273,6 +286,7 @@ def deploy_template(
         description="Скопировать глобальные регламенты и KPI в справочник организации (по развёрнутым должностям)",
     ),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> list[OrgUnitOut]:
     """Развернуть типовую оргструктуру (отделения, секции и должности) для организации."""
     if not db.get(Client, client_id):
@@ -295,7 +309,12 @@ def deploy_template(
 
 
 @router.post("", response_model=OrgUnitOut)
-def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> OrgUnitOut:
+def create_org_unit(
+    payload: OrgUnitCreate,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> OrgUnitOut:
+    assert_client_access(ctx, payload.client_id)
     assert_valid_unit_type(payload.unit_type)
     _assert_parent_ok(db, payload.client_id, payload.id, payload.parent_id)
     segment_code = normalize_template_segment_code(payload.unit_type, payload.segment_code)
@@ -324,10 +343,13 @@ def create_org_unit(payload: OrgUnitCreate, db: Session = Depends(get_db)) -> Or
 
 
 @router.patch("/{unit_id}", response_model=OrgUnitOut)
-def patch_org_unit(unit_id: str, payload: OrgUnitPatch, db: Session = Depends(get_db)) -> OrgUnitOut:
-    obj = _get_unit(db, unit_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="org_unit_not_found")
+def patch_org_unit(
+    unit_id: str,
+    payload: OrgUnitPatch,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> OrgUnitOut:
+    obj = load_org_unit_for_ctx(db, unit_id, ctx)
     data = payload.model_dump(exclude_unset=True)
     if "parent_id" in data:
         _assert_parent_ok(db, obj.client_id, unit_id, data["parent_id"])
@@ -347,11 +369,12 @@ def patch_org_unit(unit_id: str, payload: OrgUnitPatch, db: Session = Depends(ge
 
 @router.post("/{unit_id}/clone", response_model=OrgUnitCloneOut, status_code=201)
 def clone_org_unit(
-    unit_id: str, body: OrgUnitCloneIn, db: Session = Depends(get_db)
+    unit_id: str,
+    body: OrgUnitCloneIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> OrgUnitCloneOut:
-    obj = _get_unit(db, unit_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    obj = load_org_unit_for_ctx(db, unit_id, ctx)
     if obj.unit_type == "department":
         result = clone_local_department(
             db,
@@ -382,13 +405,15 @@ def clone_org_unit(
 
 
 @router.post("/bulk-clone", response_model=list[OrgUnitCloneOut], status_code=201)
-def bulk_clone_org_units(body: OrgUnitBulkCloneIn, db: Session = Depends(get_db)) -> list[OrgUnitCloneOut]:
+def bulk_clone_org_units(
+    body: OrgUnitBulkCloneIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> list[OrgUnitCloneOut]:
     out: list[OrgUnitCloneOut] = []
     results = []
     for uid in body.unit_ids:
-        obj = _get_unit(db, uid)
-        if not obj:
-            raise HTTPException(status_code=404, detail=f"org_unit_not_found:{uid}")
+        obj = load_org_unit_for_ctx(db, uid, ctx)
         if obj.unit_type != "department":
             continue
         result = clone_local_department(db, obj, name_suffix=body.name_suffix)
@@ -411,6 +436,7 @@ def reorder_org_units(
     client_id: str = Query(...),
     body: list[OrgUnitReorderItem] = Body(...),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> list[OrgUnitOut]:
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
@@ -432,10 +458,9 @@ def delete_org_unit(
     unit_id: str,
     mode: str = Query("leaf", pattern="^(leaf|cascade)$"),
     db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> Response:
-    obj = _get_unit(db, unit_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="org_unit_not_found")
+    obj = load_org_unit_for_ctx(db, unit_id, ctx)
     if mode == "cascade":
         delete_local_org_unit_cascade(db, obj)
     else:
@@ -445,9 +470,14 @@ def delete_org_unit(
 
 
 @router.post("/bulk", response_model=list[OrgUnitOut])
-def bulk_upsert_org_units(items: list[OrgUnitCreate], db: Session = Depends(get_db)) -> list[OrgUnitOut]:
+def bulk_upsert_org_units(
+    items: list[OrgUnitCreate],
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> list[OrgUnitOut]:
     out: list[OrgUnitOut] = []
     for it in items:
+        assert_client_access(ctx, it.client_id)
         unit_id = it.id
         if unit_id:
             obj = _get_unit(db, unit_id)

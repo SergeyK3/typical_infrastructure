@@ -166,7 +166,7 @@
 
     async function skillApi(rowId, opts, suffix) {
       const url = '/api/skill-assessment/catalog/competency-matrix/' + encodeURIComponent(rowId) + (suffix || '');
-      const r = await fetch(url, opts || {});
+      const r = await fetch(url, { credentials: 'same-origin', ...(opts || {}) });
       const text = await r.text();
       let j = null;
       try { j = text ? JSON.parse(text) : null; } catch (_) {}
@@ -181,7 +181,7 @@
 
     async function loadPositionsCatalog() {
       try {
-        const r = await fetch('/api/position-catalog?template_code=' + encodeURIComponent(templateCode()) + '&limit=500', { cache: 'no-store' });
+        const r = await fetch('/api/position-catalog?template_code=' + encodeURIComponent(templateCode()) + '&limit=500', { cache: 'no-store', credentials: 'same-origin' });
         if (!r.ok) return;
         const data = await r.json();
         positionsCatalog = data.items || [];

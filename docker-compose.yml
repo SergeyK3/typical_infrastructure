@@ -9,6 +9,9 @@ services:
     environment:
       - APP_NAME=${APP_NAME:-Typical infrastructure}
       - SQLITE_PATH=/app/data/app.db
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-auth-secret-change-me}
+      - SYSTEM_ADMIN_LOGIN=${SYSTEM_ADMIN_LOGIN:-}
+      - SYSTEM_ADMIN_PASSWORD=${SYSTEM_ADMIN_PASSWORD:-}
     volumes:
       - app_data:/app/data
     healthcheck:

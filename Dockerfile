@@ -16,6 +16,7 @@ COPY app/ ./app/
 COPY skill_assessment/ ./skill_assessment/
 COPY psychological_testing/ ./psychological_testing/
 COPY static/ ./static/
+COPY scripts/ ./scripts/
 
 # SQLite DB path (override via env)
 ENV SQLITE_PATH=/app/data/app.db

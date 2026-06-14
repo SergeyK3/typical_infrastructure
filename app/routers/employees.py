@@ -9,6 +9,9 @@ from fastapi.responses import Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.auth.context import CurrentAccount
+from app.auth.deps import get_current_account
+from app.auth.tenant import assert_client_access, load_employee_for_ctx, require_client_query_access
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import Account, Client, Employee, OrgUnit, Position
@@ -41,6 +44,7 @@ def list_employees(
     position_id: str | None = Query(None),
     search: str | None = Query(None, description="Поиск по ФИО или email"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[EmployeeListOut]:
@@ -91,6 +95,7 @@ def export_employees_excel(
     position_id: str | None = Query(None),
     search: str | None = Query(None),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> Response:
     if not db.get(Client, client_id):
         raise HTTPException(status_code=404, detail="client_not_found")
@@ -171,15 +176,22 @@ def export_employees_excel(
 
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
-def get_employee(employee_id: str, db: Session = Depends(get_db)) -> EmployeeOut:
-    obj = db.get(Employee, employee_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="employee_not_found")
+def get_employee(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> EmployeeOut:
+    obj = load_employee_for_ctx(db, employee_id, ctx)
     return EmployeeOut.model_validate(obj)
 
 
 @router.post("", response_model=EmployeeOut)
-def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> EmployeeOut:
+def create_employee(
+    payload: EmployeeCreate,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> EmployeeOut:
+    assert_client_access(ctx, payload.client_id)
     _assert_org_unit(db, payload.client_id, payload.org_unit_id)
     _assert_position(db, payload.client_id, payload.position_id)
     obj = Employee(
@@ -203,10 +215,13 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
 
 
 @router.patch("/{employee_id}", response_model=EmployeeOut)
-def patch_employee(employee_id: str, payload: EmployeePatch, db: Session = Depends(get_db)) -> EmployeeOut:
-    obj = db.get(Employee, employee_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="employee_not_found")
+def patch_employee(
+    employee_id: str,
+    payload: EmployeePatch,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> EmployeeOut:
+    obj = load_employee_for_ctx(db, employee_id, ctx)
     data = payload.model_dump(exclude_unset=True)
     if "org_unit_id" in data:
         _assert_org_unit(db, obj.client_id, data["org_unit_id"])
@@ -220,10 +235,12 @@ def patch_employee(employee_id: str, payload: EmployeePatch, db: Session = Depen
 
 
 @router.delete("/{employee_id}", status_code=204)
-def delete_employee(employee_id: str, db: Session = Depends(get_db)) -> Response:
-    obj = db.get(Employee, employee_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="employee_not_found")
+def delete_employee(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> Response:
+    obj = load_employee_for_ctx(db, employee_id, ctx)
     from app.models import Account
     acc = db.scalar(select(Account).where(Account.employee_id == employee_id))
     if acc:
@@ -240,6 +257,7 @@ def import_employees_excel(
     header_row: int = Query(1, ge=1, description="Строка с заголовками (1, 2, 3...). По умолчанию — 1."),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> list[EmployeeOut]:
     """Импорт сотрудников из Excel. Колонки: last_name, first_name, middle_name, email (или Фамилия, Имя, Отчество, Email)."""
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -536,9 +554,14 @@ def import_employees_excel(
 
 
 @router.post("/bulk", response_model=list[EmployeeOut])
-def bulk_upsert_employees(items: list[EmployeeCreate], db: Session = Depends(get_db)) -> list[EmployeeOut]:
+def bulk_upsert_employees(
+    items: list[EmployeeCreate],
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> list[EmployeeOut]:
     out: list[EmployeeOut] = []
     for it in items:
+        assert_client_access(ctx, it.client_id)
         obj = db.get(Employee, it.id) if it.id else None
         _assert_org_unit(db, it.client_id, it.org_unit_id)
         _assert_position(db, it.client_id, it.position_id)

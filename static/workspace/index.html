@@ -1200,7 +1200,7 @@
     }
 
     async function fetchApi(path, opts = {}) {
-      const r = await fetch(API + path, opts);
+      const r = await fetch(API + path, { ...opts, credentials: 'same-origin' });
       const text = await r.text();
       if (!r.ok) {
         throw new Error(parseApiErrorText(text) || ('HTTP ' + r.status));
@@ -1223,7 +1223,7 @@
     }
 
     async function fetchApiBlob(path, opts = {}) {
-      const r = await fetch(API + path, opts);
+      const r = await fetch(API + path, { ...opts, credentials: 'same-origin' });
       if (!r.ok) {
         const text = await r.text();
         throw new Error(parseApiErrorText(text) || ('HTTP ' + r.status));
@@ -4242,15 +4242,10 @@
       const errEl = document.getElementById('modalAccountErr');
       if (!employeeId || !login || !password) { showErr(errEl, 'Заполните сотрудника, логин и пароль'); return; }
       try {
-        const enc = await fetchApi('/accounts/encode-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password })
-        });
         await fetchApi('/accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee_id: employeeId, login, password_hash: enc.password_hash, status: 'active', role_codes: roleCodes })
+          body: JSON.stringify({ employee_id: employeeId, login, password, status: 'active', role_codes: roleCodes })
         });
         document.getElementById('modalAccount').classList.remove('show');
         await loadEmployeesForSelect();
@@ -4285,8 +4280,7 @@
       try {
         const body = { login, role_codes: roleCodes };
         if (password) {
-          const enc = await fetchApi('/accounts/encode-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
-          body.password_hash = enc.password_hash;
+          body.password = password;
         }
         await fetchApi('/accounts/' + id, {
           method: 'PATCH',

@@ -386,7 +386,7 @@ class AccountBase(BaseModel):
 class AccountCreate(BaseModel):
     employee_id: str
     login: str
-    password_hash: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=128)
     status: str = Field(default="active", min_length=1)
     id: str | None = None
     role_codes: list[str] = Field(default_factory=list, max_length=20)
@@ -394,7 +394,7 @@ class AccountCreate(BaseModel):
 
 class AccountPatch(BaseModel):
     login: str | None = None
-    password_hash: str | None = None
+    password: str | None = Field(default=None, min_length=1, max_length=128)
     status: str | None = None
     role_codes: list[str] | None = None
 
@@ -425,7 +425,7 @@ class AccountWithRolesOut(AccountOut):
 class AccountBulkItem(BaseModel):
     employee_id: str
     login: str
-    password_hash: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=128)
     status: str = Field(default="active", min_length=1)
     role_codes: list[str] = Field(default_factory=list, max_length=20)
 
