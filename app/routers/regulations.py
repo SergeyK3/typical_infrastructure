@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import (
@@ -43,7 +44,11 @@ from app.schemas import (
     RegulationKpiOut,
 )
 
-router = APIRouter(prefix="/regulations", tags=["regulations"])
+router = APIRouter(
+    prefix="/regulations",
+    tags=["regulations"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 
 def _regulation_out(db: Session, row: PositionRegulation) -> PositionRegulationOut:

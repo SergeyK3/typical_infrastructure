@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_account, require_global_admin
+from app.auth.context import CurrentAccount
 from app.db import get_db
 from app.models import Account, Client, Employee
 from pydantic import BaseModel
@@ -33,6 +35,7 @@ class ListEnvelope(BaseModel):
 @router.get("", response_model=ListEnvelope)
 def list_users(
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_global_admin),
     limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope:

@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_account, require_global_admin
+from app.auth.context import CurrentAccount
 from app.db import get_db
 from app.models import OnboardingRun, OnboardingStep
 from app.onboarding import compute_payload_hash, run_onboarding_bootstrap
@@ -17,6 +19,7 @@ router = APIRouter(prefix="/onboarding-runs", tags=["onboarding"])
 @router.get("", response_model=ListEnvelope[OnboardingRunOut])
 def list_onboarding_runs(
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_global_admin),
     client_id: str | None = None,
     status: str | None = None,
     limit: int = Query(50, ge=1, le=500),
@@ -62,6 +65,7 @@ def list_onboarding_runs(
 def create_onboarding_run(
     payload: OnboardingRunCreate,
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_global_admin),
     dry_run: bool = False,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> OnboardingRunOut:
@@ -95,7 +99,11 @@ def create_onboarding_run(
 
 
 @router.get("/{run_id}", response_model=OnboardingRunWithStepsOut)
-def get_onboarding_run(run_id: str, db: Session = Depends(get_db)) -> OnboardingRunWithStepsOut:
+def get_onboarding_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_global_admin),
+) -> OnboardingRunWithStepsOut:
     run = db.get(OnboardingRun, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="run_not_found")

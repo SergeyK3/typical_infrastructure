@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.models import Client, EnterpriseTemplate, OrgUnit, Position, PositionDeptType, TemplateOrgUnitRow
 from app.org_structures import list_positions_from_position_catalog, list_template_bundle_preview
@@ -27,7 +28,11 @@ from app.schemas import (
 )
 from app.utils import new_id32
 
-router = APIRouter(prefix="/enterprise-templates", tags=["enterprise-templates"])
+router = APIRouter(
+    prefix="/enterprise-templates",
+    tags=["enterprise-templates"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 
 def _get_template(db: Session, template_id: str) -> EnterpriseTemplate | None:

@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.models import TemplateSegmentCode
 from app.schemas import (
@@ -17,7 +18,11 @@ from app.schemas import (
     TemplateSegmentCodePatch,
 )
 
-router = APIRouter(prefix="/template-segment-codes", tags=["template_segment_codes"])
+router = APIRouter(
+    prefix="/template-segment-codes",
+    tags=["template_segment_codes"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 
 @router.get("", response_model=ListEnvelope[TemplateSegmentCodeOut])

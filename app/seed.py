@@ -32,9 +32,9 @@ def _id(prefix: str, code: str) -> str:
 
 
 ROLE_SEEDS: list[tuple[str, str]] = [
-    ("system_admin", "Platform system administrator"),
+    ("system_admin", "Global administrator (Super Admin)"),
     ("developer", "Platform developer"),
-    ("admin", "Administrator"),
+    ("admin", "Organization administrator"),
     ("hr", "HR"),
     ("manager", "Manager"),
     ("employee", "Employee"),

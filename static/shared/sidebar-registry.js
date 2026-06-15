@@ -28,12 +28,13 @@
   ];
 
   const platformNavigation = [
-    { id: 'platform.clients', label: 'Клиенты', level: 'platform', groupId: 'platform', href: '/clients', order: 10 },
-    { id: 'platform.users', label: 'Пользователи', level: 'platform', groupId: 'platform', href: '/users', order: 20 },
-    { id: 'platform.onboarding', label: 'Мастер onboarding', level: 'platform', groupId: 'platform', href: '/wizard', order: 30 },
-    { id: 'globalCatalogs.overview', label: 'Обзор', level: 'platform', groupId: 'globalCatalogs', href: '/global', order: 10 },
-    { id: 'globalCatalogs.templateOrg', label: 'Типовая оргструктура', level: 'platform', groupId: 'globalCatalogs', href: '/global/template-org', order: 20 },
-    { id: 'globalCatalogs.positions', label: 'Типовые должности', level: 'platform', groupId: 'globalCatalogs', href: '/global/positions', order: 30 },
+    { id: 'platform.clients', label: 'Клиенты', level: 'platform', groupId: 'platform', href: '/clients', order: 10, requiresGlobalAdmin: true },
+    { id: 'platform.orgAdmins', label: 'Админы организаций', level: 'platform', groupId: 'platform', href: '/org-admins', order: 15, requiresGlobalAdmin: true },
+    { id: 'platform.users', label: 'Пользователи', level: 'platform', groupId: 'platform', href: '/users', order: 20, requiresGlobalAdmin: true },
+    { id: 'platform.onboarding', label: 'Мастер onboarding', level: 'platform', groupId: 'platform', href: '/wizard', order: 30, requiresGlobalAdmin: true },
+    { id: 'globalCatalogs.overview', label: 'Обзор', level: 'platform', groupId: 'globalCatalogs', href: '/global', order: 10, requiresGlobalAdmin: true },
+    { id: 'globalCatalogs.templateOrg', label: 'Типовая оргструктура', level: 'platform', groupId: 'globalCatalogs', href: '/global/template-org', order: 20, requiresGlobalAdmin: true },
+    { id: 'globalCatalogs.positions', label: 'Типовые должности', level: 'platform', groupId: 'globalCatalogs', href: '/global/positions', order: 30, requiresGlobalAdmin: true },
     {
       id: 'globalCatalogs.regulations',
       label: 'Типовые регламенты',
@@ -43,10 +44,11 @@
       order: 40,
       elementId: 'topNavRegulations',
       title: 'Общесистемный нормативный реестр',
+      requiresGlobalAdmin: true,
     },
-    { id: 'globalCatalogs.kpi', label: 'Типовые KPI', level: 'platform', groupId: 'globalCatalogs', href: '/global/kpi', order: 50 },
-    { id: 'globalCatalogs.skills', label: 'Типовые навыки', level: 'platform', groupId: 'globalCatalogs', href: '/global/skills', order: 60 },
-    { id: 'developerTools.api', label: 'API', level: 'platform', groupId: 'globalCatalogs', href: '/docs', order: 70, className: 'api-link' },
+    { id: 'globalCatalogs.kpi', label: 'Типовые KPI', level: 'platform', groupId: 'globalCatalogs', href: '/global/kpi', order: 50, requiresGlobalAdmin: true },
+    { id: 'globalCatalogs.skills', label: 'Типовые навыки', level: 'platform', groupId: 'globalCatalogs', href: '/global/skills', order: 60, requiresGlobalAdmin: true },
+    { id: 'developerTools.api', label: 'API', level: 'platform', groupId: 'globalCatalogs', href: '/docs', order: 70, className: 'api-link', requiresGlobalAdmin: true },
   ];
 
   const organizationNavigation = [

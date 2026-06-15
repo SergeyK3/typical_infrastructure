@@ -158,6 +158,13 @@
         name: clientName || '',
         code: clientCode || '',
       };
+      const authMe = (window.AuthContext && window.AuthContext.getMe && window.AuthContext.getMe()) || null;
+      const isGlobalAdmin = hasOwn(source, 'isGlobalAdmin')
+        ? !!source.isGlobalAdmin
+        : !!(authMe && authMe.isGlobalAdmin);
+      const isOrgAdmin = hasOwn(source, 'isOrgAdmin')
+        ? !!source.isOrgAdmin
+        : !!(authMe && authMe.isOrgAdmin);
       const moduleVisibility = resolveModuleVisibility({
         currentPath,
         currentHash,
@@ -179,6 +186,8 @@
         moduleVisibility,
         collapsedSections,
         focusMode,
+        isGlobalAdmin,
+        isOrgAdmin,
         fallbackReason: source.fallbackReason || '',
       };
     }
@@ -298,6 +307,7 @@
   }
 
   function isItemVisible(item, ctx) {
+    if (item.requiresGlobalAdmin && !ctx.isGlobalAdmin) return false;
     if (item.requiresClient && !ctx.clientId) return false;
     if (item.requiresModule && !ctx.activeModules.includes(item.requiresModule)) return false;
     if (item.visibilityKey && ctx.moduleVisibility && ctx.moduleVisibility[item.visibilityKey] === false) return false;

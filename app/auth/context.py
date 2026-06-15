@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from app.models import Account, AccountRole, Client, Employee, Role
 
 SYSTEM_ROLE_CODES = frozenset({"system_admin", "developer"})
-CLIENT_ADMIN_ROLE_CODES = frozenset({"admin"})
+GLOBAL_ADMIN_ROLE_CODES = SYSTEM_ROLE_CODES
+ORG_ADMIN_ROLE_CODES = frozenset({"admin"})
+CLIENT_ADMIN_ROLE_CODES = ORG_ADMIN_ROLE_CODES
 
 
 class AccountMisconfiguredError(Exception):
@@ -31,6 +33,14 @@ class CurrentAccount:
             return True
         return client_id in self.allowed_clients
 
+    @property
+    def is_global_admin(self) -> bool:
+        return bool(set(self.roles) & GLOBAL_ADMIN_ROLE_CODES)
+
+    @property
+    def is_org_admin(self) -> bool:
+        return bool(set(self.roles) & ORG_ADMIN_ROLE_CODES) and not self.is_global_admin
+
     def to_me_dict(self) -> dict:
         return {
             "account_id": self.account_id,
@@ -38,6 +48,8 @@ class CurrentAccount:
             "roles": self.roles,
             "client_id": self.client_id,
             "is_system": self.is_system,
+            "is_global_admin": self.is_global_admin,
+            "is_org_admin": self.is_org_admin,
             "allowed_clients": self.allowed_clients,
         }
 

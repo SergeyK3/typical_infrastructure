@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import KpiTemplate, PositionCatalog, PositionDeptType
@@ -15,7 +16,11 @@ from app.schemas import KpiTemplateCreate, KpiTemplateOut, KpiTemplatePatch, Lis
 from app.catalog_copy_ops import clone_kpi_template
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 
-router = APIRouter(prefix="/kpi-templates", tags=["kpi_templates"])
+router = APIRouter(
+    prefix="/kpi-templates",
+    tags=["kpi_templates"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 
 def _get_kpi(db: Session, template_code: str, kpi_code: str) -> KpiTemplate | None:

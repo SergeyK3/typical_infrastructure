@@ -123,7 +123,7 @@ def root(request: Request, db: Session = Depends(get_db)):
     ctx = get_optional_account(request, db)
     if ctx is None:
         return RedirectResponse(url="/login", status_code=302)
-    if ctx.is_system:
+    if ctx.is_global_admin:
         return RedirectResponse(url="/clients", status_code=302)
     if ctx.client_id:
         return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
@@ -157,13 +157,36 @@ def ui_config() -> dict:
     }
 
 
+def _global_admin_page(
+    request: Request,
+    db: Session,
+    *,
+    html_path: Path,
+    not_found_detail: str,
+    login_next: str,
+) -> Response:
+    ctx = get_optional_account(request, db)
+    if ctx is None:
+        return RedirectResponse(url=f"/login?next={login_next}", status_code=302)
+    if not ctx.is_global_admin:
+        if ctx.client_id:
+            return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
+        raise HTTPException(status_code=403, detail="global_admin_required")
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    return _html_file_response(html_path)
+
+
 @app.get("/wizard")
-def wizard_page() -> FileResponse:
+def wizard_page(request: Request, db: Session = Depends(get_db)) -> Response:
     """UI wizard for one-click onboarding."""
-    wizard_path = static_dir / "wizard" / "index.html"
-    if not wizard_path.exists():
-        raise HTTPException(status_code=404, detail="wizard_not_found")
-    return _html_file_response(wizard_path)
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "wizard" / "index.html",
+        not_found_detail="wizard_not_found",
+        login_next="/wizard",
+    )
 
 
 @app.get("/client/{client_id}", response_model=None)
@@ -185,62 +208,95 @@ def client_workspace_page(
 
 
 @app.get("/users")
-def users_page() -> FileResponse:
+def users_page(request: Request, db: Session = Depends(get_db)) -> Response:
     """System users — accounts with access across all clients."""
-    users_path = static_dir / "users" / "index.html"
-    if not users_path.exists():
-        raise HTTPException(status_code=404, detail="users_page_not_found")
-    return _html_file_response(users_path)
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "users" / "index.html",
+        not_found_detail="users_page_not_found",
+        login_next="/users",
+    )
+
+
+@app.get("/org-admins")
+def org_admins_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    """Organization administrators — managed by global admin."""
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "org-admins" / "index.html",
+        not_found_detail="org_admins_page_not_found",
+        login_next="/org-admins",
+    )
 
 
 @app.get("/regulations", include_in_schema=False)
 @app.get("/regulations/", include_in_schema=False)
-def regulations_page() -> FileResponse:
-    """Регламенты должностей — реестр нормативных карточек (query `from_client` для баннера «вернуться в организацию»)."""
-    regulations_path = static_dir / "regulations" / "index.html"
-    if not regulations_path.exists():
-        raise HTTPException(status_code=404, detail="regulations_page_not_found")
-    return _html_file_response(regulations_path)
+def regulations_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    """Глобальный реестр регламентов — только Global Admin."""
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "regulations" / "index.html",
+        not_found_detail="regulations_page_not_found",
+        login_next="/regulations",
+    )
 
 
 @app.get("/global")
-def global_catalogs_hub() -> FileResponse:
-    p = static_dir / "global" / "index.html"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail="global_hub_not_found")
-    return _html_file_response(p)
+def global_catalogs_hub(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "global" / "index.html",
+        not_found_detail="global_hub_not_found",
+        login_next="/global",
+    )
 
 
 @app.get("/global/template-org")
-def global_template_org_page() -> FileResponse:
-    p = static_dir / "global" / "template-org.html"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail="global_template_org_not_found")
-    return _html_file_response(p)
+def global_template_org_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "global" / "template-org.html",
+        not_found_detail="global_template_org_not_found",
+        login_next="/global/template-org",
+    )
 
 
 @app.get("/global/positions")
-def global_position_catalog_page() -> FileResponse:
-    p = static_dir / "global" / "positions.html"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail="global_positions_not_found")
-    return _html_file_response(p)
+def global_position_catalog_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "global" / "positions.html",
+        not_found_detail="global_positions_not_found",
+        login_next="/global/positions",
+    )
 
 
 @app.get("/global/skills")
-def global_skills_page() -> FileResponse:
-    p = static_dir / "global" / "skills.html"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail="global_skills_not_found")
-    return _html_file_response(p)
+def global_skills_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "global" / "skills.html",
+        not_found_detail="global_skills_not_found",
+        login_next="/global/skills",
+    )
 
 
 @app.get("/global/kpi")
-def global_kpi_templates_page() -> FileResponse:
-    p = static_dir / "global" / "kpi.html"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail="global_kpi_not_found")
-    return _html_file_response(p)
+def global_kpi_templates_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _global_admin_page(
+        request,
+        db,
+        html_path=static_dir / "global" / "kpi.html",
+        not_found_detail="global_kpi_not_found",
+        login_next="/global/kpi",
+    )
 
 
 @app.get("/clients", response_model=None)
@@ -252,10 +308,10 @@ def clients_page(
     ctx = get_optional_account(request, db)
     if ctx is None:
         return RedirectResponse(url="/login?next=/clients", status_code=302)
-    if not ctx.is_system:
+    if not ctx.is_global_admin:
         if ctx.client_id:
             return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
-        raise HTTPException(status_code=403, detail="system_admin_required")
+        raise HTTPException(status_code=403, detail="global_admin_required")
     clients_path = static_dir / "clients" / "index.html"
     if not clients_path.exists():
         raise HTTPException(status_code=404, detail="clients_page_not_found")

@@ -25,6 +25,7 @@ def _employee_id_for_login(login: str) -> str | None:
 
 
 def _onboard_client(client, *, code: str, admin_login: str) -> str:
+    auth_login(client, TEST_SYSTEM_LOGIN, TEST_SYSTEM_PASSWORD)
     payload = onboarding_payload(client_code=code, admin_login=admin_login)
     r = client.post("/api/onboarding-runs", json=payload)
     assert r.status_code == 200, r.text
@@ -53,6 +54,8 @@ def test_system_admin_login(client):
     me_data = me.json()
     assert me_data["login"] == TEST_SYSTEM_LOGIN
     assert me_data["is_system"] is True
+    assert me_data["is_global_admin"] is True
+    assert me_data["is_org_admin"] is False
 
 
 def test_client_admin_login(client):
@@ -66,6 +69,8 @@ def test_client_admin_login(client):
     assert data["redirect_url"] == f"/client/{client_id}"
     assert client_id in data["allowed_clients"]
     assert "admin" in data["roles"]
+    assert data["is_org_admin"] is True
+    assert data["is_global_admin"] is False
 
     assert _employee_id_for_login("auth_client_a_admin") is not None
 

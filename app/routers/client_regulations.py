@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.auth.context import CurrentAccount
+from app.auth.deps import get_current_account
+from app.auth.tenant import assert_client_access, require_client_query_access
 from app.db import get_db
 from app.template_bundle_clone import resolve_client_template_code
 from app.excel_export import xlsx_file_response
@@ -74,6 +77,11 @@ def _load_detail(db: Session, reg_id: str) -> ClientPositionRegulationDetailOut:
     )
 
 
+def _load_regulation_for_ctx(db: Session, regulation_id: str, ctx: CurrentAccount) -> ClientPositionRegulation:
+    obj = db.get(ClientPositionRegulation, regulation_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="client_regulation_not_found")
+    assert_client_access(ctx, obj.client_id)
 def _insert_children(
     db: Session,
     reg_id: str,
@@ -116,6 +124,7 @@ def list_client_regulations(
     status: str | None = Query(None, max_length=16),
     is_current: bool | None = Query(None, description="Только действующие, если true"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[ClientPositionRegulationOut]:
@@ -161,8 +170,9 @@ def export_client_regulations_excel(
     position_code: str | None = Query(None, max_length=64),
     dept_type_code: str | None = Query(None, max_length=32),
     status: str | None = Query(None, max_length=16),
-    is_current: bool | None = Query(None),
+    is_current: bool | None = Query(None, description="Только действующие, если true"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> Response:
     _assert_client(db, client_id)
     filters = [ClientPositionRegulation.client_id == client_id]
@@ -248,15 +258,23 @@ def export_client_regulations_excel(
 
 
 @router.get("/{regulation_id}", response_model=ClientPositionRegulationDetailOut)
-def get_client_regulation(regulation_id: str, db: Session = Depends(get_db)) -> ClientPositionRegulationDetailOut:
+def get_client_regulation(
+    regulation_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> ClientPositionRegulationDetailOut:
+    _load_regulation_for_ctx(db, regulation_id, ctx)
     return _load_detail(db, regulation_id)
 
 
 @router.post("", response_model=ClientPositionRegulationDetailOut, status_code=201)
 def create_client_regulation(
-    body: ClientPositionRegulationCreate, db: Session = Depends(get_db)
+    body: ClientPositionRegulationCreate,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> ClientPositionRegulationDetailOut:
     _assert_client(db, body.client_id)
+    assert_client_access(ctx, body.client_id)
     dup = db.scalar(
         select(ClientPositionRegulation).where(
             ClientPositionRegulation.client_id == body.client_id,
@@ -298,9 +316,13 @@ def create_client_regulation(
 
 @router.post("/copy-from-global", response_model=ClientPositionRegulationDetailOut)
 def copy_regulation_from_global(
-    body: ClientPositionRegulationCopyFromGlobal, response: Response, db: Session = Depends(get_db)
+    body: ClientPositionRegulationCopyFromGlobal,
+    response: Response,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> ClientPositionRegulationDetailOut:
     _assert_client(db, body.client_id)
+    assert_client_access(ctx, body.client_id)
     tpl_code = resolve_client_template_code(db, body.client_id)
     glob = db.scalar(
         select(PositionRegulation).where(
@@ -399,7 +421,12 @@ def copy_regulation_from_global(
 
 
 @router.post("/{regulation_id}/sync-from-global")
-def sync_client_regulation_from_global(regulation_id: str, db: Session = Depends(get_db)) -> dict:
+def sync_client_regulation_from_global(
+    regulation_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> dict:
+    _load_regulation_for_ctx(db, regulation_id, ctx)
     from app.client_catalog_sync import sync_client_regulation_children_from_global
 
     kpis, instructions = sync_client_regulation_children_from_global(db, regulation_id)
@@ -409,11 +436,12 @@ def sync_client_regulation_from_global(regulation_id: str, db: Session = Depends
 
 @router.patch("/{regulation_id}", response_model=ClientPositionRegulationDetailOut)
 def patch_client_regulation(
-    regulation_id: str, body: ClientPositionRegulationPatch, db: Session = Depends(get_db)
+    regulation_id: str,
+    body: ClientPositionRegulationPatch,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> ClientPositionRegulationDetailOut:
-    obj = db.get(ClientPositionRegulation, regulation_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="client_regulation_not_found")
+    obj = _load_regulation_for_ctx(db, regulation_id, ctx)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
     db.commit()
@@ -422,10 +450,12 @@ def patch_client_regulation(
 
 
 @router.delete("/{regulation_id}", status_code=204)
-def delete_client_regulation(regulation_id: str, db: Session = Depends(get_db)) -> Response:
-    obj = db.get(ClientPositionRegulation, regulation_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="client_regulation_not_found")
+def delete_client_regulation(
+    regulation_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> Response:
+    obj = _load_regulation_for_ctx(db, regulation_id, ctx)
     for rk in db.scalars(
         select(ClientRegulationKpi).where(ClientRegulationKpi.client_regulation_id == regulation_id)
     ).all():

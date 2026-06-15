@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import PositionDeptType, TemplateOrgUnitRow
@@ -37,7 +38,11 @@ from app.schemas import (
 )
 from app.utils import new_id32
 
-router = APIRouter(prefix="/template-org-units", tags=["template_org_units"])
+router = APIRouter(
+    prefix="/template-org-units",
+    tags=["template_org_units"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 
 def _segment_specs(rows: list[TemplateOrgUnitRow]) -> list[dict]:

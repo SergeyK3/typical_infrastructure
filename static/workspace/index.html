@@ -1147,6 +1147,7 @@
   </div>
 
   <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
+  <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
   <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
   <script src="/static/shared/catalog-row-actions.js?v=cra-2"></script>
   <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
@@ -1154,11 +1155,14 @@
   <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script>
-    if (window.SidebarRenderer) {
-      window.SidebarRenderer.renderWorkspaceSidebar({
-        activeTab: workspaceTabFromHash(location.hash),
-      });
-    }
+    (async function bootstrapWorkspaceSidebar() {
+      if (window.AuthContext) await window.AuthContext.load();
+      if (window.SidebarRenderer) {
+        window.SidebarRenderer.renderWorkspaceSidebar({
+          activeTab: workspaceTabFromHash(location.hash),
+        });
+      }
+    })();
 
     const API = '/api';
     let clientId = '';
@@ -4754,6 +4758,7 @@
 
     // Init
     (async () => {
+      if (window.AuthContext) await window.AuthContext.load();
       clientId = getClientId();
       await loadClient();
       await loadRoles();

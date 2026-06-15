@@ -29,6 +29,8 @@ class LoginOut(BaseModel):
     roles: list[str]
     client_id: str | None
     is_system: bool
+    is_global_admin: bool
+    is_org_admin: bool
     allowed_clients: list[str]
     redirect_url: str
 
@@ -39,6 +41,8 @@ class MeOut(BaseModel):
     roles: list[str]
     client_id: str | None
     is_system: bool
+    is_global_admin: bool
+    is_org_admin: bool
     allowed_clients: list[str]
 
 

@@ -41,11 +41,26 @@ def get_current_account(
     return ctx
 
 
+def require_global_admin(
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> CurrentAccount:
+    if not ctx.is_global_admin:
+        raise HTTPException(status_code=403, detail="global_admin_required")
+    return ctx
+
+
 def require_system_admin(
     ctx: CurrentAccount = Depends(get_current_account),
 ) -> CurrentAccount:
-    if not ctx.is_system:
-        raise HTTPException(status_code=403, detail="system_admin_required")
+    """Alias for global (platform) admin access."""
+    return require_global_admin(ctx)
+
+
+def require_org_admin(
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> CurrentAccount:
+    if not (ctx.is_global_admin or ctx.is_org_admin):
+        raise HTTPException(status_code=403, detail="org_admin_required")
     return ctx
 
 

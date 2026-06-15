@@ -8,6 +8,9 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.context import CurrentAccount
+from app.auth.deps import get_current_account
+from app.auth.tenant import assert_client_access, require_client_query_access
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import (
@@ -27,10 +30,19 @@ def _assert_client(db: Session, client_id: str) -> None:
         raise HTTPException(status_code=404, detail="client_not_found")
 
 
+def _load_standalone_kpi_for_ctx(db: Session, kpi_id: str, ctx: CurrentAccount) -> ClientStandaloneKpi:
+    obj = db.get(ClientStandaloneKpi, kpi_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="client_standalone_kpi_not_found")
+    assert_client_access(ctx, obj.client_id)
+    return obj
+
+
 @router.get("/export/excel")
 def export_local_kpis_excel(
     client_id: str = Query(..., description="ID организации"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
 ) -> Response:
     """Сводная выгрузка KPI организации: из локальных регламентов и без регламента."""
     _assert_client(db, client_id)
@@ -112,6 +124,7 @@ def export_local_kpis_excel(
 def list_client_standalone_kpis(
     client_id: str = Query(..., description="ID организации"),
     db: Session = Depends(get_db),
+    _ctx: CurrentAccount = Depends(require_client_query_access),
     limit: int = Query(500, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ListEnvelope[ClientStandaloneKpiOut]:
@@ -133,9 +146,12 @@ def list_client_standalone_kpis(
 
 @router.post("", response_model=ClientStandaloneKpiOut, status_code=201)
 def create_client_standalone_kpi(
-    body: ClientStandaloneKpiCreate, db: Session = Depends(get_db)
+    body: ClientStandaloneKpiCreate,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> ClientStandaloneKpiOut:
     _assert_client(db, body.client_id)
+    assert_client_access(ctx, body.client_id)
     code = body.kpi_code.strip()
     dup = db.scalar(
         select(ClientStandaloneKpi).where(
@@ -165,11 +181,12 @@ def create_client_standalone_kpi(
 
 @router.patch("/{kpi_id}", response_model=ClientStandaloneKpiOut)
 def patch_client_standalone_kpi(
-    kpi_id: str, body: ClientStandaloneKpiPatch, db: Session = Depends(get_db)
+    kpi_id: str,
+    body: ClientStandaloneKpiPatch,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
 ) -> ClientStandaloneKpiOut:
-    obj = db.get(ClientStandaloneKpi, kpi_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="client_standalone_kpi_not_found")
+    obj = _load_standalone_kpi_for_ctx(db, kpi_id, ctx)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
     db.commit()
@@ -178,10 +195,12 @@ def patch_client_standalone_kpi(
 
 
 @router.delete("/{kpi_id}", status_code=204)
-def delete_client_standalone_kpi(kpi_id: str, db: Session = Depends(get_db)) -> Response:
-    obj = db.get(ClientStandaloneKpi, kpi_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="client_standalone_kpi_not_found")
+def delete_client_standalone_kpi(
+    kpi_id: str,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+) -> Response:
+    obj = _load_standalone_kpi_for_ctx(db, kpi_id, ctx)
     db.delete(obj)
     db.commit()
     return Response(status_code=204)

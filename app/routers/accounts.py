@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.context import CurrentAccount
 from app.auth.deps import get_current_account, require_system_admin
+from app.auth.policies import assert_account_management_allowed, assert_role_assignment_allowed
 from app.auth.tenant import assert_client_access, load_account_for_ctx, require_client_query_access
 from app.db import get_db
 from app.excel_export import xlsx_file_response
@@ -224,8 +225,10 @@ def create_account(
 ) -> AccountWithRolesOut:
     emp = _assert_employee(db, payload.employee_id)
     assert_client_access(ctx, emp.client_id)
+    assert_account_management_allowed(ctx)
     _assert_login_unique(db, payload.login)
     _assert_role_codes(db, payload.role_codes)
+    assert_role_assignment_allowed(ctx, payload.role_codes)
     obj = Account(
         id=payload.id or new_id32(),
         employee_id=payload.employee_id,
@@ -253,6 +256,7 @@ def patch_account(
     ctx: CurrentAccount = Depends(get_current_account),
 ) -> AccountWithRolesOut:
     obj = load_account_for_ctx(db, account_id, ctx)
+    assert_account_management_allowed(ctx)
     data = payload.model_dump(exclude_unset=True)
     role_codes = data.pop("role_codes", None)
     password = data.pop("password", None)
@@ -260,6 +264,7 @@ def patch_account(
         _assert_login_unique(db, data["login"], exclude_account_id=account_id)
     if role_codes is not None:
         _assert_role_codes(db, role_codes)
+        assert_role_assignment_allowed(ctx, role_codes)
     if password is not None:
         obj.password_hash = hash_password(password)
     for k, v in data.items():
@@ -282,6 +287,7 @@ def delete_account(
     ctx: CurrentAccount = Depends(get_current_account),
 ) -> Response:
     obj = load_account_for_ctx(db, account_id, ctx)
+    assert_account_management_allowed(ctx)
     for ar in db.scalars(select(AccountRole).where(AccountRole.account_id == account_id)).all():
         db.delete(ar)
     db.delete(obj)
@@ -296,6 +302,7 @@ def reset_password(
     ctx: CurrentAccount = Depends(get_current_account),
 ) -> AccountOut:
     obj = load_account_for_ctx(db, account_id, ctx)
+    assert_account_management_allowed(ctx)
     new_password = generate_temp_password()
     obj.password_hash = hash_password(new_password)
     db.commit()
@@ -311,12 +318,14 @@ def bulk_create_accounts(
 ) -> AccountBulkCreateResult:
     created: list[AccountOut] = []
     errors: list[dict] = []
+    assert_account_management_allowed(ctx)
     for i, it in enumerate(payload.items):
         try:
             emp = _assert_employee(db, it.employee_id)
             assert_client_access(ctx, emp.client_id)
             _assert_login_unique(db, it.login)
             _assert_role_codes(db, it.role_codes)
+            assert_role_assignment_allowed(ctx, it.role_codes)
             existing = db.scalar(select(Account).where(Account.employee_id == it.employee_id))
             if existing:
                 errors.append({"index": i, "employee_id": it.employee_id, "detail": "employee_already_has_account"})

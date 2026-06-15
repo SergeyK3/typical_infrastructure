@@ -6,6 +6,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth.catalog_access import assert_catalog_copy_allowed
+from app.auth.context import CurrentAccount
+from app.auth.deps import get_current_account
 from app.competency_copy_ops import (
     copy_competency_matrix_row_global_to_global,
     copy_competency_matrix_row_local_to_global,
@@ -45,7 +48,12 @@ router = APIRouter(prefix="/catalog-copy", tags=["catalog_copy"])
 
 
 @router.post("/regulation")
-def copy_regulation(body: CatalogCopyRegulationIn, db: Session = Depends(get_db)):
+def copy_regulation(
+    body: CatalogCopyRegulationIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, body.mode, body.client_id)
     mode = body.mode.strip()
     if mode == "global_to_global":
         if not body.target_template_code:
@@ -98,7 +106,12 @@ def copy_regulation(body: CatalogCopyRegulationIn, db: Session = Depends(get_db)
 
 
 @router.post("/position", status_code=201)
-def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
+def copy_position(
+    body: CatalogCopyPositionIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, body.mode, body.client_id)
     mode = body.mode.strip()
     if mode == "global_to_global":
         if not body.target_template_code or not body.source_position_code:
@@ -178,7 +191,12 @@ def copy_position(body: CatalogCopyPositionIn, db: Session = Depends(get_db)):
 
 
 @router.post("/org-unit", status_code=201)
-def copy_org_unit(body: CatalogCopyOrgUnitIn, db: Session = Depends(get_db)):
+def copy_org_unit(
+    body: CatalogCopyOrgUnitIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, body.mode, body.client_id)
     mode = body.mode.strip()
     if mode == "global_to_global":
         if not body.target_template_code:
@@ -219,7 +237,12 @@ def copy_org_unit(body: CatalogCopyOrgUnitIn, db: Session = Depends(get_db)):
 
 
 @router.post("/kpi", status_code=201)
-def copy_kpi(body: CatalogCopyKpiIn, db: Session = Depends(get_db)):
+def copy_kpi(
+    body: CatalogCopyKpiIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, body.mode, body.client_id)
     mode = body.mode.strip()
     if mode == "local_to_global":
         if not body.client_id:
@@ -258,14 +281,24 @@ def copy_kpi(body: CatalogCopyKpiIn, db: Session = Depends(get_db)):
 
 
 @router.post("/skills-matrix")
-def copy_skills_matrix(body: CatalogCopySkillsIn, db: Session = Depends(get_db)):
+def copy_skills_matrix(
+    body: CatalogCopySkillsIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, "global_to_local", body.client_id)
     out = clone_skills_matrix_global_to_local(db, body.client_id, body.source_template_code)
     db.commit()
     return out
 
 
 @router.post("/skill", status_code=201)
-def copy_skill_row(body: CatalogCopySkillIn, db: Session = Depends(get_db)):
+def copy_skill_row(
+    body: CatalogCopySkillIn,
+    db: Session = Depends(get_db),
+    ctx: CurrentAccount = Depends(get_current_account),
+):
+    assert_catalog_copy_allowed(ctx, body.mode, body.client_id)
     mode = body.mode.strip()
     if not body.target_template_code:
         raise HTTPException(status_code=422, detail="target_template_code_required")

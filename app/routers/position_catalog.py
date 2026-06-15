@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_global_admin
 from app.db import get_db
 from app.excel_export import xlsx_file_response
 from app.models import PositionCatalog, PositionDeptType, TemplateOrgUnitRow, TemplateSegmentCode
@@ -28,7 +29,11 @@ from app.schemas import (
 
 from app.template_constants import DEFAULT_TEMPLATE_CODE
 
-router = APIRouter(prefix="/position-catalog", tags=["position_catalog"])
+router = APIRouter(
+    prefix="/position-catalog",
+    tags=["position_catalog"],
+    dependencies=[Depends(require_global_admin)],
+)
 
 _SORT_COLUMNS = {
     "sort_order": PositionCatalog.sort_order,
