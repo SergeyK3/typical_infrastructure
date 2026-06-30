@@ -116,6 +116,8 @@ class OrgUnit(Base, TimestampMixin):
     is_detached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     #: Сегмент деятельности (department); у секций — null, effective — от родителя.
     segment_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Группа отделений (slug log_group); для department/section; может задаваться backfill.
+    log_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class PositionCatalog(Base, TimestampMixin):

@@ -5,6 +5,25 @@
   'use strict';
 
   var BOT_INFO_COLLAPSED_KEY = 'psychTestingBotInfoCollapsed';
+  /** Синтетическая группа: все отделения (нет log_group в данных или явный выбор). */
+  var LOG_GROUP_ALL = '__all__';
+  /** Синтетическая группа: отделения без effective_log_group при смешанных данных. */
+  var LOG_GROUP_UNGROUPED = '__ungrouped__';
+  var LABEL_LOG_GROUP_ALL = 'Все отделения';
+  var LABEL_LOG_GROUP_UNGROUPED = 'Без группы';
+
+  function normalizeLogGroupValue(raw) {
+    return String(raw || '').trim();
+  }
+
+  function isAllLogGroup(logGroup) {
+    var g = normalizeLogGroupValue(logGroup);
+    return !g || g === LOG_GROUP_ALL;
+  }
+
+  function departmentLogGroup(u) {
+    return normalizeLogGroupValue(u && u.effective_log_group);
+  }
 
   function readBotInfoCollapsed(storage) {
     try {
@@ -47,31 +66,56 @@
   }
 
   function logGroupLabel(code) {
-    var c = String(code || '').trim();
-    return c || '';
+    var c = normalizeLogGroupValue(code);
+    if (!c) return '';
+    var labels = {
+      clinical: 'Клинические',
+      paraclinical: 'Параклинические',
+      admin_household: 'Административно-хозяйственные',
+    };
+    return labels[c] || c;
   }
 
   function collectLogGroups(orgUnits) {
+    var depts = departmentOrgUnits(orgUnits);
     var seen = Object.create(null);
-    var out = [];
-    departmentOrgUnits(orgUnits).forEach(function (u) {
-      var g = String(u.effective_log_group || '').trim();
-      if (!g || seen[g]) return;
+    var grouped = [];
+    var hasUngrouped = false;
+
+    depts.forEach(function (u) {
+      var g = departmentLogGroup(u);
+      if (!g) {
+        hasUngrouped = true;
+        return;
+      }
+      if (seen[g]) return;
       seen[g] = true;
-      out.push({ value: g, label: logGroupLabel(g) });
+      grouped.push({ value: g, label: logGroupLabel(g) });
     });
-    out.sort(function (a, b) {
+    grouped.sort(function (a, b) {
       return a.label.localeCompare(b.label, 'ru');
     });
-    return out;
+
+    if (!grouped.length) {
+      return [{ value: LOG_GROUP_ALL, label: LABEL_LOG_GROUP_ALL }];
+    }
+    if (hasUngrouped) {
+      grouped.push({ value: LOG_GROUP_UNGROUPED, label: LABEL_LOG_GROUP_UNGROUPED });
+    }
+    return grouped;
   }
 
   function filterDepartments(orgUnits, logGroup) {
     var list = departmentOrgUnits(orgUnits);
-    var g = String(logGroup || '').trim();
-    if (!g) return list.slice();
+    var g = normalizeLogGroupValue(logGroup);
+    if (!g || g === LOG_GROUP_ALL) return list.slice();
+    if (g === LOG_GROUP_UNGROUPED) {
+      return list.filter(function (u) {
+        return !departmentLogGroup(u);
+      });
+    }
     return list.filter(function (u) {
-      return String(u.effective_log_group || '').trim() === g;
+      return departmentLogGroup(u) === g;
     });
   }
 
@@ -176,8 +220,21 @@
     return next;
   }
 
+  function defaultLogGroupSelection(logGroups, current) {
+    var cur = normalizeLogGroupValue(current);
+    if (cur && logGroups.some(function (g) { return g.value === cur; })) return cur;
+    if (logGroups.length === 1 && logGroups[0].value === LOG_GROUP_ALL) {
+      return LOG_GROUP_ALL;
+    }
+    return '';
+  }
+
   var api = {
     BOT_INFO_COLLAPSED_KEY: BOT_INFO_COLLAPSED_KEY,
+    LOG_GROUP_ALL: LOG_GROUP_ALL,
+    LOG_GROUP_UNGROUPED: LOG_GROUP_UNGROUPED,
+    LABEL_LOG_GROUP_ALL: LABEL_LOG_GROUP_ALL,
+    LABEL_LOG_GROUP_UNGROUPED: LABEL_LOG_GROUP_UNGROUPED,
     readBotInfoCollapsed: readBotInfoCollapsed,
     writeBotInfoCollapsed: writeBotInfoCollapsed,
     applyBotInfoCollapsed: applyBotInfoCollapsed,
@@ -190,6 +247,8 @@
     formatEmployeeName: formatEmployeeName,
     buildSelectOptions: buildSelectOptions,
     isAssignEnabled: isAssignEnabled,
+    isAllLogGroup: isAllLogGroup,
+    defaultLogGroupSelection: defaultLogGroupSelection,
     cascadeFilterState: cascadeFilterState,
     resetCascadeOnChange: resetCascadeOnChange,
     logGroupLabel: logGroupLabel,

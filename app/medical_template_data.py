@@ -59,6 +59,7 @@ MEDICAL_ORG_UNIT_ADDITIONS: list[dict] = [
 
 def merged_medical_org_units() -> list[dict]:
     """Все узлы default плюс медицинские отделения (без замены default-структуры)."""
+    from app.medical_template_excel import apply_excel_log_groups_to_specs
     from app.org_structures import DEFAULT_ORG_UNITS
 
     default_codes = {u["code"] for u in DEFAULT_ORG_UNITS}
@@ -66,7 +67,7 @@ def merged_medical_org_units() -> list[dict]:
     for spec in MEDICAL_ORG_UNIT_ADDITIONS:
         if spec["code"] not in default_codes:
             merged.append(dict(spec))
-    return merged
+    return apply_excel_log_groups_to_specs(merged)
 
 
 # Обратная совместимость для импортов

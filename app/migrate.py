@@ -987,6 +987,17 @@ def migrate_template_org_units_log_group() -> None:
         conn.commit()
 
 
+def migrate_org_units_log_group() -> None:
+    """log_group на клиентских org_units (backfill групп отделений)."""
+    if not _table_exists("org_units"):
+        return
+    if _column_exists("org_units", "log_group"):
+        return
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE org_units ADD COLUMN log_group VARCHAR(64) NULL"))
+        conn.commit()
+
+
 def migrate_segment_code_fields() -> None:
     """segment_code на типовой оргструктуре, клиентских org_units и должностях."""
     with engine.connect() as conn:
@@ -1311,6 +1322,7 @@ def run_migrations() -> None:
     migrate_position_regulations_template_scope()
     migrate_competency_skill_definitions_template_scope()
     migrate_template_org_units_log_group()
+    migrate_org_units_log_group()
     migrate_segment_code_fields()
     migrate_template_segment_codes_table()
     migrate_position_catalog_sort_order()

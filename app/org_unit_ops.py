@@ -191,15 +191,43 @@ def build_template_log_group_by_code(db: Session, client_id: str) -> dict[str, s
     }
 
 
+def _local_org_unit_log_group(org_unit: OrgUnit, ctx: ClientOrgEnrichContext) -> str | None:
+    """log_group, заданный на клиентской строке (backfill), с наследованием section → department."""
+    lg = (getattr(org_unit, "log_group", None) or "").strip()
+    if lg:
+        return lg
+    if org_unit.unit_type == "section":
+        cur = org_unit
+        seen: set[str] = set()
+        while cur.parent_id and cur.parent_id not in seen:
+            seen.add(cur.parent_id)
+            parent = ctx.by_id.get(cur.parent_id)
+            if not parent:
+                break
+            plg = (getattr(parent, "log_group", None) or "").strip()
+            if plg:
+                return plg
+            if parent.unit_type == "department":
+                break
+            cur = parent
+    return None
+
+
 def resolve_org_unit_effective_log_group(
     org_unit: OrgUnit,
     *,
     ctx: ClientOrgEnrichContext,
 ) -> str | None:
-    """Эффективный log_group для клиентского узла (из шаблона по catalog_source_code)."""
+    """Эффективный log_group: локальный backfill → шаблон по catalog_source_code."""
+    local = _local_org_unit_log_group(org_unit, ctx)
+    if local:
+        return local
     csc = (org_unit.catalog_source_code or "").strip()
     if csc and csc in ctx.log_group_by_catalog_code:
         return ctx.log_group_by_catalog_code[csc]
+    code = (org_unit.code or "").strip()
+    if code and code in ctx.log_group_by_catalog_code:
+        return ctx.log_group_by_catalog_code[code]
     if org_unit.unit_type == "department":
         return None
     cur = org_unit

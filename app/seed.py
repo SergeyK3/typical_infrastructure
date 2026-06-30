@@ -497,6 +497,15 @@ def _sync_template_org_unit_row_from_spec(row: TemplateOrgUnitRow, spec: dict) -
         row.unit_type = spec["unit_type"]
         changed = True
     expected_log_group = spec.get("log_group")
+    if not expected_log_group and spec.get("group_id") is not None:
+        from app.medical_org_groups import group_id_to_log_group, normalize_group_id
+
+        gid = normalize_group_id(spec.get("group_id"))
+        if gid:
+            try:
+                expected_log_group = group_id_to_log_group(gid)
+            except ValueError:
+                expected_log_group = str(spec.get("group_id")).strip() or None
     if row.log_group != expected_log_group:
         row.log_group = expected_log_group
         changed = True
