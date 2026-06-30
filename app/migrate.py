@@ -113,6 +113,32 @@ def migrate_employees_telegram_id() -> None:
         conn.commit()
 
 
+def migrate_persons() -> None:
+    """Таблица identity aggregate Person (PROJ-PERSON Stage 1). Без связи с employees."""
+    if _table_exists("persons"):
+        return
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE persons (
+                    id VARCHAR(32) NOT NULL PRIMARY KEY,
+                    client_id VARCHAR(32) NOT NULL,
+                    last_name VARCHAR(128) NOT NULL,
+                    first_name VARCHAR(128) NOT NULL,
+                    middle_name VARCHAR(128) NULL,
+                    email VARCHAR(256) NULL,
+                    phone VARCHAR(32) NULL,
+                    telegram_id VARCHAR(128) NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        conn.commit()
+
+
 def migrate_employee_consent_records() -> None:
     """Таблица единого согласия ПДн на сотрудника + backfill из Part1 и examination."""
     if _table_exists("employee_consent_records"):
@@ -1312,6 +1338,7 @@ def run_migrations() -> None:
     migrate_kpi_templates_position_code()
     migrate_positions_is_detached()
     migrate_employees_telegram_id()
+    migrate_persons()
     migrate_employee_consent_records()
     migrate_pt_assignment_released_tests()
     migrate_pt_test_programs_and_assignment_steps()

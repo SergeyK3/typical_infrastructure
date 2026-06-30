@@ -191,6 +191,24 @@ class Position(Base, TimestampMixin):
     segment_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class Person(Base, TimestampMixin):
+    """Identity aggregate — устойчивая идентичность человека в рамках client (tenant).
+
+    Stage 1 (PROJ-PERSON): foundation-only; без связи с Employee и без потребителей в API.
+    """
+
+    __tablename__ = "persons"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    middle_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    telegram_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
 class Employee(Base, TimestampMixin):
     __tablename__ = "employees"
 
