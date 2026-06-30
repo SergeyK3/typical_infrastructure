@@ -62,7 +62,9 @@ class OrgUnitBase(BaseModel):
     is_detached: bool = True
     segment_code: str | None = None
     effective_segment_code: str | None = None
+    log_group: str | None = None
     effective_log_group: str | None = None
+    effective_log_group_name: str | None = None
 
 
 class OrgUnitCreate(OrgUnitBase):
@@ -362,9 +364,12 @@ class EmployeeOut(EmployeeBase):
 
 
 class EmployeeListOut(EmployeeOut):
-    """Список сотрудников: дополнительно логин корпоративной учётной записи (если есть)."""
+    """Список сотрудников: read-only сведения об учётной записи и ролях (если есть)."""
 
     account_login: str | None = None
+    account_id: str | None = None
+    account_status: str | None = None
+    system_role_labels: list[str] = Field(default_factory=list)
 
 
 class RoleOut(BaseModel):

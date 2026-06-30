@@ -125,6 +125,17 @@
     .url-flag-yes { background: rgba(63,185,80,0.2); color: var(--success); }
     .url-flag-yes:hover { background: rgba(63,185,80,0.32); text-decoration: underline; }
     .url-flag-no { background: rgba(128,128,128,0.12); color: var(--text-muted); }
+    .employee-account-access {
+      margin-top: 1.25rem; padding: 0.85rem 1rem; border: 1px dashed var(--border);
+      border-radius: 8px; background: var(--bg);
+    }
+    .employee-account-access legend { font-size: 0.9rem; font-weight: 600; color: var(--text); padding: 0 0.35rem; }
+    .employee-account-access .meta { margin: 0.35rem 0 0.75rem; line-height: 1.4; }
+    .employee-account-access dl { display: grid; grid-template-columns: 9rem 1fr; gap: 0.35rem 0.75rem; margin: 0 0 0.75rem; font-size: 0.88rem; }
+    .employee-account-access dt { color: var(--text-muted); margin: 0; }
+    .employee-account-access dd { margin: 0; }
+    .employee-account-access-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .employee-account-access-actions .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
     .td-url-flag { text-align: center; white-space: nowrap; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
     .cr-table th, .cr-table td { padding: 0.4rem 0.45rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -501,13 +512,13 @@
         <table class="ws-table" id="empTable">
           <thead>
             <tr>
-              <th style="width:14%;"><label class="cr-th-filter">ФИО<input type="text" id="empFilterLastName" placeholder="Фамилия" title="Фильтр по фамилии"></label></th>
-              <th style="width:12%;">Email</th>
-              <th style="width:9%;">Телефон</th>
-              <th style="width:9%;">Telegram</th>
+              <th style="width:16%;"><label class="cr-th-filter">ФИО<input type="text" id="empFilterLastName" placeholder="Фамилия" title="Фильтр по фамилии"></label></th>
               <th style="width:14%;"><label class="cr-th-filter">Подразделение<select id="empFilterOrg" title="Фильтр по подразделению"><option value="">— все —</option></select></label></th>
               <th style="width:14%;"><label class="cr-th-filter">Должность<select id="empFilterPos" title="Фильтр по должности"><option value="">— все —</option></select></label></th>
-              <th style="width:12%;">Логин (корп.)</th>
+              <th style="width:10%;">Телефон</th>
+              <th style="width:10%;">Telegram</th>
+              <th style="width:8%;">Аккаунт</th>
+              <th style="width:14%;">Роль в системе</th>
               <th style="width:9rem;"></th>
             </tr>
           </thead>
@@ -523,19 +534,16 @@
       <button class="btn btn-primary" id="btnAddAccount">+ Добавить аккаунт</button>
       <a class="btn btn-secondary" id="exportAccountsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
-      <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;">Пароль в списке не показывается; задайте при создании аккаунта или в форме «Изменить» (новый пароль заменит старый).</p>
+      <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;">Журнал учётных записей организации. Управление доступом — здесь; кадровые сведения — в разделе «Сотрудники».</p>
       <div style="overflow-x:auto;margin-top:0.75rem;">
         <table class="ws-table" id="accTable">
           <thead>
             <tr>
-              <th style="width:12%;">Логин</th>
-              <th style="width:12%;">Сотрудник</th>
-              <th style="width:8%;">Телефон</th>
-              <th style="width:8%;">Telegram</th>
-              <th style="width:12%;"><label class="cr-th-filter">Подразделение<select id="accFilterOrg" title="Фильтр"><option value="">— все —</option></select></label></th>
-              <th style="width:12%;"><label class="cr-th-filter">Должность<select id="accFilterPos" title="Фильтр"><option value="">— все —</option></select></label></th>
-              <th style="width:7%;" title="Пароль хранится в виде хэша; смена — в форме редактирования">Пароль</th>
-              <th style="width:7%;">Статус</th>
+              <th style="width:14%;">Логин</th>
+              <th style="width:18%;">Сотрудник</th>
+              <th style="width:16%;"><label class="cr-th-filter">Подразделение<select id="accFilterOrg" title="Фильтр"><option value="">— все —</option></select></label></th>
+              <th style="width:16%;"><label class="cr-th-filter">Должность<select id="accFilterPos" title="Фильтр"><option value="">— все —</option></select></label></th>
+              <th style="width:10%;">Статус</th>
               <th style="width:9rem;"></th>
             </tr>
           </thead>
@@ -922,6 +930,20 @@
         <option value="inactive">inactive</option>
         <option value="dismissed">dismissed</option>
       </select>
+      <fieldset class="employee-account-access" id="empEditAccountAccess" aria-label="Аккаунт и доступ">
+        <legend>Аккаунт и доступ</legend>
+        <p class="meta">Управление учётной записью будет доступно в следующей фазе. Сейчас — просмотр сведений из списка сотрудников.</p>
+        <dl>
+          <dt>Логин</dt><dd id="empEditAccountLogin">—</dd>
+          <dt>Статус УЗ</dt><dd id="empEditAccountStatus">—</dd>
+          <dt>Роль в системе</dt><dd id="empEditAccountRoles">—</dd>
+        </dl>
+        <div class="employee-account-access-actions">
+          <button type="button" class="btn btn-secondary btn-sm" disabled title="Будет доступно в следующей фазе">Создать учётную запись</button>
+          <button type="button" class="btn btn-secondary btn-sm" disabled title="Будет доступно в следующей фазе">Сбросить пароль</button>
+          <button type="button" class="btn btn-secondary btn-sm" disabled title="Будет доступно в следующей фазе">Заблокировать</button>
+        </div>
+      </fieldset>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnEmployeeEditSave">Сохранить</button>
         <button class="btn btn-secondary" id="btnEmployeeEditCancel">Отмена</button>
@@ -1171,7 +1193,7 @@
   <script src="/static/shared/filter-combobox.js?v=fcb-1"></script>
   <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
-  <script src="/static/shared/psych-testing-ui.js?v=psych-ui-1"></script>
+  <script src="/static/shared/psych-testing-ui.js?v=psych-ui-4"></script>
   <script>
     (async function bootstrapWorkspaceSidebar() {
       if (window.AuthContext) await window.AuthContext.load();
@@ -3111,6 +3133,44 @@
     }
 
     // Employees
+    const ACCOUNT_STATUS_LABELS = {
+      active: 'Активен',
+      blocked: 'Заблокирован',
+      inactive: 'Не активен',
+    };
+
+    function formatAccountStatusLabel(status) {
+      const s = String(status || '').trim();
+      if (!s) return '—';
+      return ACCOUNT_STATUS_LABELS[s] || s;
+    }
+
+    function formatEmployeeAccountPresence(employee) {
+      return employee && employee.account_id ? 'Есть' : '—';
+    }
+
+    function formatEmployeeSystemRoles(employee) {
+      const labels = employee && employee.system_role_labels;
+      if (Array.isArray(labels) && labels.length) return labels.join(', ');
+      return '—';
+    }
+
+    function renderEmployeeAccountAccessWireframe(employee) {
+      const loginEl = document.getElementById('empEditAccountLogin');
+      const statusEl = document.getElementById('empEditAccountStatus');
+      const rolesEl = document.getElementById('empEditAccountRoles');
+      if (!loginEl || !statusEl || !rolesEl) return;
+      if (employee && employee.account_id) {
+        loginEl.textContent = employee.account_login || '—';
+        statusEl.textContent = formatAccountStatusLabel(employee.account_status);
+        rolesEl.textContent = formatEmployeeSystemRoles(employee);
+      } else {
+        loginEl.textContent = '—';
+        statusEl.textContent = '—';
+        rolesEl.textContent = '—';
+      }
+    }
+
     async function loadEmployees() {
       await loadPositionsForSelect();
       if (!orgUnits.length) await loadOrgTree();
@@ -3178,14 +3238,15 @@
           const ou = orgUnits.find(x => x.id === e.org_unit_id);
           const pos = positionsCache.find(x => x.id === e.position_id);
           const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
+          const ouLabel = ou ? (ou.name || ou.code) : '';
           return '<tr>' +
             '<td class="td-ellipsis">' + escapeHtml(name) + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(e.email || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(ouLabel) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(e.phone || '') + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(e.telegram_id || '') + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(ou ? ou.code : '') + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(e.account_login || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(formatEmployeeAccountPresence(e)) + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(formatEmployeeSystemRoles(e)) + '</td>' +
             '<td class="row-actions">' + CatalogRowActions.preset('editDelete', { id: e.id }, { rowKey: e.id, size: 'sm' }) + '</td>' +
           '</tr>';
         }).join('');
@@ -3827,54 +3888,77 @@
       if (!lgSel || !ouSel || !posSel || !empSel) return;
 
       const st = psychAssignDomState();
-      psychAssignFilterState = {
-        logGroup: st.logGroup,
-        orgUnitId: st.orgUnitId,
-        positionId: st.positionId,
-      };
-      const cascade = PsychTestingUi.cascadeFilterState(st, {
+      const cascadePreview = PsychTestingUi.cascadeFilterState(st, {
+        orgUnits: orgUnits,
+        positions: positionsCache,
+        employees: employeesAllCache,
+      });
+      const resolvedLogGroup = PsychTestingUi.defaultLogGroupSelection(cascadePreview.logGroups, st.logGroup);
+      const filterState = Object.assign({}, st, { logGroup: resolvedLogGroup });
+      const cascadeResolved = PsychTestingUi.cascadeFilterState(filterState, {
         orgUnits: orgUnits,
         positions: positionsCache,
         employees: employeesAllCache,
       });
 
-      const prevLg = st.logGroup;
+      const prevLg = resolvedLogGroup;
       const prevOu = st.orgUnitId;
       const prevPos = st.positionId;
       const prevEmp = st.employeeId;
 
-      const lgOpts = PsychTestingUi.buildSelectOptions(
-        cascade.logGroups.map(function (g) {
-          return { value: g.value, label: escapeHtml(g.label) };
-        }),
-        escapeHtml('— группа отделений —'),
-        null
-      );
-      lgSel.innerHTML = lgOpts.html;
-      if (prevLg && cascade.logGroups.some(function (g) { return g.value === prevLg; })) lgSel.value = prevLg;
+      const lgPlaceholder = cascadeResolved.logGroups.length === 1 &&
+        cascadeResolved.logGroups[0].value === PsychTestingUi.LOG_GROUP_ALL
+        ? escapeHtml(PsychTestingUi.LABEL_LOG_GROUP_ALL)
+        : escapeHtml('— группа отделений —');
+      if (
+        cascadeResolved.logGroups.length === 1 &&
+        cascadeResolved.logGroups[0].value === PsychTestingUi.LOG_GROUP_ALL
+      ) {
+        lgSel.innerHTML =
+          '<option value="' + PsychTestingUi.LOG_GROUP_ALL + '">' +
+          escapeHtml(PsychTestingUi.LABEL_LOG_GROUP_ALL) + '</option>';
+        lgSel.value = PsychTestingUi.LOG_GROUP_ALL;
+      } else {
+        const lgOpts = PsychTestingUi.buildSelectOptions(
+          cascadeResolved.logGroups.map(function (g) {
+            return { value: g.value, label: escapeHtml(g.label) };
+          }),
+          lgPlaceholder,
+          null
+        );
+        lgSel.innerHTML = lgOpts.html;
+        if (prevLg && cascadeResolved.logGroups.some(function (g) { return g.value === prevLg; })) {
+          lgSel.value = prevLg;
+        }
+      }
 
-      const deptItems = cascade.departments.map(function (u) {
+      const deptItems = cascadeResolved.departments.map(function (u) {
         return { value: u.id, label: escapeHtml(u.name || u.code || u.id) };
       });
-      const deptEmpty = st.logGroup ? escapeHtml('Нет отделений для выбранной группы') : null;
+      const deptEmpty =
+        filterState.logGroup && !PsychTestingUi.isAllLogGroup(filterState.logGroup)
+          ? escapeHtml('Нет отделений для выбранной группы')
+          : null;
       const ouOpts = PsychTestingUi.buildSelectOptions(deptItems, escapeHtml('— отделение —'), deptEmpty);
       ouSel.innerHTML = ouOpts.html;
-      if (prevOu && cascade.departments.some(function (u) { return u.id === prevOu; })) ouSel.value = prevOu;
+      if (prevOu && cascadeResolved.departments.some(function (u) { return u.id === prevOu; })) ouSel.value = prevOu;
 
-      const posItems = cascade.positions.map(function (p) {
+      const posItems = cascadeResolved.positions.map(function (p) {
         var label = (p.code || '') + (p.name ? ' — ' + p.name : '');
         return { value: p.id, label: escapeHtml(label) };
       });
       const posEmpty = st.orgUnitId ? escapeHtml('Нет должностей для выбранного отделения') : null;
       const posOpts = PsychTestingUi.buildSelectOptions(posItems, escapeHtml('— должность —'), posEmpty);
       posSel.innerHTML = posOpts.html;
-      if (prevPos && cascade.positions.some(function (p) { return p.id === prevPos; })) posSel.value = prevPos;
+      if (prevPos && cascadeResolved.positions.some(function (p) { return p.id === prevPos; })) posSel.value = prevPos;
 
-      const empItems = cascade.employees.map(function (e) {
+      const empItems = cascadeResolved.employees.map(function (e) {
         return { value: e.id, label: escapeHtml(PsychTestingUi.formatEmployeeName(e)) };
       });
+      const groupNarrowsEmployees =
+        filterState.logGroup && !PsychTestingUi.isAllLogGroup(filterState.logGroup);
       const empEmpty =
-        (st.positionId || st.orgUnitId || st.logGroup)
+        (st.positionId || st.orgUnitId || groupNarrowsEmployees)
           ? escapeHtml('Нет сотрудников с Telegram для выбранных условий')
           : null;
       const empOpts = PsychTestingUi.buildSelectOptions(
@@ -3883,7 +3967,13 @@
         empEmpty
       );
       empSel.innerHTML = empOpts.html;
-      if (prevEmp && cascade.employees.some(function (e) { return e.id === prevEmp; })) empSel.value = prevEmp;
+      if (prevEmp && cascadeResolved.employees.some(function (e) { return e.id === prevEmp; })) empSel.value = prevEmp;
+
+      psychAssignFilterState = {
+        logGroup: lgSel.value,
+        orgUnitId: ouSel.value,
+        positionId: posSel.value,
+      };
 
       updatePsychAssignButtonState();
     }
@@ -4280,6 +4370,7 @@
       const posSel = document.getElementById('empEditPosition');
       posSel.innerHTML = '<option value="">— Не выбрано —</option>' + positionsCache.map(p => '<option value="' + p.id + '">' + p.code + ' — ' + p.name + '</option>').join('');
       posSel.value = e.position_id || '';
+      renderEmployeeAccountAccessWireframe(e);
       showErr(document.getElementById('modalEmployeeEditErr'), '');
       document.getElementById('modalEmployeeEdit').classList.add('show');
     }
@@ -4351,7 +4442,7 @@
         const items = data.items || [];
         updateWorkspaceExportLinks();
         if (!items.length) {
-          tbody.innerHTML = '<tr><td colspan="9" class="meta" style="padding:1rem;">Нет аккаунтов</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Нет аккаунтов</td></tr>';
           return;
         }
         tbody.innerHTML = items.map((a) => {
@@ -4362,12 +4453,9 @@
           return '<tr>' +
             '<td class="td-ellipsis">' + escapeHtml(a.login) + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(name) + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(emp.phone || '') + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(emp.telegram_id || '') + '</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(ou ? ou.code : '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(ou ? (ou.name || ou.code) : '') + '</td>' +
             '<td class="td-ellipsis">' + escapeHtml(pos ? pos.name : '') + '</td>' +
-            '<td class="meta" title="Задаётся при создании или в форме «Изменить»">—</td>' +
-            '<td class="td-ellipsis">' + escapeHtml(a.status || '') + '</td>' +
+            '<td class="td-ellipsis">' + escapeHtml(formatAccountStatusLabel(a.status)) + '</td>' +
             '<td>' + CatalogRowActions.preset('editDelete', { id: a.id }, { rowKey: a.id, size: 'sm' }) + '</td>' +
           '</tr>';
         }).join('');
@@ -4380,7 +4468,7 @@
           tbody._craBound = true;
         }
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="9" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="err" style="padding:1rem;">' + escapeHtml(e.message) + '</td></tr>';
       }
     }
 

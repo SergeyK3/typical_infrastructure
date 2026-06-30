@@ -42,6 +42,7 @@ from app.schemas import (
     OrgUnitReorderItem,
     SegmentSyncOut,
 )
+from app.medical_org_groups import log_group_label
 from app.utils import new_id32
 
 router = APIRouter(prefix="/org-units", tags=["org_units"])
@@ -55,10 +56,13 @@ def _org_unit_out(
     if ctx is None:
         ctx = ClientOrgEnrichContext.build(db, row.client_id)
     base = OrgUnitOut.model_validate(row)
+    effective_log_group = resolve_org_unit_effective_log_group(row, ctx=ctx)
+    effective_log_group_name = log_group_label(effective_log_group) or None
     return base.model_copy(
         update={
             "effective_segment_code": resolve_org_unit_effective_segment(db, row),
-            "effective_log_group": resolve_org_unit_effective_log_group(row, ctx=ctx),
+            "effective_log_group": effective_log_group,
+            "effective_log_group_name": effective_log_group_name,
         }
     )
 

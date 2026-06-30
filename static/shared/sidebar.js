@@ -531,9 +531,17 @@
     hint.innerHTML = 'Просмотр и правки в разрезе <strong>выбранной</strong> организации';
     middle.appendChild(createCollapsibleSection(
       groupById(groups, 'organizationCore'),
-      reg.organizationNavigation,
+      (reg.organizationNavigation || []).filter(function (item) {
+        return item.groupId === 'organizationCore';
+      }),
       ctx,
       { hint, focusMode: 'organization' }
+    ));
+    middle.appendChild(createCollapsibleSection(
+      groupById(groups, 'organizationAdmin'),
+      reg.organizationAdminNavigation || [],
+      ctx,
+      { focusMode: 'organization' }
     ));
     root.appendChild(middle);
 

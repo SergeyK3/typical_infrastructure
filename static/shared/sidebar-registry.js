@@ -24,6 +24,7 @@
     { id: 'platform', label: 'Typical Infrastructure', level: 'platform', order: 10 },
     { id: 'globalCatalogs', label: 'Глобальные справочники', level: 'platform', order: 20 },
     { id: 'organizationCore', label: 'Справочники организации', level: 'organization', order: 30 },
+    { id: 'organizationAdmin', label: 'Администрирование', level: 'organization', order: 35 },
     { id: 'hrPluginModules', label: 'HR-МОДУЛИ', level: 'module', order: 50 },
   ];
 
@@ -58,7 +59,10 @@
     { id: 'organization.kpi', label: 'Локальные KPI', level: 'organization', groupId: 'organizationCore', tab: 'local-kpi', order: 40 },
     { id: 'organization.skills', label: 'Локальные навыки', level: 'organization', groupId: 'organizationCore', tab: 'local-skills', order: 50 },
     { id: 'organization.employees', label: 'Сотрудники', level: 'organization', groupId: 'organizationCore', tab: 'employees', order: 60 },
-    { id: 'organization.accounts', label: 'Аккаунты', level: 'organization', groupId: 'organizationCore', tab: 'accounts', order: 70 },
+  ];
+
+  const organizationAdminNavigation = [
+    { id: 'organization.accounts', label: 'Аккаунты', level: 'organization', groupId: 'organizationAdmin', tab: 'accounts', order: 10 },
   ];
 
   const moduleNavigation = [];
@@ -161,6 +165,7 @@
     groups,
     platformNavigation,
     organizationNavigation,
+    organizationAdminNavigation,
     moduleNavigation,
     hrModuleNavigation,
     moduleRegistry,

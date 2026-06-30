@@ -25,6 +25,10 @@
     return normalizeLogGroupValue(u && u.effective_log_group);
   }
 
+  function departmentLogGroupName(u) {
+    return normalizeLogGroupValue(u && u.effective_log_group_name);
+  }
+
   function readBotInfoCollapsed(storage) {
     try {
       return storage.getItem(BOT_INFO_COLLAPSED_KEY) === '1';
@@ -65,15 +69,17 @@
     });
   }
 
-  function logGroupLabel(code) {
+  function logGroupLabel(code, orgUnits) {
     var c = normalizeLogGroupValue(code);
     if (!c) return '';
-    var labels = {
-      clinical: 'Клинические',
-      paraclinical: 'Параклинические',
-      admin_household: 'Административно-хозяйственные',
-    };
-    return labels[c] || c;
+    var depts = departmentOrgUnits(orgUnits || []);
+    for (var i = 0; i < depts.length; i++) {
+      if (departmentLogGroup(depts[i]) === c) {
+        var name = departmentLogGroupName(depts[i]);
+        if (name) return name;
+      }
+    }
+    return c;
   }
 
   function collectLogGroups(orgUnits) {
@@ -90,7 +96,8 @@
       }
       if (seen[g]) return;
       seen[g] = true;
-      grouped.push({ value: g, label: logGroupLabel(g) });
+      var label = departmentLogGroupName(u) || g;
+      grouped.push({ value: g, label: label });
     });
     grouped.sort(function (a, b) {
       return a.label.localeCompare(b.label, 'ru');

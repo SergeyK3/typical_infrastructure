@@ -14,7 +14,7 @@ from app.auth.deps import get_current_account
 from app.auth.tenant import assert_client_access, load_employee_for_ctx, require_client_query_access
 from app.db import get_db
 from app.excel_export import xlsx_file_response
-from app.models import Account, Client, Employee, OrgUnit, Position
+from app.models import Account, AccountRole, Client, Employee, OrgUnit, Position, Role
 from app.schemas import EmployeeCreate, EmployeeListOut, EmployeeOut, EmployeePatch, ListEnvelope
 from app.utils import new_id32
 
@@ -35,6 +35,39 @@ def _assert_position(db: Session, client_id: str, position_id: str | None) -> No
     pos = db.get(Position, position_id)
     if not pos or pos.client_id != client_id:
         raise HTTPException(status_code=400, detail="position_not_found")
+
+
+def _employee_account_enrichment(
+    db: Session,
+    emp_ids: list[str],
+) -> dict[str, dict[str, object]]:
+    """employee_id → account_id, account_login, account_status, system_role_labels."""
+    if not emp_ids:
+        return {}
+    accounts = db.scalars(select(Account).where(Account.employee_id.in_(emp_ids))).all()
+    by_emp: dict[str, Account] = {}
+    for acc in accounts:
+        if acc.employee_id and acc.employee_id not in by_emp:
+            by_emp[acc.employee_id] = acc
+    account_ids = [a.id for a in by_emp.values()]
+    labels_by_account: dict[str, list[str]] = {aid: [] for aid in account_ids}
+    if account_ids:
+        for account_id, role_name in db.execute(
+            select(AccountRole.account_id, Role.name)
+            .join(Role, AccountRole.role_id == Role.id)
+            .where(AccountRole.account_id.in_(account_ids))
+            .order_by(Role.code)
+        ).all():
+            labels_by_account.setdefault(account_id, []).append(role_name)
+    out: dict[str, dict[str, object]] = {}
+    for emp_id, acc in by_emp.items():
+        out[emp_id] = {
+            "account_id": acc.id,
+            "account_login": acc.login,
+            "account_status": acc.status,
+            "system_role_labels": labels_by_account.get(acc.id, []),
+        }
+    return out
 
 
 @router.get("", response_model=ListEnvelope[EmployeeListOut])
@@ -68,18 +101,19 @@ def list_employees(
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.order_by(Employee.created_at.desc()).limit(limit).offset(offset)).all()
     emp_ids = [r.id for r in rows]
-    logins: dict[str, str] = {}
-    if emp_ids:
-        for acc in db.scalars(select(Account).where(Account.employee_id.in_(emp_ids))).all():
-            if acc.employee_id not in logins:
-                logins[acc.employee_id] = acc.login
-    items = [
-        EmployeeListOut(
-            **EmployeeOut.model_validate(r).model_dump(),
-            account_login=logins.get(r.id),
+    account_info = _employee_account_enrichment(db, emp_ids)
+    items = []
+    for r in rows:
+        info = account_info.get(r.id, {})
+        items.append(
+            EmployeeListOut(
+                **EmployeeOut.model_validate(r).model_dump(),
+                account_login=info.get("account_login"),
+                account_id=info.get("account_id"),
+                account_status=info.get("account_status"),
+                system_role_labels=list(info.get("system_role_labels") or []),
+            )
         )
-        for r in rows
-    ]
     return ListEnvelope[EmployeeListOut](
         items=items,
         total=total,
