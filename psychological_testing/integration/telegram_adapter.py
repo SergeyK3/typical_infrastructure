@@ -517,6 +517,9 @@ class PsychTestingTelegramAdapter:
     def _test_id_for_step(self, chat_id: str, step_key: str) -> tuple[str, MbtiDeliveryMode | None]:
         ctx = self._assignment_menu_context(chat_id)
         if ctx:
+            allowed_ids = ctx.get("allowed_test_ids") or []
+            if len(allowed_ids) == 1:
+                return str(allowed_ids[0]), None
             for step in ctx.get("allowed_steps") or []:
                 if str(step.get("step_key")) == step_key:
                     return str(step["test_id"]), None

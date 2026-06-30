@@ -547,18 +547,35 @@
     <!-- Static HR module placeholders -->
     <div id="panel-psych-testing" class="panel">
       <h2>Психологические тестирования</h2>
-      <div class="empty-state module-entry" style="margin-bottom: 1rem;">
-        <h3>Telegram-бот</h3>
-        <p class="empty-message">Сотрудник проходит тест в Telegram; результаты сохраняются в JSON и SQLite (env <code>PSYCH_TESTING_PERSIST_JSON</code>, <code>PSYCH_TESTING_PERSIST_DB</code>).</p>
-        <p class="empty-hint" id="psychTestingCommands">Загрузка доступных команд…</p>
-        <p class="meta" id="psychTestingStatus" style="margin-top:0.5rem;"></p>
-        <div class="module-entry-actions">
-          <button type="button" class="btn btn-secondary" id="btnPsychRefresh">Обновить список</button>
+      <div class="empty-state module-entry psych-bot-info-block" id="psychBotInfoBlock" style="margin-bottom: 1rem;">
+        <div class="psych-bot-info-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem;">
+          <div style="flex:1;min-width:0;">
+            <h3 style="margin:0 0 0.35rem;">Telegram-бот</h3>
+            <p class="empty-message psych-bot-info-summary" style="margin:0;">Сотрудник проходит тест в Telegram; результаты сохраняются в системе.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnPsychBotToggle" style="flex-shrink:0;margin-top:0.15rem;">Свернуть</button>
+        </div>
+        <div class="psych-bot-info-details" id="psychBotInfoDetails" style="margin-top:0.75rem;">
+          <p class="empty-message">Подробно: результаты сохраняются в JSON и SQLite (env <code>PSYCH_TESTING_PERSIST_JSON</code>, <code>PSYCH_TESTING_PERSIST_DB</code>).</p>
+          <p class="empty-hint" id="psychTestingCommands">Загрузка доступных команд…</p>
+          <p class="meta" id="psychTestingStatus" style="margin-top:0.5rem;"></p>
+          <div class="module-entry-actions">
+            <button type="button" class="btn btn-secondary" id="btnPsychRefresh">Обновить список</button>
+          </div>
         </div>
       </div>
-      <div class="org-actions" style="margin-bottom:0.75rem;flex-wrap:wrap;">
+      <div class="org-actions psych-assign-filters" style="margin-bottom:0.75rem;flex-wrap:wrap;">
+        <select id="psychFilterLogGroup" title="Группа отделений" style="min-width:200px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">— группа отделений —</option>
+        </select>
+        <select id="psychFilterOrgUnit" title="Отделение" style="min-width:220px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">— отделение —</option>
+        </select>
+        <select id="psychFilterPosition" title="Должность" style="min-width:220px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">— должность —</option>
+        </select>
         <select id="psychAssignEmployee" title="Сотрудник с Telegram" style="min-width:220px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
-          <option value="">— сотрудник —</option>
+          <option value="">— сотрудник (есть Telegram) —</option>
         </select>
         <select id="psychAssignTest" title="Тест для назначения" style="min-width:240px;padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
           <option value="">— тест —</option>
@@ -567,7 +584,7 @@
           <span style="white-space:nowrap;">Дедлайн (новое):</span>
           <input type="date" id="psychAssignDue" title="3 рабочих дня по умолчанию" style="padding:0.5rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
         </label>
-        <button type="button" class="btn btn-primary" id="btnPsychAssignNotify">Назначить и уведомить в Telegram</button>
+        <button type="button" class="btn btn-primary" id="btnPsychAssignNotify" disabled>Назначить и уведомить в Telegram</button>
       </div>
       <p class="meta" style="margin:0 0 0.5rem 0;">ОК назначает <strong>один тест</strong> сотруднику (по устному распоряжению руководства). Каждое назначение и каждое прохождение сохраняются в истории (таблица ниже + JSON-сессии). Следующий тест — новое назначение. Дедлайн по умолчанию — <strong>3 рабочих дня</strong>.</p>
       <p class="meta hidden" id="psychAssignmentsMeta"></p>
@@ -1154,6 +1171,7 @@
   <script src="/static/shared/filter-combobox.js?v=fcb-1"></script>
   <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
+  <script src="/static/shared/psych-testing-ui.js?v=psych-ui-1"></script>
   <script>
     (async function bootstrapWorkspaceSidebar() {
       if (window.AuthContext) await window.AuthContext.load();
@@ -1337,8 +1355,8 @@
     };
 
     function applyPsychRbacUi() {
-      const assignBlock = document.querySelector('#panel-psych-testing .org-actions');
-      const assignHint = document.querySelector('#panel-psych-testing .org-actions + p.meta');
+      const assignBlock = document.querySelector('#panel-psych-testing .psych-assign-filters');
+      const assignHint = document.querySelector('#panel-psych-testing .psych-assign-filters + p.meta');
       const sessionExportBtn = document.getElementById('btnPsychSessionExportPdf');
       if (assignBlock) {
         assignBlock.style.display = psychRbacContext.canAssign ? '' : 'none';
@@ -3772,6 +3790,142 @@
     }
 
     let psychAvailableTests = [];
+    let psychAssignFilterState = {
+      logGroup: '',
+      orgUnitId: '',
+      positionId: '',
+    };
+
+    function psychAssignDomState() {
+      const empSel = document.getElementById('psychAssignEmployee');
+      const testSel = document.getElementById('psychAssignTest');
+      const lgSel = document.getElementById('psychFilterLogGroup');
+      const ouSel = document.getElementById('psychFilterOrgUnit');
+      const posSel = document.getElementById('psychFilterPosition');
+      return {
+        logGroup: lgSel ? lgSel.value : psychAssignFilterState.logGroup,
+        orgUnitId: ouSel ? ouSel.value : psychAssignFilterState.orgUnitId,
+        positionId: posSel ? posSel.value : psychAssignFilterState.positionId,
+        employeeId: empSel ? empSel.value : '',
+        testId: testSel ? testSel.value : '',
+      };
+    }
+
+    function updatePsychAssignButtonState() {
+      const btn = document.getElementById('btnPsychAssignNotify');
+      if (!btn || !window.PsychTestingUi) return;
+      const st = psychAssignDomState();
+      btn.disabled = !PsychTestingUi.isAssignEnabled(st.employeeId, st.testId);
+    }
+
+    function renderPsychAssignCascadeSelects() {
+      if (!window.PsychTestingUi) return;
+      const lgSel = document.getElementById('psychFilterLogGroup');
+      const ouSel = document.getElementById('psychFilterOrgUnit');
+      const posSel = document.getElementById('psychFilterPosition');
+      const empSel = document.getElementById('psychAssignEmployee');
+      if (!lgSel || !ouSel || !posSel || !empSel) return;
+
+      const st = psychAssignDomState();
+      psychAssignFilterState = {
+        logGroup: st.logGroup,
+        orgUnitId: st.orgUnitId,
+        positionId: st.positionId,
+      };
+      const cascade = PsychTestingUi.cascadeFilterState(st, {
+        orgUnits: orgUnits,
+        positions: positionsCache,
+        employees: employeesAllCache,
+      });
+
+      const prevLg = st.logGroup;
+      const prevOu = st.orgUnitId;
+      const prevPos = st.positionId;
+      const prevEmp = st.employeeId;
+
+      const lgOpts = PsychTestingUi.buildSelectOptions(
+        cascade.logGroups.map(function (g) {
+          return { value: g.value, label: escapeHtml(g.label) };
+        }),
+        escapeHtml('— группа отделений —'),
+        null
+      );
+      lgSel.innerHTML = lgOpts.html;
+      if (prevLg && cascade.logGroups.some(function (g) { return g.value === prevLg; })) lgSel.value = prevLg;
+
+      const deptItems = cascade.departments.map(function (u) {
+        return { value: u.id, label: escapeHtml(u.name || u.code || u.id) };
+      });
+      const deptEmpty = st.logGroup ? escapeHtml('Нет отделений для выбранной группы') : null;
+      const ouOpts = PsychTestingUi.buildSelectOptions(deptItems, escapeHtml('— отделение —'), deptEmpty);
+      ouSel.innerHTML = ouOpts.html;
+      if (prevOu && cascade.departments.some(function (u) { return u.id === prevOu; })) ouSel.value = prevOu;
+
+      const posItems = cascade.positions.map(function (p) {
+        var label = (p.code || '') + (p.name ? ' — ' + p.name : '');
+        return { value: p.id, label: escapeHtml(label) };
+      });
+      const posEmpty = st.orgUnitId ? escapeHtml('Нет должностей для выбранного отделения') : null;
+      const posOpts = PsychTestingUi.buildSelectOptions(posItems, escapeHtml('— должность —'), posEmpty);
+      posSel.innerHTML = posOpts.html;
+      if (prevPos && cascade.positions.some(function (p) { return p.id === prevPos; })) posSel.value = prevPos;
+
+      const empItems = cascade.employees.map(function (e) {
+        return { value: e.id, label: escapeHtml(PsychTestingUi.formatEmployeeName(e)) };
+      });
+      const empEmpty =
+        (st.positionId || st.orgUnitId || st.logGroup)
+          ? escapeHtml('Нет сотрудников с Telegram для выбранных условий')
+          : null;
+      const empOpts = PsychTestingUi.buildSelectOptions(
+        empItems,
+        escapeHtml('— сотрудник (есть Telegram) —'),
+        empEmpty
+      );
+      empSel.innerHTML = empOpts.html;
+      if (prevEmp && cascade.employees.some(function (e) { return e.id === prevEmp; })) empSel.value = prevEmp;
+
+      updatePsychAssignButtonState();
+    }
+
+    function wirePsychAssignFilters() {
+      const lgSel = document.getElementById('psychFilterLogGroup');
+      const ouSel = document.getElementById('psychFilterOrgUnit');
+      const posSel = document.getElementById('psychFilterPosition');
+      const empSel = document.getElementById('psychAssignEmployee');
+      const testSel = document.getElementById('psychAssignTest');
+      if (!lgSel || lgSel.dataset.psychWired) return;
+      lgSel.dataset.psychWired = '1';
+      lgSel.onchange = function () {
+        psychAssignFilterState = PsychTestingUi.resetCascadeOnChange('logGroup');
+        psychAssignFilterState.logGroup = lgSel.value;
+        if (empSel) empSel.value = '';
+        renderPsychAssignCascadeSelects();
+      };
+      ouSel.onchange = function () {
+        psychAssignFilterState = PsychTestingUi.resetCascadeOnChange('orgUnitId', lgSel.value);
+        psychAssignFilterState.orgUnitId = ouSel.value;
+        if (empSel) empSel.value = '';
+        renderPsychAssignCascadeSelects();
+      };
+      posSel.onchange = function () {
+        psychAssignFilterState = PsychTestingUi.resetCascadeOnChange('positionId', lgSel.value, ouSel.value);
+        psychAssignFilterState.positionId = posSel.value;
+        if (empSel) empSel.value = '';
+        renderPsychAssignCascadeSelects();
+      };
+      empSel.onchange = updatePsychAssignButtonState;
+      testSel.onchange = updatePsychAssignButtonState;
+    }
+
+    function initPsychBotInfoBlock() {
+      if (!window.PsychTestingUi) return;
+      PsychTestingUi.wireBotInfoToggle({
+        block: document.getElementById('psychBotInfoBlock'),
+        details: document.getElementById('psychBotInfoDetails'),
+        toggleBtn: document.getElementById('btnPsychBotToggle'),
+      });
+    }
 
     async function fillPsychAssignTestSelect() {
       const sel = document.getElementById('psychAssignTest');
@@ -3795,18 +3949,16 @@
           '<option value="' + escapeHtml(t.test_id) + '">' + escapeHtml(t.display_name || t.test_id) + '</option>'
         ).join('');
       if (prev && items.some((t) => t.test_id === prev)) sel.value = prev;
+      updatePsychAssignButtonState();
     }
 
     async function fillPsychAssignEmployeeSelect() {
-      const sel = document.getElementById('psychAssignEmployee');
-      if (!sel || !clientId) return;
+      if (!clientId) return;
+      if (!orgUnits.length) await loadOrgTree();
+      await loadPositionsForSelect();
       await loadEmployeesForSelect();
-      const withTg = employeesAllCache.filter((e) => String(e.telegram_id || '').trim());
-      sel.innerHTML = '<option value="">— сотрудник (есть Telegram) —</option>' +
-        withTg.map((e) => {
-          const name = [e.last_name, e.first_name, e.middle_name].filter(Boolean).join(' ');
-          return '<option value="' + escapeHtml(e.id) + '">' + escapeHtml(name) + '</option>';
-        }).join('');
+      wirePsychAssignFilters();
+      renderPsychAssignCascadeSelects();
     }
 
     async function loadPsychAssignments() {
@@ -3925,6 +4077,9 @@
       try {
         await fetchApi('/psychological-testing/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         showWorkspaceToast(notify ? 'Назначение создано, уведомление отправлено в Telegram.' : 'Назначение создано.', 'success');
+        const empSel = document.getElementById('psychAssignEmployee');
+        if (empSel) empSel.value = '';
+        updatePsychAssignButtonState();
         loadPsychAssignments();
       } catch (e) {
         const msg = e.message || String(e);
@@ -3952,6 +4107,7 @@
       const tbody = document.getElementById('psychSessionsTbody');
       const meta = document.getElementById('psychSessionsMeta');
       if (!tbody) return;
+      initPsychBotInfoBlock();
       await loadPsychTestingStatus();
       if (!clientId) {
         tbody.innerHTML = '<tr><td colspan="7" class="meta" style="padding:1rem;">Выберите организацию.</td></tr>';

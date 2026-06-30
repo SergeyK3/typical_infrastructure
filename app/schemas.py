@@ -62,6 +62,7 @@ class OrgUnitBase(BaseModel):
     is_detached: bool = True
     segment_code: str | None = None
     effective_segment_code: str | None = None
+    effective_log_group: str | None = None
 
 
 class OrgUnitCreate(OrgUnitBase):

@@ -131,6 +131,93 @@ def resolve_org_unit_effective_segment(db: Session, org_unit: OrgUnit) -> str | 
     return None
 
 
+@dataclass
+class ClientOrgEnrichContext:
+    """Кэш для обогащения org_units (segment, log_group) в рамках одного запроса."""
+
+    by_id: dict[str, OrgUnit]
+    log_group_by_catalog_code: dict[str, str | None]
+
+    @classmethod
+    def build(cls, db: Session, client_id: str) -> ClientOrgEnrichContext:
+        rows = db.scalars(select(OrgUnit).where(OrgUnit.client_id == client_id)).all()
+        return cls(
+            by_id={u.id: u for u in rows},
+            log_group_by_catalog_code=build_template_log_group_by_code(db, client_id),
+        )
+
+
+def effective_log_group_from_specs(specs: list[dict], code: str) -> str | None:
+    """Эффективный log_group узла шаблона (department — своё; section — от department-предка)."""
+    by_code = {s["code"]: s for s in specs if s.get("code")}
+    spec = by_code.get(code)
+    if not spec:
+        return None
+    if spec.get("unit_type") == "department":
+        lg = (spec.get("log_group") or "").strip()
+        return lg or None
+    parent = spec.get("parent_code")
+    while parent:
+        parent_spec = by_code.get(parent)
+        if not parent_spec:
+            break
+        if parent_spec.get("unit_type") == "department":
+            lg = (parent_spec.get("log_group") or "").strip()
+            return lg or None
+        parent = parent_spec.get("parent_code")
+    lg = (spec.get("log_group") or "").strip()
+    return lg or None
+
+
+def build_template_log_group_by_code(db: Session, client_id: str) -> dict[str, str | None]:
+    """Код узла типового шаблона → effective log_group (для catalog_source_code клиента)."""
+    from app.models import Client, EnterpriseTemplate
+    from app.template_constants import DEFAULT_TEMPLATE_CODE
+    from app.template_org_resolve import resolve_template_structure
+
+    client = db.get(Client, client_id)
+    if not client:
+        return {}
+    template_code = DEFAULT_TEMPLATE_CODE
+    if client.template_id:
+        tpl = db.get(EnterpriseTemplate, client.template_id)
+        if tpl and tpl.is_active:
+            template_code = tpl.code
+    structure = resolve_template_structure(db, template_code)
+    return {
+        str(spec["code"]): effective_log_group_from_specs(structure, spec["code"])
+        for spec in structure
+        if spec.get("code")
+    }
+
+
+def resolve_org_unit_effective_log_group(
+    org_unit: OrgUnit,
+    *,
+    ctx: ClientOrgEnrichContext,
+) -> str | None:
+    """Эффективный log_group для клиентского узла (из шаблона по catalog_source_code)."""
+    csc = (org_unit.catalog_source_code or "").strip()
+    if csc and csc in ctx.log_group_by_catalog_code:
+        return ctx.log_group_by_catalog_code[csc]
+    if org_unit.unit_type == "department":
+        return None
+    cur = org_unit
+    seen: set[str] = set()
+    while cur.parent_id and cur.parent_id not in seen:
+        seen.add(cur.parent_id)
+        parent = ctx.by_id.get(cur.parent_id)
+        if not parent:
+            break
+        if parent.unit_type == "department":
+            pcsc = (parent.catalog_source_code or "").strip()
+            if pcsc and pcsc in ctx.log_group_by_catalog_code:
+                return ctx.log_group_by_catalog_code[pcsc]
+            return None
+        cur = parent
+    return None
+
+
 def assert_not_protected_code(code: str) -> None:
     if code in PROTECTED_ORG_CODES:
         raise HTTPException(

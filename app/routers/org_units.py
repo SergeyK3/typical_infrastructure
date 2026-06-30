@@ -16,12 +16,14 @@ from app.models import Client, Employee, EnterpriseTemplate, OrgUnit
 from app.client_template_apply import apply_template_to_client
 from app.org_unit_ops import (
     assert_valid_unit_type,
+    ClientOrgEnrichContext,
     clone_local_department,
     clone_local_section,
     delete_local_org_unit_cascade,
     delete_local_org_unit_leaf,
     format_org_unit_name,
     normalize_template_segment_code,
+    resolve_org_unit_effective_log_group,
     resolve_org_unit_effective_segment,
     SEGMENT_UNIT_TYPES,
 )
@@ -45,10 +47,19 @@ from app.utils import new_id32
 router = APIRouter(prefix="/org-units", tags=["org_units"])
 
 
-def _org_unit_out(db: Session, row: OrgUnit) -> OrgUnitOut:
+def _org_unit_out(
+    db: Session,
+    row: OrgUnit,
+    ctx: ClientOrgEnrichContext | None = None,
+) -> OrgUnitOut:
+    if ctx is None:
+        ctx = ClientOrgEnrichContext.build(db, row.client_id)
     base = OrgUnitOut.model_validate(row)
     return base.model_copy(
-        update={"effective_segment_code": resolve_org_unit_effective_segment(db, row)}
+        update={
+            "effective_segment_code": resolve_org_unit_effective_segment(db, row),
+            "effective_log_group": resolve_org_unit_effective_log_group(row, ctx=ctx),
+        }
     )
 
 
@@ -107,8 +118,9 @@ def list_org_units(
     rows = db.scalars(
         q.order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc()).limit(limit).offset(offset)
     ).all()
+    ctx = ClientOrgEnrichContext.build(db, client_id) if rows else None
     return ListEnvelope[OrgUnitOut](
-        items=[_org_unit_out(db, r) for r in rows],
+        items=[_org_unit_out(db, r, ctx) for r in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -124,9 +136,10 @@ def tree_org_units(
     rows = db.scalars(
         select(OrgUnit).where(OrgUnit.client_id == client_id).order_by(OrgUnit.sort_order.asc(), OrgUnit.created_at.asc())
     ).all()
+    ctx = ClientOrgEnrichContext.build(db, client_id) if rows else None
     nodes: dict[str, OrgUnitNode] = {}
     for r in rows:
-        base = _org_unit_out(db, r)
+        base = _org_unit_out(db, r, ctx)
         nodes[r.id] = OrgUnitNode.model_validate(base).model_copy(update={"children": []})
 
     roots: list[OrgUnitNode] = []
