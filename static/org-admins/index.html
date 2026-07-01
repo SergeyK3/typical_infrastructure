@@ -1,107 +1,22 @@
 <!-- route: /org-admins (compatibility redirect) | file: static/org-admins/index.html -->
-<!-- Stage 2C: GET /org-admins is served as 302 → /users?preset=org-admins in app/main.py; this HTML is unused. -->
+<!-- Stage 2C: GET /org-admins is 302 → /users?preset=org-admins in app/main.py. -->
+<!-- This stub is a fallback if an older handler or reverse proxy serves the file directly. -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админы организаций — Typical Infrastructure</title>
-  <link rel="stylesheet" href="/static/shared/layout.css">
-  <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
-  <style>
-    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem; }
-    .toolbar label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem; }
-    .toolbar select { min-width: 280px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
-    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-    th, td { padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
-    th { color: var(--text-muted); font-weight: 600; background: rgba(255,255,255,0.02); }
-    tr:last-child td { border-bottom: none; }
-    .empty { padding: 2rem; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 8px; }
-  </style>
+  <title>Учётные записи — Typical Infrastructure</title>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search || '');
+      params.set('preset', 'org-admins');
+      params.delete('role_code');
+      window.location.replace('/users?' + params.toString());
+    })();
+  </script>
 </head>
 <body>
-  <div class="app-layout">
-    <aside class="sidebar" id="platformSidebar"></aside>
-    <script>window.__platformSidebarOptions = {};</script>
-    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260703"></script>
-    <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
-    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260703"></script>
-    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260703"></script>
-    <main class="main">
-      <div class="main-header">
-        <h1>Админы организаций</h1>
-        <p class="subtitle">Локальные администраторы (роль admin) в разрезе организации — управление доступно Global Admin.</p>
-      </div>
-      <div class="content">
-        <div class="toolbar">
-          <div>
-            <label for="clientSelect">Организация</label>
-            <select id="clientSelect"><option value="">Загрузка…</option></select>
-          </div>
-        </div>
-        <div id="tableWrap"></div>
-      </div>
-    </main>
-  </div>
-  <script>
-    async function loadClients() {
-      const r = await fetch('/api/clients?limit=500', { credentials: 'same-origin' });
-      if (!r.ok) throw new Error('clients_load_failed');
-      return (await r.json()).items || [];
-    }
-
-    async function loadOrgAdmins(clientId) {
-      const r = await fetch('/api/org-admins?client_id=' + encodeURIComponent(clientId), { credentials: 'same-origin' });
-      if (!r.ok) throw new Error('org_admins_load_failed');
-      return (await r.json()).items || [];
-    }
-
-    function renderTable(items) {
-      const wrap = document.getElementById('tableWrap');
-      if (!items.length) {
-        wrap.innerHTML = '<div class="empty">Нет локальных администраторов для выбранной организации.</div>';
-        return;
-      }
-      const rows = items.map(function (item) {
-        return '<tr>'
-          + '<td>' + escapeHtml(item.login) + '</td>'
-          + '<td>' + escapeHtml(item.employee_name) + '</td>'
-          + '<td>' + escapeHtml(item.status) + '</td>'
-          + '<td><a href="/client/' + encodeURIComponent(item.client_id) + '#accounts">Аккаунты →</a></td>'
-          + '</tr>';
-      }).join('');
-      wrap.innerHTML = '<table><thead><tr><th>Логин</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody>'
-        + rows + '</tbody></table>';
-    }
-
-    function escapeHtml(value) {
-      return String(value || '').replace(/[&<>"']/g, function (ch) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
-      });
-    }
-
-    async function init() {
-      const select = document.getElementById('clientSelect');
-      try {
-        const clients = await loadClients();
-        select.innerHTML = clients.map(function (c) {
-          return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name || c.code || c.id) + '</option>';
-        }).join('');
-        if (!clients.length) {
-          document.getElementById('tableWrap').innerHTML = '<div class="empty">Нет организаций.</div>';
-          return;
-        }
-        async function refresh() {
-          renderTable(await loadOrgAdmins(select.value));
-        }
-        select.onchange = refresh;
-        await refresh();
-      } catch (err) {
-        document.getElementById('tableWrap').innerHTML = '<div class="empty">Не удалось загрузить данные.</div>';
-      }
-    }
-
-    init();
-  </script>
+  <p><a href="/users?preset=org-admins">Перейти к учётным записям</a></p>
 </body>
 </html>

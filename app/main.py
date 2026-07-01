@@ -227,9 +227,8 @@ def users_page(request: Request, db: Session = Depends(get_db)) -> Response:
     )
 
 
-@app.get("/org-admins")
-def org_admins_page(request: Request, db: Session = Depends(get_db)) -> Response:
-    """Compatibility route: redirect to canonical /users with org-admins preset (Stage 2C)."""
+def _org_admins_redirect(request: Request, db: Session) -> Response:
+    """Compatibility redirect: /org-admins → /users?preset=org-admins (Stage 2C)."""
     ctx = get_optional_account(request, db)
     if ctx is None:
         return RedirectResponse(url="/login?next=/org-admins", status_code=302)
@@ -241,6 +240,12 @@ def org_admins_page(request: Request, db: Session = Depends(get_db)) -> Response
     params["preset"] = "org-admins"
     params.pop("role_code", None)
     return RedirectResponse(url=f"/users?{urlencode(params, doseq=True)}", status_code=302)
+
+
+@app.get("/org-admins", include_in_schema=False)
+@app.get("/org-admins/", include_in_schema=False)
+def org_admins_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    return _org_admins_redirect(request, db)
 
 
 @app.get("/regulations", include_in_schema=False)

@@ -134,6 +134,13 @@ def test_org_admins_route_redirects_to_users_preset(client):
     page = client.get("/org-admins", follow_redirects=False)
     assert page.status_code == 302
     assert page.headers["location"] == "/users?preset=org-admins"
+    assert "<h1>Админы организаций</h1>" not in page.text
+
+
+def test_org_admins_trailing_slash_redirects_to_users_preset(client):
+    page = client.get("/org-admins/", follow_redirects=False)
+    assert page.status_code == 302
+    assert page.headers["location"] == "/users?preset=org-admins"
 
 
 def test_org_admins_route_preserves_client_id_on_redirect(client):
