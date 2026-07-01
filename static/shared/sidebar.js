@@ -409,17 +409,35 @@
     eyebrow.textContent = 'Выбранная организация';
     card.appendChild(eyebrow);
 
+    const org = ctx.organization || {};
+    const displayName = ctx.clientName || org.name || (ctx.clientId ? ctx.clientId : 'Не выбрана');
+    const fullName = (ctx.clientFullName || org.fullName || '').trim();
+    const code = (ctx.clientCode || org.code || '').trim();
+
     const name = document.createElement('div');
     name.className = 'sidebar-organization-name';
-    const displayName = ctx.clientName || (ctx.clientId ? ctx.clientId : 'Не выбрана');
     name.textContent = displayName;
-    const fullName = (ctx.clientFullName || ctx.organization && ctx.organization.fullName || '').trim();
-    if (fullName && fullName !== displayName) name.title = fullName;
+    if (fullName && fullName !== displayName) {
+      name.title = fullName;
+    }
     card.appendChild(name);
+
+    if (fullName && fullName !== displayName) {
+      const fullLine = document.createElement('div');
+      fullLine.className = 'sidebar-organization-full-name';
+      fullLine.textContent = fullName;
+      card.appendChild(fullLine);
+    }
 
     const meta = document.createElement('div');
     meta.className = 'sidebar-organization-meta';
-    meta.textContent = ctx.clientCode || (ctx.clientId ? 'ID: ' + ctx.clientId : 'Навигация доступна без контекста');
+    if (code) {
+      meta.textContent = 'Код: ' + code;
+    } else if (ctx.clientId) {
+      meta.textContent = 'ID: ' + ctx.clientId;
+    } else {
+      meta.textContent = 'Навигация доступна без контекста';
+    }
     card.appendChild(meta);
 
     return card;

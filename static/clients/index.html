@@ -22,9 +22,9 @@
     .empty-state { padding: 2rem; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; }
     .empty-message { margin: 0 0 0.5rem 0; font-size: 1rem; } .empty-hint { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
     .empty-hint a { color: var(--accent); }
-    .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 100; align-items: flex-start; justify-content: center; padding: 1rem; overflow-y: auto; }
     .modal.show { display: flex; }
-    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 420px; width: 100%; max-height: none; margin: auto 0; }
     .modal-content h3 { margin: 0 0 1rem 0; font-size: 1.1rem; }
     .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
     .modal-content input, .modal-content select { width: 100%; padding: 0.5rem 0.75rem; margin-top: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
@@ -36,7 +36,7 @@
     .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   </style>
 </head>
-<body>
+<body data-page="clients" data-page-version="stage-2e-short-name-1">
   <div class="app-layout">
     <aside class="sidebar" id="platformSidebar"></aside>
     <script>window.__platformSidebarOptions = { bottomHintHtml: 'Нажмите на карточку клиента — в рабочем пространстве доступны подразделения, должности и регламенты этой организации.' };</script>
@@ -104,16 +104,16 @@
     <div class="modal-content">
       <h3>Изменить организацию</h3>
       <input type="hidden" id="editClientId" />
-      <label>Код</label>
+      <label for="editCode">Код</label>
       <input type="text" id="editCode" maxlength="64" />
-      <label>Название</label>
+      <label for="editName">Название</label>
       <input type="text" id="editName" maxlength="256" />
-      <label>Краткое название</label>
-      <input type="text" id="editShortName" maxlength="64" placeholder="Например: ММЦ" />
-      <p class="modal-hint">Используется в таблицах и компактных списках. Если не заполнено, отображается полное название.</p>
-      <label>БИН</label>
+      <label for="editShortName">Краткое название</label>
+      <input type="text" id="editShortName" maxlength="64" placeholder="Например: ММЦ" autocomplete="off" />
+      <p class="modal-hint" id="editShortNameHint">Используется в таблицах и компактных списках. Если не заполнено, отображается полное название.</p>
+      <label for="editBin">БИН</label>
       <input type="text" id="editBin" maxlength="32" />
-      <label>Статус</label>
+      <label for="editStatus">Статус</label>
       <select id="editStatus">
         <option value="active">active</option>
         <option value="inactive">inactive</option>

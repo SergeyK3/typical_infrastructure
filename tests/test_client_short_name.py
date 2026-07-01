@@ -114,6 +114,22 @@ def test_users_api_returns_client_short_name(client):
 def test_clients_edit_page_has_short_name_field():
     html = (ROOT / "static/clients/index.html").read_text(encoding="utf-8")
     assert 'id="editShortName"' in html
+    assert 'for="editShortName"' in html
     assert "Краткое название" in html
     assert "ClientDisplay.compactLabel" in html
     assert "client-display.js" in html
+    assert 'data-page-version="stage-2e-short-name-1"' in html
+
+
+def test_clients_page_http_includes_short_name_field(client):
+    r = client.get("/clients")
+    assert r.status_code == 200, r.text
+    assert 'id="editShortName"' in r.text
+    assert "Краткое название" in r.text
+    assert r.headers.get("x-platform-page") == "clients-stage-2e"
+
+
+def test_compact_label_prefers_name_over_code():
+    c = _FakeClient(name="Full Organization Name", code="ORG_CODE", short_name=None)
+    assert client_compact_label(c) == "Full Organization Name"
+    assert client_compact_label(c) != "ORG_CODE"

@@ -332,7 +332,7 @@ def clients_page(
     clients_path = static_dir / "clients" / "index.html"
     if not clients_path.exists():
         raise HTTPException(status_code=404, detail="clients_page_not_found")
-    return _html_file_response(clients_path)
+    return _html_file_response(clients_path, platform_page="clients-stage-2e")
 
 
 if static_dir.exists():
