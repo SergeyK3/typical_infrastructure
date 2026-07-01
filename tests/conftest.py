@@ -26,7 +26,12 @@ def bootstrap_test_system_admin() -> None:
     db = SessionLocal()
     try:
         seed_roles(db)
-        bootstrap_system_admin(db, login=TEST_SYSTEM_LOGIN, password=TEST_SYSTEM_PASSWORD)
+        bootstrap_system_admin(
+            db,
+            login=TEST_SYSTEM_LOGIN,
+            password=TEST_SYSTEM_PASSWORD,
+            sync_existing=True,
+        )
     finally:
         db.close()
 

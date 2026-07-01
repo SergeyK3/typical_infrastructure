@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     app_name: str = "Typical infrastructure"
     sqlite_path: str = "app.db"
     auth_secret_key: str = "dev-insecure-auth-secret-change-me"
+    system_admin_login: str | None = None
+    system_admin_password: str | None = None
+    system_admin_sync: bool = False
 
 
 settings = Settings()

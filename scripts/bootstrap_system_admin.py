@@ -5,7 +5,7 @@ Usage (from repo root):
     python scripts/bootstrap_system_admin.py
 
 Requires in .env:
-    SYSTEM_ADMIN_LOGIN=...
+    SYSTEM_ADMIN_LOGIN=gladmin
     SYSTEM_ADMIN_PASSWORD=...
 """
 
@@ -42,7 +42,7 @@ def main() -> int:
     db = SessionLocal()
     try:
         seed_roles(db)
-        account = bootstrap_system_admin(db, login=login, password=password)
+        account = bootstrap_system_admin(db, login=login, password=password, sync_existing=True)
         print(f"system_admin ready: login={account.login!r} account_id={account.id}")
         return 0
     finally:
