@@ -99,7 +99,7 @@
 
   function clientSnapshot(client) {
     if (!client) return null;
-    var CD = global.ClientDisplay;
+    var CD = window.ClientDisplay;
     var displayName = CD ? CD.compactLabel(client) : ((client.short_name || '').trim() || (client.name || client.code || client.id || ''));
     var fullName = CD ? CD.fullLabel(client) : ((client.name || client.code || client.id || '').trim());
     return {
@@ -412,7 +412,6 @@
     const org = ctx.organization || {};
     const displayName = ctx.clientName || org.name || (ctx.clientId ? ctx.clientId : 'Не выбрана');
     const fullName = (ctx.clientFullName || org.fullName || '').trim();
-    const code = (ctx.clientCode || org.code || '').trim();
 
     const name = document.createElement('div');
     name.className = 'sidebar-organization-name';
@@ -421,24 +420,6 @@
       name.title = fullName;
     }
     card.appendChild(name);
-
-    if (fullName && fullName !== displayName) {
-      const fullLine = document.createElement('div');
-      fullLine.className = 'sidebar-organization-full-name';
-      fullLine.textContent = fullName;
-      card.appendChild(fullLine);
-    }
-
-    const meta = document.createElement('div');
-    meta.className = 'sidebar-organization-meta';
-    if (code) {
-      meta.textContent = 'Код: ' + code;
-    } else if (ctx.clientId) {
-      meta.textContent = 'ID: ' + ctx.clientId;
-    } else {
-      meta.textContent = 'Навигация доступна без контекста';
-    }
-    card.appendChild(meta);
 
     return card;
   }

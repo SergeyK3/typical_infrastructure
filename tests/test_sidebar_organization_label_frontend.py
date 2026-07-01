@@ -26,8 +26,21 @@ def test_sidebar_organization_label_js():
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
-def test_sidebar_organization_label_markup_in_source():
+def test_sidebar_organization_summary_is_compact_only():
     sidebar = (ROOT / "static/shared/sidebar.js").read_text(encoding="utf-8")
-    assert "sidebar-organization-full-name" in sidebar
-    assert "Код: " in sidebar
+    assert "sidebar-organization-name" in sidebar
     assert "clientFullName" in sidebar
+    assert "sidebar-organization-full-name" not in sidebar
+    assert "sidebar-organization-meta" not in sidebar
+    assert "Код: " not in sidebar
+    assert "window.ClientDisplay" in sidebar
+    assert "global.ClientDisplay" not in sidebar
+
+
+def test_workspace_loads_sidebar_with_cache_bust():
+    workspace = (ROOT / "static/workspace/index.html").read_text(encoding="utf-8")
+    assert "client-display.js" in workspace
+    assert 'sidebar.js?v=platform-sidebar-20260705' in workspace
+    idx_client_display = workspace.index("client-display.js")
+    idx_sidebar = workspace.index("sidebar.js")
+    assert idx_client_display < idx_sidebar, "ClientDisplay must load before sidebar.js"

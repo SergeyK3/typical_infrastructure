@@ -101,13 +101,16 @@ function runScript(filename, sandbox) {
   vm.runInNewContext(code, sandbox, { filename });
 }
 
+function loadSidebarStack(sandbox, { withClientDisplay = true } = {}) {
+  runScript('sidebar-registry.js', sandbox);
+  if (withClientDisplay) runScript('client-display.js', sandbox);
+  runScript('sidebar.js', sandbox);
+  sandbox.window.UiTheme = { mountToggle() {} };
+}
+
 {
   const { sandbox, root } = buildSandbox();
-  runScript('sidebar-registry.js', sandbox);
-  runScript('client-display.js', sandbox);
-  runScript('sidebar.js', sandbox);
-
-  sandbox.window.UiTheme = { mountToggle() {} };
+  loadSidebarStack(sandbox);
 
   sandbox.window.SidebarRenderer.renderWorkspaceSidebar({
     rootId: 'workspaceSidebar',
@@ -129,17 +132,13 @@ function runScript(filename, sandbox) {
 
   assert.equal(nameEl.textContent, 'ММЦ');
   assert.equal(nameEl.title, 'Многопрофильный медицинский центр г. Астаны');
-  assert.equal(fullEl.textContent, 'Многопрофильный медицинский центр г. Астаны');
-  assert.equal(metaEl.textContent, 'Код: mmc');
+  assert.equal(fullEl, null, 'no duplicate full-name line in sidebar summary');
+  assert.equal(metaEl, null, 'no code/id meta line in sidebar summary');
 }
 
 {
   const { sandbox, root } = buildSandbox();
-  runScript('sidebar-registry.js', sandbox);
-  runScript('client-display.js', sandbox);
-  runScript('sidebar.js', sandbox);
-
-  sandbox.window.UiTheme = { mountToggle() {} };
+  loadSidebarStack(sandbox);
 
   sandbox.window.SidebarRenderer.renderWorkspaceSidebar({
     rootId: 'workspaceSidebar',
@@ -161,7 +160,60 @@ function runScript(filename, sandbox) {
   assert.equal(nameEl.textContent, 'Full Organization Only');
   assert.equal(nameEl.title, '');
   assert.equal(fullEl, null, 'no duplicate full-name line when compact equals full');
-  assert.equal(metaEl.textContent, 'Код: fullorg');
+  assert.equal(metaEl, null, 'no code meta line when names match');
+}
+
+{
+  const { sandbox } = buildSandbox();
+  loadSidebarStack(sandbox);
+
+  const clients = [{
+    id: 'c1',
+    name: 'Многопрофильный медицинский центр г. Астаны',
+    short_name: 'ММЦ',
+    code: 'mmc',
+  }];
+
+  assert.doesNotThrow(() => {
+    sandbox.window.SidebarContext.resolveOrganization({
+      clients,
+      requestedClientId: 'c1',
+      currentPath: '/client/c1',
+      currentHash: '',
+      activeTab: 'org',
+      focusMode: 'organization',
+    });
+  });
+
+  const resolved = sandbox.window.SidebarContext.resolveOrganization({
+    clients,
+    requestedClientId: 'c1',
+    currentPath: '/client/c1',
+  });
+
+  assert.equal(resolved.context.clientName, 'ММЦ');
+  assert.equal(resolved.context.clientFullName, 'Многопрофильный медицинский центр г. Астаны');
+}
+
+{
+  const { sandbox } = buildSandbox();
+  loadSidebarStack(sandbox, { withClientDisplay: false });
+
+  const clients = [{
+    id: 'c3',
+    name: 'Fallback Name',
+    short_name: '',
+    code: 'fb',
+  }];
+
+  const resolved = sandbox.window.SidebarContext.resolveOrganization({
+    clients,
+    requestedClientId: 'c3',
+    currentPath: '/client/c3',
+  });
+
+  assert.equal(resolved.context.clientName, 'Fallback Name');
+  assert.notEqual(resolved.context.clientName, 'fb', 'code is not used as compact label fallback');
 }
 
 console.log('test_sidebar_organization_label.mjs: all passed');
