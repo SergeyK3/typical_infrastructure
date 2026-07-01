@@ -1373,6 +1373,17 @@ def migrate_accounts_nullable_employee_id() -> None:
         conn.commit()
 
 
+def migrate_clients_short_name() -> None:
+    """PROJ-ACCESS-ADMIN Stage 2E: optional compact organization label."""
+    if not _table_exists("clients"):
+        return
+    if _column_exists("clients", "short_name"):
+        return
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE clients ADD COLUMN short_name VARCHAR(64) NULL"))
+        conn.commit()
+
+
 def run_migrations() -> None:
     migrate_created_entities()
     migrate_positions_catalog_fields()
@@ -1405,3 +1416,4 @@ def run_migrations() -> None:
     migrate_hosp_template_code_to_medical()
     migrate_enterprise_template_display_names()
     migrate_accounts_nullable_employee_id()
+    migrate_clients_short_name()

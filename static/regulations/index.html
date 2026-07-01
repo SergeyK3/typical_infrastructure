@@ -11,6 +11,7 @@
   <script src="/static/shared/catalog-copy.js?v=catalog-copy-4"></script>
   <script src="/static/shared/catalog-row-actions.js?v=cra-1"></script>
   <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
+  <script src="/static/shared/client-display.js?v=client-display-1"></script>
   <style>
     .badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: rgba(124,58,237,0.2); color: var(--accent); white-space: nowrap; }
     .badge.current { background: rgba(63,185,80,0.2); color: var(--success); }
@@ -528,7 +529,9 @@
         (data.items || []).forEach(c => {
           const opt = document.createElement('option');
           opt.value = c.id;
-          opt.textContent = c.name + ' (' + c.code + ')';
+          opt.textContent = ClientDisplay.compactLabel(c) + ' (' + c.code + ')';
+          const title = ClientDisplay.labelTitle(c);
+          if (title) opt.title = title;
           sel.appendChild(opt);
         });
         formClientsLoaded = true;

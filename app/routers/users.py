@@ -22,6 +22,7 @@ class UserOut(BaseModel):
     status: str
     client_id: str
     client_name: str
+    client_short_name: str | None = None
     employee_id: str
     employee_name: str
     role_codes: list[str] = Field(default_factory=list)
@@ -66,7 +67,7 @@ def list_users(
 ) -> ListEnvelope:
     """List org-bound accounts across clients — Global Admin dashboard."""
     q = (
-        select(Account, Client.name.label("client_name"), Employee)
+        select(Account, Client.name.label("client_name"), Client.short_name.label("client_short_name"), Employee)
         .join(Employee, Account.employee_id == Employee.id)
         .join(Client, Employee.client_id == Client.id)
     )
@@ -84,7 +85,7 @@ def list_users(
 
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.execute(q.order_by(Account.created_at.desc()).limit(limit).offset(offset)).all()
-    account_ids = [acc.id for acc, _, _ in rows]
+    account_ids = [acc.id for acc, _, _, _ in rows]
     roles_by_account = _role_codes_for_accounts(db, account_ids)
 
     items = [
@@ -94,10 +95,11 @@ def list_users(
             status=acc.status,
             client_id=emp.client_id,
             client_name=client_name or "",
+            client_short_name=(client_short_name or "").strip() or None,
             employee_id=emp.id,
             employee_name=_employee_display_name(emp),
             role_codes=roles_by_account.get(acc.id, []),
         )
-        for acc, client_name, emp in rows
+        for acc, client_name, client_short_name, emp in rows
     ]
     return ListEnvelope(items=items, total=total, limit=limit, offset=offset)

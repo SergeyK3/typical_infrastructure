@@ -535,7 +535,6 @@
       <button class="btn btn-primary" id="btnAddAccount">+ Добавить аккаунт</button>
       <a class="btn btn-secondary" id="exportAccountsXlsx" href="#" style="text-decoration:none;">Скачать Excel</a>
       </div>
-      <p class="meta" style="margin:0.5rem 0 0 0;max-width:48rem;">Журнал учётных записей организации. Управление доступом — здесь; кадровые сведения — в разделе «Сотрудники».</p>
       <div style="overflow-x:auto;margin-top:0.75rem;">
         <table class="ws-table" id="accTable">
           <thead>
@@ -1195,6 +1194,8 @@
   <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script src="/static/shared/psych-testing-ui.js?v=psych-ui-4"></script>
+  <script src="/static/shared/info-banner.js?v=info-banner-1"></script>
+  <script src="/static/shared/client-display.js?v=client-display-1"></script>
   <script>
     const API = '/api';
     let clientId = '';
@@ -1973,7 +1974,8 @@
         currentPath: window.location.pathname,
         currentHash: window.location.hash || '',
         clientId,
-        clientName: selectedClient ? selectedClient.name : '',
+        clientName: selectedClient ? ClientDisplay.compactLabel(selectedClient) : '',
+        clientFullName: selectedClient ? ClientDisplay.fullLabel(selectedClient) : '',
         clientCode: selectedClient ? selectedClient.code : '',
         activeTab: getActiveWorkspaceTab(),
         focusMode: getStoredWorkspaceSidebarFocus(),
@@ -2110,13 +2112,18 @@
       );
       if (requestedClientId && !clientExists) {
         clientId = '';
-        syncWorkspaceSidebarContext({ clientId: '', clientName: '', clientCode: '', fallbackReason: 'stale-client' });
+        syncWorkspaceSidebarContext({ clientId: '', clientName: '', clientFullName: '', clientCode: '', fallbackReason: 'stale-client' });
         document.querySelector('.main-header').innerHTML = '<p class="err">Организация не найдена. <a href="/clients">← К списку клиентов</a></p>';
         return;
       }
       if (resolvedOrganization) clientId = resolvedOrganization.clientId;
       if (!clientId && clientsList.length) clientId = clientsList[0].id;
-      selEl.innerHTML = clientsList.length ? clientsList.map(c => '<option value="' + c.id + '"' + (c.id === clientId ? ' selected' : '') + '>' + c.name + ' (' + c.code + ')' + '</option>').join('') : '<option value="">Нет организаций</option>';
+      selEl.innerHTML = clientsList.length ? clientsList.map(c => {
+        const compact = ClientDisplay.compactLabel(c);
+        const title = ClientDisplay.labelTitle(c);
+        const titleAttr = title ? ' title="' + ClientDisplay.escapeAttr(title) + '"' : '';
+        return '<option value="' + c.id + '"' + (c.id === clientId ? ' selected' : '') + titleAttr + '>' + compact + ' (' + c.code + ')' + '</option>';
+      }).join('') : '<option value="">Нет организаций</option>';
       selEl.onchange = () => { window.location.href = '/client/' + selEl.value; };
       clientId = selEl.value || clientId;
       syncWorkspaceSidebarContext();
@@ -5001,6 +5008,9 @@
 
     // Init
     (async () => {
+      InfoBanner.mountPreset(document.getElementById('panel-accounts'), 'localAdminAccounts', {
+        insertBefore: document.querySelector('#panel-accounts .org-actions'),
+      });
       if (window.AuthContext) await window.AuthContext.load();
       clientId = getClientId();
       await loadClient();

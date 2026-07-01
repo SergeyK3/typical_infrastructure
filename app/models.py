@@ -85,6 +85,7 @@ class Client(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
+    short_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     bin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     template_id: Mapped[str | None] = mapped_column(String(32), nullable=True)

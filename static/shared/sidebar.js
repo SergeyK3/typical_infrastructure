@@ -99,10 +99,16 @@
 
   function clientSnapshot(client) {
     if (!client) return null;
+    var CD = global.ClientDisplay;
+    var displayName = CD ? CD.compactLabel(client) : ((client.short_name || '').trim() || (client.name || client.code || client.id || ''));
+    var fullName = CD ? CD.fullLabel(client) : ((client.name || client.code || client.id || '').trim());
     return {
       id: client.id || '',
       name: client.name || '',
+      short_name: client.short_name || '',
       code: client.code || '',
+      displayName: displayName,
+      fullName: fullName,
     };
   }
 
@@ -152,10 +158,12 @@
         ? source.clientId
         : (state.clientId || urlClientId || '');
       const clientName = hasOwn(source, 'clientName') && source.clientName != null ? source.clientName : (state.clientName || '');
+      const clientFullName = hasOwn(source, 'clientFullName') && source.clientFullName != null ? source.clientFullName : (state.clientFullName || '');
       const clientCode = hasOwn(source, 'clientCode') && source.clientCode != null ? source.clientCode : (state.clientCode || '');
       const organization = {
         clientId: clientId || '',
         name: clientName || '',
+        fullName: clientFullName || clientName || '',
         code: clientCode || '',
       };
       const authMe = (window.AuthContext && window.AuthContext.getMe && window.AuthContext.getMe()) || null;
@@ -170,6 +178,7 @@
         currentHash,
         clientId: clientId || '',
         clientName: clientName || '',
+        clientFullName: clientFullName || clientName || '',
         clientCode: clientCode || '',
         organization,
       }, source);
@@ -179,6 +188,7 @@
         currentHash,
         clientId: clientId || '',
         clientName: clientName || '',
+        clientFullName: clientFullName || clientName || '',
         clientCode: clientCode || '',
         organization,
         activeTab,
@@ -240,7 +250,8 @@
         currentPath: opts.currentPath,
         currentHash: opts.currentHash,
         clientId: snapshot ? snapshot.id : '',
-        clientName: snapshot ? snapshot.name : '',
+        clientName: snapshot ? snapshot.displayName : '',
+        clientFullName: snapshot ? snapshot.fullName : '',
         clientCode: snapshot ? snapshot.code : '',
         activeTab: opts.activeTab,
         focusMode: opts.focusMode,
@@ -400,7 +411,10 @@
 
     const name = document.createElement('div');
     name.className = 'sidebar-organization-name';
-    name.textContent = ctx.clientName || (ctx.clientId ? ctx.clientId : 'Не выбрана');
+    const displayName = ctx.clientName || (ctx.clientId ? ctx.clientId : 'Не выбрана');
+    name.textContent = displayName;
+    const fullName = (ctx.clientFullName || ctx.organization && ctx.organization.fullName || '').trim();
+    if (fullName && fullName !== displayName) name.title = fullName;
     card.appendChild(name);
 
     const meta = document.createElement('div');

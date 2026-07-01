@@ -8,6 +8,8 @@
   <title>Учётные записи — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
+  <script src="/static/shared/info-banner.js?v=info-banner-1"></script>
+  <script src="/static/shared/client-display.js?v=client-display-1"></script>
   <style>
     .btn-danger { background: rgba(248,81,73,0.2); color: var(--error); }
     label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
@@ -286,7 +288,7 @@
 
       clientSel.innerHTML = '<option value="">— все —</option>' +
         clientsCache.map(function (c) {
-          return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name || c.code || c.id) + '</option>';
+          return '<option value="' + escapeHtml(c.id) + '"' + ClientDisplay.titleAttr(c) + '>' + escapeHtml(ClientDisplay.compactLabel(c)) + '</option>';
         }).join('');
 
       roleSel.innerHTML = '<option value="">— все —</option>' +
@@ -323,10 +325,13 @@
             const empCell = eid
               ? '<a href="' + escapeHtml(empHref) + '" title="' + escapeHtml(eid) + '">' + escapeHtml(u.employee_name || '—') + '</a>'
               : escapeHtml(u.employee_name || '—');
+            const orgCompact = ClientDisplay.compactLabelFromUserRow(u);
+            const orgTitle = ClientDisplay.labelTitleFromUserRow(u);
+            const orgTitleAttr = orgTitle ? ' title="' + escapeHtml(orgTitle) + '"' : '';
             return '<tr>'
               + '<td class="td-ellipsis">' + escapeHtml(u.login || '—') + '</td>'
               + '<td class="td-ellipsis">' + empCell + '</td>'
-              + '<td class="td-ellipsis"><a href="/client/' + escapeHtml(cid) + '">' + escapeHtml(u.client_name || '—') + '</a></td>'
+              + '<td class="td-ellipsis"><a href="/client/' + escapeHtml(cid) + '"' + orgTitleAttr + '>' + escapeHtml(orgCompact || '—') + '</a></td>'
               + '<td class="td-ellipsis">' + escapeHtml(roleLabels(u.role_codes)) + '</td>'
               + '<td>' + escapeHtml(u.status || '—') + '</td>'
               + '<td class="row-actions">'
@@ -439,6 +444,9 @@
 
     async function initPage() {
       normalizePresetUrl();
+      InfoBanner.mountPreset(document.querySelector('.content'), 'globalAdminAccounts', {
+        insertBefore: document.querySelector('.content').firstElementChild,
+      });
       await loadRoles();
       const data = await api('GET', '/clients?limit=500&offset=0');
       clientsCache = data.items || [];

@@ -23,6 +23,7 @@ class ListEnvelope(BaseModel, Generic[T]):
 class ClientBase(BaseModel):
     code: str
     name: str
+    short_name: str | None = None
     bin: str | None = None
     status: str = Field(min_length=1)
     template_id: str | None = None
@@ -36,6 +37,7 @@ class ClientCreate(ClientBase):
 class ClientPatch(BaseModel):
     code: str | None = None
     name: str | None = None
+    short_name: str | None = None
     bin: str | None = None
     status: str | None = None
     template_id: str | None = None

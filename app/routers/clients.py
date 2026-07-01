@@ -86,6 +86,7 @@ def create_client(
         id=payload.id or new_id32(),
         code=payload.code,
         name=payload.name,
+        short_name=(payload.short_name or "").strip() or None,
         bin=payload.bin,
         status=payload.status,
         template_id=template_id,
@@ -110,6 +111,9 @@ def patch_client(
     template_code = data.pop("template_code", None)
     if template_code is not None:
         data["template_id"] = _resolve_template_id(db, template_code)
+    if "short_name" in data:
+        raw = data["short_name"]
+        data["short_name"] = (raw or "").strip() or None if raw is not None else None
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()

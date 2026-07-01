@@ -108,6 +108,9 @@
       <input type="text" id="editCode" maxlength="64" />
       <label>Название</label>
       <input type="text" id="editName" maxlength="256" />
+      <label>Краткое название</label>
+      <input type="text" id="editShortName" maxlength="64" placeholder="Например: ММЦ" />
+      <p class="modal-hint">Используется в таблицах и компактных списках. Если не заполнено, отображается полное название.</p>
       <label>БИН</label>
       <input type="text" id="editBin" maxlength="32" />
       <label>Статус</label>
@@ -123,8 +126,38 @@
   </div>
 
   <script src="/static/shared/global-template-context.js"></script>
+  <script src="/static/shared/client-display.js?v=client-display-1"></script>
   <script>
     const API = '/api';
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+    function renderClientCard(c) {
+      const compact = ClientDisplay.compactLabel(c);
+      const full = ClientDisplay.fullLabel(c);
+      const title = ClientDisplay.labelTitle(c);
+      const fullLine = title
+        ? '<div class="meta" style="margin-top:0.25rem;">' + escapeHtml(full) + '</div>'
+        : '';
+      return `
+          <div class="card" data-id="${escapeHtml(c.id)}">
+            <div class="card-body">
+              <a href="/client/${escapeHtml(c.id)}" target="_blank" rel="noopener noreferrer">
+                <h3${ClientDisplay.titleAttr(c)}>${escapeHtml(compact)}</h3>
+                ${fullLine}
+                <div class="meta">Код: ${escapeHtml(c.code)} · Статус: ${escapeHtml(c.status || 'active')}${c.template_code ? ' · Инфраструктура: ' + escapeHtml(c.template_code) : ''} · Войти в организацию →</div>
+              </a>
+            </div>
+            <div class="card-actions">
+              <button type="button" class="btn btn-secondary btn-apply-template" data-id="${escapeHtml(c.id)}">Применить шаблон</button>
+              <button type="button" class="btn btn-secondary btn-edit" data-id="${escapeHtml(c.id)}">Изменить</button>
+              <button type="button" class="btn btn-danger btn-delete" data-id="${escapeHtml(c.id)}">Удалить</button>
+            </div>
+          </div>`;
+    }
     async function fetchApi(path, opts = {}) {
       const r = await fetch(API + path, {
         method: opts.method || 'GET',
@@ -153,21 +186,7 @@
             </div>`;
           return;
         }
-        list.innerHTML = items.map(c => `
-          <div class="card" data-id="${c.id}">
-            <div class="card-body">
-              <a href="/client/${c.id}" target="_blank" rel="noopener noreferrer">
-                <h3>${c.name}</h3>
-                <div class="meta">Код: ${c.code} · Статус: ${c.status || 'active'}${c.template_code ? ' · Инфраструктура: ' + c.template_code : ''} · Войти в организацию →</div>
-              </a>
-            </div>
-            <div class="card-actions">
-              <button type="button" class="btn btn-secondary btn-apply-template" data-id="${c.id}">Применить шаблон</button>
-              <button type="button" class="btn btn-secondary btn-edit" data-id="${c.id}">Изменить</button>
-              <button type="button" class="btn btn-danger btn-delete" data-id="${c.id}">Удалить</button>
-            </div>
-          </div>
-        `).join('');
+        list.innerHTML = items.map(c => renderClientCard(c)).join('');
         list.querySelectorAll('.btn-apply-template').forEach(btn => {
           btn.addEventListener('click', (e) => { e.stopPropagation(); openApplyTemplateModal(btn.dataset.id); });
         });
@@ -186,6 +205,7 @@
         document.getElementById('editClientId').value = c.id;
         document.getElementById('editCode').value = c.code || '';
         document.getElementById('editName').value = c.name || '';
+        document.getElementById('editShortName').value = c.short_name || '';
         document.getElementById('editBin').value = c.bin || '';
         document.getElementById('editStatus').value = c.status || 'active';
         document.getElementById('editModal').classList.add('show');
@@ -199,6 +219,7 @@
       const payload = {
         code: document.getElementById('editCode').value.trim(),
         name: document.getElementById('editName').value.trim(),
+        short_name: document.getElementById('editShortName').value.trim() || null,
         bin: document.getElementById('editBin').value.trim() || null,
         status: document.getElementById('editStatus').value,
       };
