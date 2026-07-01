@@ -315,11 +315,27 @@
     return true;
   }
 
+  function normalizePath(pathValue) {
+    const raw = String(pathValue || '').trim();
+    if (!raw || raw === '#') return '';
+    if (raw.startsWith('/')) {
+      const path = raw.split('?')[0].replace(/\/+$/, '');
+      return path || '/';
+    }
+    try {
+      const path = new URL(raw, window.location.origin).pathname.replace(/\/+$/, '');
+      return path || '/';
+    } catch (_) {
+      return raw.split('?')[0];
+    }
+  }
+
   function isItemActive(item, ctx) {
     if (typeof item.isActive === 'function') return item.isActive(ctx);
     if (item.tab) return item.tab === ctx.activeTab;
-    if (!item.href || typeof item.href === 'function') return false;
-    return ctx.currentPath === item.href;
+    const href = resolveHref(item, ctx);
+    if (!href || href === '#') return false;
+    return normalizePath(href) === normalizePath(ctx.currentPath);
   }
 
   function createItem(item, ctx) {
@@ -484,6 +500,56 @@
     return nextState;
   }
 
+  function renderPlatformSidebar(options) {
+    const opts = options || {};
+    const root = document.getElementById(opts.rootId || 'platformSidebar');
+    if (!root) return null;
+    const reg = registry();
+    const ctx = buildContext({
+      currentPath: opts.currentPath || window.location.pathname,
+      isGlobalAdmin: opts.isGlobalAdmin,
+    });
+    const groups = reg.groups || [];
+    const platformItems = (reg.platformNavigation || []).filter(function (item) {
+      return item.groupId === 'platform';
+    });
+    const catalogItems = (reg.platformNavigation || []).filter(function (item) {
+      return item.groupId === 'globalCatalogs';
+    });
+
+    root.innerHTML = '';
+    root.classList.add('sidebar');
+
+    const top = document.createElement('div');
+    top.className = 'sidebar-top';
+
+    const brand = document.createElement('div');
+    brand.className = 'sidebar-brand';
+    brand.textContent = groupById(groups, 'platform').label || 'Typical Infrastructure';
+    top.appendChild(brand);
+
+    renderItems(top, platformItems, ctx);
+    top.appendChild(createSectionLabel(groupById(groups, 'globalCatalogs').label || 'Глобальные справочники'));
+    renderItems(top, catalogItems, ctx);
+    root.appendChild(top);
+
+    if (opts.bottomHintHtml) {
+      const bottom = document.createElement('div');
+      bottom.className = 'sidebar-bottom';
+      bottom.appendChild(createSectionLabel('Справочники организации'));
+      const hint = document.createElement('div');
+      hint.className = 'sidebar-muted';
+      hint.style.fontSize = '0.78rem';
+      hint.style.lineHeight = '1.35';
+      hint.innerHTML = opts.bottomHintHtml;
+      bottom.appendChild(hint);
+      root.appendChild(bottom);
+    }
+
+    if (window.UiTheme) window.UiTheme.mountToggle(root);
+    return ctx;
+  }
+
   function renderWorkspaceSidebar(options) {
     const opts = options || {};
     const root = document.getElementById(opts.rootId || 'workspaceSidebar');
@@ -597,6 +663,7 @@
       return SidebarContext.getStoredFocus(options);
     },
     applyWorkspaceSidebarFocus,
+    renderPlatformSidebar,
     renderWorkspaceSidebar,
   };
 })();

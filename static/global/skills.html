@@ -50,26 +50,12 @@
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar">
-      <div class="sidebar-top">
-        <div class="sidebar-brand">Typical Infrastructure</div>
-        <a href="/clients" class="sidebar-item">Клиенты</a>
-        <a href="/users" class="sidebar-item">Пользователи</a>
-        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
-        <div class="sidebar-section-label">Глобальные справочники</div>
-        <a href="/global" class="sidebar-item">Обзор</a>
-        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
-        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/regulations" class="sidebar-item">Типовые регламенты</a>
-        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
-        <a href="/global/skills" class="sidebar-item active">Типовые навыки</a>
-        <a href="/docs" class="sidebar-item api-link">API</a>
-      </div>
-      <div class="sidebar-bottom">
-        <div class="sidebar-section-label">Справочники организации</div>
-        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Навыки используются как типовая матрица для должностей и дальнейшей оценки сотрудников.</div>
-      </div>
-    </aside>
+    <aside class="sidebar" id="platformSidebar"></aside>
+    <script>window.__platformSidebarOptions = { bottomHintHtml: 'Навыки используются как типовая матрица для должностей и дальнейшей оценки сотрудников.' };</script>
+    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
+    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260701"></script>
     <main class="main">
       <div class="main-header">
         <h1>Типовые навыки</h1>

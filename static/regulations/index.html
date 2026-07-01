@@ -138,26 +138,12 @@
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar">
-      <div class="sidebar-top">
-        <div class="sidebar-brand">Typical Infrastructure</div>
-        <a href="/clients" class="sidebar-item">Клиенты</a>
-        <a href="/users" class="sidebar-item">Пользователи</a>
-        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
-        <div class="sidebar-section-label">Глобальные справочники</div>
-        <a href="/global" class="sidebar-item">Обзор</a>
-        <a href="/global/template-org" class="sidebar-item">Типовая оргструктура</a>
-        <a href="/global/positions" class="sidebar-item">Типовые должности</a>
-        <a href="/regulations" class="sidebar-item active">Типовые регламенты</a>
-        <a href="/global/kpi" class="sidebar-item">Типовые KPI</a>
-        <a href="/global/skills" class="sidebar-item">Типовые навыки</a>
-        <a href="/docs" class="sidebar-item api-link">API</a>
-      </div>
-        <div class="sidebar-bottom">
-        <div class="sidebar-section-label">Справочники организации</div>
-        <div class="sidebar-muted" style="font-size:0.78rem;line-height:1.35;">Регламенты и KPI конкретной организации — в <a href="/clients">рабочем пространстве</a> (вкладка «Регламенты и KPI»).</div>
-      </div>
-    </aside>
+    <aside class="sidebar" id="platformSidebar"></aside>
+    <script>window.__platformSidebarOptions = { bottomHintHtml: 'Регламенты и KPI конкретной организации — в <a href="/clients">рабочем пространстве</a> (вкладка «Регламенты и KPI»).' };</script>
+    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
+    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260701"></script>
     <main class="main">
       <div id="fromOrgBanner" class="hidden" style="margin: 0 1.5rem; padding: 0.75rem 1rem; background: rgba(124,58,237,0.15); border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;">
         <div>

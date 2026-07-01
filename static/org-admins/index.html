@@ -20,15 +20,12 @@
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar">
-      <div class="sidebar-top">
-        <div class="sidebar-brand">Typical Infrastructure</div>
-        <a href="/clients" class="sidebar-item">Клиенты</a>
-        <a href="/org-admins" class="sidebar-item active">Админы организаций</a>
-        <a href="/users" class="sidebar-item">Пользователи</a>
-        <a href="/wizard" class="sidebar-item">Мастер onboarding</a>
-      </div>
-    </aside>
+    <aside class="sidebar" id="platformSidebar"></aside>
+    <script>window.__platformSidebarOptions = {};</script>
+    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
+    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260701"></script>
     <main class="main">
       <div class="main-header">
         <h1>Админы организаций</h1>
