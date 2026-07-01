@@ -1010,7 +1010,15 @@
     <div class="modal-content">
       <h3>Добавить аккаунт</h3>
       <div class="err hidden" id="modalAccountErr"></div>
-      <label>Сотрудник</label>
+      <label for="accPickNameSearch">Поиск по ФИО</label>
+      <input type="search" id="accPickNameSearch" placeholder="Фамилия, имя…" autocomplete="off">
+      <label for="accPickLogGroup">Группа отделений</label>
+      <select id="accPickLogGroup"></select>
+      <label for="accPickOrgUnit">Отделение</label>
+      <select id="accPickOrgUnit"></select>
+      <label for="accPickPosition">Должность</label>
+      <select id="accPickPosition"></select>
+      <label for="accEmployee">Сотрудник</label>
       <select id="accEmployee"></select>
       <label>Логин</label>
       <input type="text" id="accLogin" placeholder="ivanov">
@@ -1195,6 +1203,7 @@
   <script src="/static/shared/org-unit-picker.js?v=oup-3"></script>
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script src="/static/shared/psych-testing-ui.js?v=psych-ui-4"></script>
+  <script src="/static/shared/account-employee-picker.js?v=account-employee-picker-1"></script>
   <script src="/static/shared/info-banner.js?v=info-banner-1"></script>
   <script>
     const API = '/api';
@@ -4418,6 +4427,151 @@
     }
 
     // Accounts
+    let accPickerFilterState = {
+      logGroup: '',
+      orgUnitId: '',
+      positionId: '',
+      nameQuery: '',
+    };
+
+    function accPickerDomState() {
+      return {
+        logGroup: document.getElementById('accPickLogGroup') ? document.getElementById('accPickLogGroup').value : accPickerFilterState.logGroup,
+        orgUnitId: document.getElementById('accPickOrgUnit') ? document.getElementById('accPickOrgUnit').value : '',
+        positionId: document.getElementById('accPickPosition') ? document.getElementById('accPickPosition').value : '',
+        nameQuery: document.getElementById('accPickNameSearch') ? document.getElementById('accPickNameSearch').value.trim() : '',
+        employeeId: document.getElementById('accEmployee') ? document.getElementById('accEmployee').value : '',
+      };
+    }
+
+    function resetAccAccountPickerFilters() {
+      accPickerFilterState = { logGroup: '', orgUnitId: '', positionId: '', nameQuery: '' };
+      const nameEl = document.getElementById('accPickNameSearch');
+      if (nameEl) nameEl.value = '';
+    }
+
+    function renderAccAccountEmployeePicker() {
+      if (!window.AccountEmployeePicker || !window.PsychTestingUi) return;
+      const AEP = AccountEmployeePicker;
+      const PT = PsychTestingUi;
+      const lgSel = document.getElementById('accPickLogGroup');
+      const ouSel = document.getElementById('accPickOrgUnit');
+      const posSel = document.getElementById('accPickPosition');
+      const empSel = document.getElementById('accEmployee');
+      if (!lgSel || !ouSel || !posSel || !empSel) return;
+
+      const st = accPickerDomState();
+      const resolved = AEP.resolvePicker(st, {
+        orgUnits: orgUnits,
+        positions: positionsCache,
+        employees: employeesAllCache,
+      }, PT);
+
+      if (
+        resolved.logGroups.length === 1 &&
+        resolved.logGroups[0].value === PT.LOG_GROUP_ALL
+      ) {
+        lgSel.innerHTML =
+          '<option value="' + PT.LOG_GROUP_ALL + '">' +
+          escapeHtml(PT.LABEL_LOG_GROUP_ALL) + '</option>';
+        lgSel.value = PT.LOG_GROUP_ALL;
+      } else {
+        const lgPlaceholder = escapeHtml(AEP.PLACEHOLDER_LOG_GROUP);
+        const lgOpts = PT.buildSelectOptions(
+          resolved.logGroups.map(function (g) {
+            return { value: g.value, label: escapeHtml(g.label) };
+          }),
+          lgPlaceholder,
+          null
+        );
+        lgSel.innerHTML = lgOpts.html;
+        lgSel.value = resolved.resolvedLogGroup || '';
+      }
+
+      const deptItems = resolved.departments.map(function (u) {
+        return { value: u.id, label: escapeHtml(u.name || u.code || u.id) };
+      });
+      const deptEmpty =
+        st.logGroup && !PT.isAllLogGroup(st.logGroup)
+          ? escapeHtml('Нет отделений для выбранной группы')
+          : null;
+      ouSel.innerHTML = PT.buildSelectOptions(deptItems, escapeHtml(AEP.PLACEHOLDER_DEPARTMENT), deptEmpty).html;
+      if (st.orgUnitId && resolved.departments.some(function (u) { return u.id === st.orgUnitId; })) {
+        ouSel.value = st.orgUnitId;
+      } else {
+        ouSel.value = '';
+      }
+
+      const posItems = resolved.positions.map(function (p) {
+        return { value: p.id, label: escapeHtml((p.code || '') + (p.name ? ' — ' + p.name : '')) };
+      });
+      const posEmpty = st.orgUnitId ? escapeHtml('Нет должностей для выбранного отделения') : null;
+      posSel.innerHTML = PT.buildSelectOptions(posItems, escapeHtml(AEP.PLACEHOLDER_POSITION), posEmpty).html;
+      if (st.positionId && resolved.positions.some(function (p) { return p.id === st.positionId; })) {
+        posSel.value = st.positionId;
+      } else {
+        posSel.value = '';
+      }
+
+      const empItems = resolved.employees.map(function (e) {
+        return { value: e.id, label: escapeHtml(AEP.formatEmployeeOptionLabel(e)) };
+      });
+      const empEmpty = AEP.employeeEmptyMessage(resolved, PT);
+      empSel.innerHTML = PT.buildSelectOptions(
+        empItems,
+        escapeHtml(AEP.PLACEHOLDER_EMPLOYEE),
+        empEmpty ? escapeHtml(empEmpty) : null
+      ).html;
+      empSel.value = resolved.employeeId || '';
+
+      accPickerFilterState = {
+        logGroup: lgSel.value,
+        orgUnitId: ouSel.value,
+        positionId: posSel.value,
+        nameQuery: st.nameQuery,
+      };
+    }
+
+    function wireAccAccountPickerFilters() {
+      const lgSel = document.getElementById('accPickLogGroup');
+      const ouSel = document.getElementById('accPickOrgUnit');
+      const posSel = document.getElementById('accPickPosition');
+      const nameEl = document.getElementById('accPickNameSearch');
+      if (!lgSel || lgSel.dataset.accPickerWired) return;
+      lgSel.dataset.accPickerWired = '1';
+
+      lgSel.onchange = function () {
+        accPickerFilterState = AccountEmployeePicker.resetOnChange('logGroup', Object.assign({}, accPickerDomState(), {
+          logGroup: lgSel.value,
+        }));
+        renderAccAccountEmployeePicker();
+      };
+      ouSel.onchange = function () {
+        accPickerFilterState = AccountEmployeePicker.resetOnChange('orgUnitId', Object.assign({}, accPickerDomState(), {
+          logGroup: lgSel.value,
+          orgUnitId: ouSel.value,
+        }));
+        renderAccAccountEmployeePicker();
+      };
+      posSel.onchange = function () {
+        accPickerFilterState = AccountEmployeePicker.resetOnChange('positionId', Object.assign({}, accPickerDomState(), {
+          logGroup: lgSel.value,
+          orgUnitId: ouSel.value,
+          positionId: posSel.value,
+        }));
+        renderAccAccountEmployeePicker();
+      };
+      if (nameEl) {
+        let nameTimer = null;
+        nameEl.addEventListener('input', function () {
+          clearTimeout(nameTimer);
+          nameTimer = setTimeout(function () {
+            renderAccAccountEmployeePicker();
+          }, 200);
+        });
+      }
+    }
+
     async function loadEmployeesForSelect() {
       try {
         const data = await fetchApi('/employees?client_id=' + encodeURIComponent(clientId) + '&limit=2000');
@@ -4480,12 +4634,11 @@
 
     document.getElementById('btnAddAccount').onclick = async () => {
       await loadEmployeesForSelect();
-      const empSel = document.getElementById('accEmployee');
-      empSel.innerHTML = employeesAllCache.map(e => {
-        const name = [e.last_name, e.first_name].filter(Boolean).join(' ');
-        return '<option value="' + e.id + '">' + name + (e.email ? ' (' + e.email + ')' : '') + '</option>';
-      }).join('');
-      if (!employeesAllCache.length) empSel.innerHTML = '<option value="">Нет сотрудников</option>';
+      if (!orgUnits.length) await loadOrgTree();
+      if (!positionsCache.length) await loadPositionsForSelect();
+      resetAccAccountPickerFilters();
+      wireAccAccountPickerFilters();
+      renderAccAccountEmployeePicker();
       const rolesEl = document.getElementById('accRoles');
       rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"> ' + r.name + '</label>').join('');
       document.getElementById('accLogin').value = '';
