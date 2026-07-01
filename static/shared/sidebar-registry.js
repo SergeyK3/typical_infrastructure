@@ -28,10 +28,24 @@
     { id: 'hrPluginModules', label: 'HR-МОДУЛИ', level: 'module', order: 50 },
   ];
 
+  // Canonical platform route for accounts: /users («Учётные записи»).
+  // Legacy /org-admins is a compatibility redirect to /users?preset=org-admins (Stage 2C).
   const platformNavigation = [
     { id: 'platform.clients', label: 'Клиенты', level: 'platform', groupId: 'platform', href: '/clients', order: 10, requiresGlobalAdmin: true },
-    { id: 'platform.orgAdmins', label: 'Админы организаций', level: 'platform', groupId: 'platform', href: '/org-admins', order: 15, requiresGlobalAdmin: true },
-    { id: 'platform.users', label: 'Пользователи', level: 'platform', groupId: 'platform', href: '/users', order: 20, requiresGlobalAdmin: true },
+    {
+      id: 'platform.users',
+      label: 'Учётные записи',
+      level: 'platform',
+      groupId: 'platform',
+      href: '/users',
+      order: 20,
+      requiresGlobalAdmin: true,
+      // Active for /users and /users?preset=org-admins (pathname only; preset is not a separate nav item).
+      isActive: function (ctx) {
+        var path = String((ctx && ctx.currentPath) || '').split('?')[0].replace(/\/+$/, '');
+        return (path || '/') === '/users';
+      },
+    },
     { id: 'platform.onboarding', label: 'Мастер onboarding', level: 'platform', groupId: 'platform', href: '/wizard', order: 30, requiresGlobalAdmin: true },
     { id: 'globalCatalogs.overview', label: 'Обзор', level: 'platform', groupId: 'globalCatalogs', href: '/global', order: 10, requiresGlobalAdmin: true },
     { id: 'globalCatalogs.templateOrg', label: 'Типовая оргструктура', level: 'platform', groupId: 'globalCatalogs', href: '/global/template-org', order: 20, requiresGlobalAdmin: true },

@@ -3,6 +3,7 @@ r"""D:\MyActivity\MyInfoBusiness\MyPythonApps\10 Typical_infrastructure\app\main
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from app.auth.deps import get_optional_account
@@ -29,6 +30,7 @@ from app.seed import (
     seed_template_org_units,
     seed_template_segment_codes,
 )
+from app.system_admin import bootstrap_system_admin_if_configured
 from app.universal_seed import (
     apply_regulation_enrichment_json,
     link_regulation_kpis_from_templates,
@@ -79,8 +81,11 @@ _HTML_NO_CACHE = {
 }
 
 
-def _html_file_response(path: Path) -> FileResponse:
-    return FileResponse(path, media_type="text/html; charset=utf-8", headers=_HTML_NO_CACHE)
+def _html_file_response(path: Path, *, platform_page: str | None = None) -> FileResponse:
+    headers = dict(_HTML_NO_CACHE)
+    if platform_page:
+        headers["X-Platform-Page"] = platform_page
+    return FileResponse(path, media_type="text/html; charset=utf-8", headers=headers)
 
 _MSG_MAP = {
     "Field required": "Поле обязательно для заполнения",
@@ -164,6 +169,7 @@ def _global_admin_page(
     html_path: Path,
     not_found_detail: str,
     login_next: str,
+    platform_page: str | None = None,
 ) -> Response:
     ctx = get_optional_account(request, db)
     if ctx is None:
@@ -174,7 +180,7 @@ def _global_admin_page(
         raise HTTPException(status_code=403, detail="global_admin_required")
     if not html_path.exists():
         raise HTTPException(status_code=404, detail=not_found_detail)
-    return _html_file_response(html_path)
+    return _html_file_response(html_path, platform_page=platform_page)
 
 
 @app.get("/wizard")
@@ -208,6 +214,7 @@ def client_workspace_page(
 
 
 @app.get("/users")
+@app.get("/users/")
 def users_page(request: Request, db: Session = Depends(get_db)) -> Response:
     """System users — accounts with access across all clients."""
     return _global_admin_page(
@@ -216,19 +223,24 @@ def users_page(request: Request, db: Session = Depends(get_db)) -> Response:
         html_path=static_dir / "users" / "index.html",
         not_found_detail="users_page_not_found",
         login_next="/users",
+        platform_page="users",
     )
 
 
 @app.get("/org-admins")
 def org_admins_page(request: Request, db: Session = Depends(get_db)) -> Response:
-    """Organization administrators — managed by global admin."""
-    return _global_admin_page(
-        request,
-        db,
-        html_path=static_dir / "org-admins" / "index.html",
-        not_found_detail="org_admins_page_not_found",
-        login_next="/org-admins",
-    )
+    """Compatibility route: redirect to canonical /users with org-admins preset (Stage 2C)."""
+    ctx = get_optional_account(request, db)
+    if ctx is None:
+        return RedirectResponse(url="/login?next=/org-admins", status_code=302)
+    if not ctx.is_global_admin:
+        if ctx.client_id:
+            return RedirectResponse(url=f"/client/{ctx.client_id}", status_code=302)
+        raise HTTPException(status_code=403, detail="global_admin_required")
+    params = dict(request.query_params)
+    params["preset"] = "org-admins"
+    params.pop("role_code", None)
+    return RedirectResponse(url=f"/users?{urlencode(params, doseq=True)}", status_code=302)
 
 
 @app.get("/regulations", include_in_schema=False)
@@ -329,6 +341,7 @@ def _startup() -> None:
     db = SessionLocal()
     try:
         seed_roles(db)
+        bootstrap_system_admin_if_configured(db)
         seed_enterprise_templates(db)
         seed_position_catalog(db)
         seed_kpi_templates(db)

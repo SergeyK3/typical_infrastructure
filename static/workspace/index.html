@@ -241,6 +241,7 @@
   </style>
 </head>
 <body>
+  <script src="/static/shared/workspace-route-guard.js?v=platform-sidebar-20260703"></script>
   <div id="workspaceToastHost" class="workspace-toast-host" aria-live="polite"></div>
   <div class="app-layout">
     <aside class="sidebar workspace-sidebar" id="workspaceSidebar"></aside>
@@ -1185,9 +1186,9 @@
     </div>
   </div>
 
-  <script src="/static/shared/sidebar-registry.js?v=hr-modules-sidebar-20260520"></script>
+  <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260703"></script>
   <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
-  <script src="/static/shared/sidebar.js?v=hr-modules-sidebar-20260520"></script>
+  <script src="/static/shared/sidebar.js?v=platform-sidebar-20260703"></script>
   <script src="/static/shared/catalog-row-actions.js?v=cra-2"></script>
   <script src="/static/shared/catalog-position-search.js?v=cps-1"></script>
   <script src="/static/shared/filter-combobox.js?v=fcb-1"></script>
@@ -1195,15 +1196,6 @@
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script src="/static/shared/psych-testing-ui.js?v=psych-ui-4"></script>
   <script>
-    (async function bootstrapWorkspaceSidebar() {
-      if (window.AuthContext) await window.AuthContext.load();
-      if (window.SidebarRenderer) {
-        window.SidebarRenderer.renderWorkspaceSidebar({
-          activeTab: workspaceTabFromHash(location.hash),
-        });
-      }
-    })();
-
     const API = '/api';
     let clientId = '';
     let orgUnits = [];
@@ -2002,6 +1994,14 @@
       }
     }
 
+    function isPlatformNavLink(el) {
+      if (!el) return false;
+      if (el.dataset.platformNav === '1') return true;
+      var href = el.getAttribute('href') || '';
+      if (!href || href === '#') return false;
+      return /^\/(?:users|clients|org-admins|wizard|global|regulations)(?:\/|$)/.test(href.split('?')[0].split('#')[0]);
+    }
+
     function bindWorkspaceSidebarInteractions() {
       document.querySelectorAll('[data-sidebar-section-toggle]').forEach(btn => {
         btn.onclick = (e) => {
@@ -2013,6 +2013,7 @@
       });
       document.querySelectorAll('.sidebar-item[data-tab]').forEach(t => {
         t.onclick = (e) => {
+          if (isPlatformNavLink(t)) return;
           e.preventDefault();
           activateWorkspaceTab(t.dataset.tab);
         };
@@ -2072,8 +2073,6 @@
       else if (tab === 'accounts') loadAccounts();
       else if (tab === 'psych-testing') loadPsychTesting();
     }
-
-    bindWorkspaceSidebarInteractions();
 
     document.getElementById('btnHeaderClientRegs').onclick = () => {
       if (!clientId) {

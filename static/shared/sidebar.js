@@ -344,11 +344,15 @@
     if (item.elementId) a.id = item.elementId;
     if (item.id) a.dataset.navId = item.id;
     if (item.title) a.title = item.title;
+    const href = resolveHref(item, ctx);
     if (item.tab) {
-      a.href = resolveHref(item, ctx);
+      a.href = href;
       a.dataset.tab = item.tab;
     } else {
-      a.href = resolveHref(item, ctx);
+      a.href = href;
+    }
+    if (href && href !== '#' && normalizePath(href).match(/^\/(?:users|clients|org-admins|wizard|global|regulations)(?:\/|$)/)) {
+      a.dataset.platformNav = '1';
     }
     if (isItemActive(item, ctx)) a.classList.add('active');
     a.textContent = item.label;

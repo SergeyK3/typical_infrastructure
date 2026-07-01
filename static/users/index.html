@@ -1,10 +1,11 @@
-<!-- route: /users | file: static/users/index.html -->
+<!-- route: /users (canonical) | file: static/users/index.html -->
+<!-- Legacy /org-admins → 302 /users?preset=org-admins (Stage 2C compatibility). -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Пользователи — Typical Infrastructure</title>
+  <title>Учётные записи — Typical Infrastructure</title>
   <link rel="stylesheet" href="/static/shared/layout.css">
   <script src="/static/shared/theme.js?v=ui-theme-20260522"></script>
   <style>
@@ -24,56 +25,95 @@
     .checkbox-group input[type=checkbox] { width: auto; max-width: none; margin: 0; }
     .hidden { display: none !important; }
     .main-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .users-section { margin-bottom: 1.75rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    .users-section:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .users-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .users-section h2 { margin: 0; font-size: 1.15rem; }
+    .users-section-desc { margin: 0.35rem 0 0; font-size: 0.9rem; color: var(--text-muted); line-height: 1.45; max-width: 42rem; }
+    .users-section-placeholder { margin: 0; font-size: 0.85rem; }
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+    .filter-bar label { margin: 0; font-size: 0.82rem; }
+    .filter-bar select { margin-top: 0.25rem; min-width: 180px; max-width: 240px; width: auto; }
+    .filter-bar .filter-field { flex: 0 1 auto; }
+    .preset-banner { margin-bottom: 1rem; padding: 0.65rem 0.85rem; background: rgba(124,58,237,0.12); border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; line-height: 1.4; }
+    .modal-note { margin: 0 0 1rem; font-size: 0.9rem; line-height: 1.45; color: var(--text-muted); }
+    .modal-followup { margin: 0 0 1rem; font-size: 0.82rem; line-height: 1.4; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .td-ellipsis { max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
-<body>
+<body data-platform-page="users">
+  <script src="/static/shared/platform-page-guard.js?v=platform-sidebar-20260703"></script>
   <div class="app-layout">
     <aside class="sidebar" id="platformSidebar"></aside>
     <script>window.__platformSidebarOptions = { bottomHintHtml: 'Выберите организацию на странице «Клиенты»' };</script>
-    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/sidebar-registry.js?v=platform-sidebar-20260703"></script>
     <script src="/static/shared/auth-context.js?v=admin-roles-1"></script>
-    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260701"></script>
-    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260701"></script>
+    <script src="/static/shared/sidebar.js?v=platform-sidebar-20260703"></script>
+    <script src="/static/shared/platform-sidebar-init.js?v=platform-sidebar-20260703"></script>
     <main class="main">
       <div class="main-header">
-        <div class="main-header-row">
-          <div>
-            <h1>Пользователи</h1>
-            <p class="subtitle">Уполномоченные работники клиентов с доступом к системе</p>
-          </div>
-          <button type="button" class="btn btn-primary" id="btnCreateUser">Создать</button>
+        <div>
+          <h1>Учётные записи</h1>
+          <p class="subtitle">Платформенные и организационные учётные записи с доступом к системе.</p>
         </div>
       </div>
       <div class="content">
+        <section id="platformAccountsSection" class="users-section" aria-labelledby="platformAccountsHeading">
+          <div class="users-section-header">
+            <div>
+              <h2 id="platformAccountsHeading">Платформенные аккаунты</h2>
+              <p class="users-section-desc">Платформенные аккаунты используются для администрирования платформы. Они предназначены для назначения Global Admin, передачи полномочий преемнику, делегирования административного доступа и аварийного восстановления доступа.</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnCreatePlatformAccount">Создать платформенный аккаунт</button>
+          </div>
+          <p class="users-section-placeholder meta">Раздел находится в разработке. Управление платформенными аккаунтами станет доступно после реализации Platform Account Lifecycle.</p>
+        </section>
+
+        <section id="orgAccountsSection" class="users-section" aria-labelledby="orgAccountsHeading">
+          <h2 id="orgAccountsHeading">Учётные записи организаций</h2>
+          <div id="presetBanner" class="preset-banner hidden"></div>
+          <div class="filter-bar">
+          <div class="filter-field">
+            <label for="filterClient">Организация</label>
+            <select id="filterClient"><option value="">— все —</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="filterRole">Роль</label>
+            <select id="filterRole"><option value="">— все —</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="filterStatus">Статус</label>
+            <select id="filterStatus">
+              <option value="">— все —</option>
+              <option value="active">active</option>
+              <option value="blocked">blocked</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnResetFilters" style="margin-bottom:0.1rem;">Сбросить</button>
+        </div>
         <div id="usersList">Загрузка...</div>
+        </section>
       </div>
     </main>
   </div>
 
-  <div id="modalUserAccount" class="modal">
+  <!-- TODO / FOLLOW-UP: Platform Account Lifecycle — API, audit, lifecycle, policy; wire create/list UI here. -->
+  <div id="modalPlatformAccount" class="modal">
     <div class="modal-content">
-      <h3>Новый пользователь</h3>
-      <div class="err hidden" id="modalUserAccountErr"></div>
-      <label>Организация</label>
-      <select id="userAccClient"></select>
-      <label>Сотрудник</label>
-      <select id="userAccEmployee"></select>
-      <label>Логин</label>
-      <input type="text" id="userAccLogin" placeholder="ivanov@company.ru" autocomplete="off">
-      <label>Пароль</label>
-      <input type="password" id="userAccPassword" placeholder="••••••••" autocomplete="new-password">
-      <label>Роли</label>
-      <div class="checkbox-group" id="userAccRoles"></div>
+      <h3>Платформенный аккаунт</h3>
+      <p class="modal-note">Функция будет доступна после реализации Platform Account Lifecycle.</p>
+      <p class="modal-note">Платформенные аккаунты используются для администрирования платформы. Они предназначены для назначения Global Admin, передачи полномочий преемнику, делегирования административного доступа и аварийного восстановления доступа.</p>
+      <p class="modal-note">Учётные записи сотрудников организаций создаются и сопровождаются в административном контуре соответствующей организации.</p>
       <div class="modal-actions">
-        <button type="button" class="btn btn-primary" id="btnUserAccountSave">Сохранить</button>
-        <button type="button" class="btn btn-secondary" id="btnUserAccountCancel">Отмена</button>
+        <button type="button" class="btn btn-secondary" id="btnPlatformAccountCancel">Закрыть</button>
       </div>
     </div>
   </div>
 
   <div id="modalUserAccountEdit" class="modal">
     <div class="modal-content">
-      <h3>Изменить пользователя</h3>
+      <h3>Изменить учётную запись</h3>
       <div class="err hidden" id="modalUserAccountEditErr"></div>
       <input type="hidden" id="userAccEditId">
       <label>Логин</label>
@@ -91,6 +131,21 @@
 
   <script>
     let rolesCache = [];
+    let clientsCache = [];
+
+    const ROLE_UI_LABELS = {
+      admin: 'Администратор организации',
+      system_admin: 'Глобальный администратор',
+      developer: 'Разработчик платформы',
+      hr: 'Кадры',
+      manager: 'Руководитель',
+      employee: 'Сотрудник',
+    };
+
+    function roleDisplayName(code, apiName) {
+      if (!code) return apiName || '—';
+      return ROLE_UI_LABELS[code] || apiName || code;
+    }
 
     function escapeHtml(s) {
       if (s == null) return '';
@@ -129,6 +184,93 @@
       return j;
     }
 
+    // Developer notes (Stage 2C):
+    // - Canonical HTML route: /users («Учётные записи»).
+    // - Legacy /org-admins → 302 /users?preset=org-admins (bookmarks and old links).
+    // - preset=org-admins is the public filter for local org admins; role_code=admin is applied internally, not in the URL.
+    // - Platform account create: TODO/FOLLOW-UP Platform Account Lifecycle (API, audit, lifecycle, policy).
+    // - Org-bound account create belongs to client workspace (#accounts), not this global page.
+
+    function normalizePresetUrl() {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('preset') !== 'org-admins' || !p.has('role_code')) return;
+      p.delete('role_code');
+      const qs = p.toString();
+      history.replaceState(null, '', '/users' + (qs ? '?' + qs : ''));
+    }
+
+    function readFiltersFromUrl() {
+      const p = new URLSearchParams(window.location.search);
+      const preset = (p.get('preset') || '').trim();
+      let roleCode = (p.get('role_code') || '').trim();
+      if (preset === 'org-admins' && !roleCode) roleCode = 'admin';
+      return {
+        preset,
+        clientId: (p.get('client_id') || '').trim(),
+        roleCode,
+        status: (p.get('status') || '').trim(),
+      };
+    }
+
+    function getFilterValues() {
+      return {
+        clientId: document.getElementById('filterClient').value || '',
+        roleCode: document.getElementById('filterRole').value || '',
+        status: document.getElementById('filterStatus').value || '',
+      };
+    }
+
+    function syncUrlFromFilters() {
+      const f = getFilterValues();
+      let urlPreset = readFiltersFromUrl().preset;
+      const params = new URLSearchParams();
+      if (urlPreset === 'org-admins') {
+        if (f.roleCode && f.roleCode !== 'admin') {
+          urlPreset = '';
+        } else {
+          params.set('preset', 'org-admins');
+        }
+      }
+      if (f.clientId) params.set('client_id', f.clientId);
+      if (f.roleCode && urlPreset !== 'org-admins') params.set('role_code', f.roleCode);
+      if (f.status) params.set('status', f.status);
+      const qs = params.toString();
+      const next = '/users' + (qs ? '?' + qs : '');
+      if (window.location.pathname + window.location.search !== next) {
+        history.replaceState(null, '', next);
+      }
+      updatePresetBanner(urlPreset, f.roleCode);
+    }
+
+    function updatePresetBanner(preset, roleCode) {
+      const el = document.getElementById('presetBanner');
+      if (!el) return;
+      if (preset === 'org-admins' || roleCode === 'admin') {
+        el.textContent = 'Показаны локальные администраторы организаций.';
+        el.classList.remove('hidden');
+      } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+      }
+    }
+
+    function roleLabels(codes) {
+      if (!Array.isArray(codes) || !codes.length) return '—';
+      const byCode = {};
+      rolesCache.forEach(function (r) { byCode[r.code] = r.name || r.code; });
+      return codes.map(function (c) { return roleDisplayName(c, byCode[c]); }).join(', ');
+    }
+
+    function buildUsersApiPath() {
+      const f = getFilterValues();
+      const qs = new URLSearchParams();
+      if (f.clientId) qs.set('client_id', f.clientId);
+      if (f.roleCode) qs.set('role_code', f.roleCode);
+      if (f.status) qs.set('status', f.status);
+      const q = qs.toString();
+      return '/users' + (q ? '?' + q : '');
+    }
+
     async function loadRoles() {
       try {
         rolesCache = await api('GET', '/roles') || [];
@@ -137,68 +279,68 @@
       }
     }
 
-    async function loadClientsForSelect() {
-      const data = await api('GET', '/clients?limit=500&offset=0');
-      const items = data.items || [];
-      const sel = document.getElementById('userAccClient');
-      sel.innerHTML = items.length
-        ? items.map(c => '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name || c.id) + '</option>').join('')
-        : '<option value="">Нет организаций</option>';
-    }
+    function populateFilterSelects() {
+      const clientSel = document.getElementById('filterClient');
+      const roleSel = document.getElementById('filterRole');
+      const url = readFiltersFromUrl();
 
-    async function refreshEmployeesForClient() {
-      const clientId = document.getElementById('userAccClient').value;
-      const empSel = document.getElementById('userAccEmployee');
-      if (!clientId) {
-        empSel.innerHTML = '<option value="">Сначала выберите организацию</option>';
-        return;
-      }
-      const [empData, accData] = await Promise.all([
-        api('GET', '/employees?client_id=' + encodeURIComponent(clientId) + '&limit=500&offset=0'),
-        api('GET', '/accounts?client_id=' + encodeURIComponent(clientId) + '&limit=500&offset=0'),
-      ]);
-      const employees = empData.items || [];
-      const withAccount = new Set((accData.items || []).map(a => a.employee_id));
-      const free = employees.filter(e => !withAccount.has(e.id));
-      empSel.innerHTML = free.length
-        ? free.map(e => {
-            const name = [e.last_name, e.first_name].filter(Boolean).join(' ');
-            const label = name + (e.email ? ' (' + e.email + ')' : '');
-            return '<option value="' + escapeHtml(e.id) + '">' + escapeHtml(label || e.id) + '</option>';
-          }).join('')
-        : '<option value="">Нет сотрудников без учётной записи</option>';
+      clientSel.innerHTML = '<option value="">— все —</option>' +
+        clientsCache.map(function (c) {
+          return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name || c.code || c.id) + '</option>';
+        }).join('');
+
+      roleSel.innerHTML = '<option value="">— все —</option>' +
+        rolesCache.map(function (r) {
+          return '<option value="' + escapeHtml(r.code) + '">' + escapeHtml(roleDisplayName(r.code, r.name)) + '</option>';
+        }).join('');
+
+      clientSel.value = url.clientId;
+      roleSel.value = url.roleCode;
+      document.getElementById('filterStatus').value = url.status;
+      updatePresetBanner(url.preset, url.roleCode);
     }
 
     async function loadUsers() {
       const el = document.getElementById('usersList');
       if (!el) return;
+      syncUrlFromFilters();
       try {
-        const data = await api('GET', '/users');
+        const data = await api('GET', buildUsersApiPath());
         const items = Array.isArray(data?.items) ? data.items : [];
         if (!items.length) {
-          el.innerHTML = '<p class="meta">Нет пользователей с доступом к системе.</p>';
+          el.innerHTML = '<p class="meta">Нет учётных записей по выбранным фильтрам.</p>';
           return;
         }
-        el.innerHTML = '<table class="data-table"><thead><tr><th>Логин</th><th>Сотрудник</th><th>Организация</th><th>Статус</th><th></th></tr></thead><tbody>' +
-          items.map(u => {
+        el.innerHTML = '<table class="data-table" id="usersTable"><thead><tr>'
+          + '<th>Логин</th><th>Сотрудник</th><th>Организация</th><th>Роли</th><th>Статус</th><th>Действия</th>'
+          + '</tr></thead><tbody>'
+          + items.map(function (u) {
             const cid = u.client_id || '';
-            return '<tr>' +
-              '<td>' + escapeHtml(u.login || '—') + '</td>' +
-              '<td>' + escapeHtml(u.employee_name || '—') + '</td>' +
-              '<td><a href="/client/' + escapeHtml(cid) + '">' + escapeHtml(u.client_name || '—') + '</a></td>' +
-              '<td>' + escapeHtml(u.status || '—') + '</td>' +
-              '<td class="row-actions">' +
-              '<button type="button" class="btn btn-sm btn-secondary" data-edit-user="' + escapeHtml(u.id) + '">Изменить</button>' +
-              '<button type="button" class="btn btn-sm btn-danger" data-del-user="' + escapeHtml(u.id) + '">Удалить</button>' +
-              '<a href="/client/' + escapeHtml(cid) + '" class="btn btn-sm btn-secondary">В организацию</a>' +
-              '</td></tr>';
-          }).join('') +
-          '</tbody></table>';
-        el.querySelectorAll('[data-edit-user]').forEach(btn => {
-          btn.onclick = () => openEditUser(btn.getAttribute('data-edit-user'));
+            const eid = u.employee_id || '';
+            const empHref = cid && eid
+              ? '/client/' + encodeURIComponent(cid) + '#employees'
+              : '#';
+            const empCell = eid
+              ? '<a href="' + escapeHtml(empHref) + '" title="' + escapeHtml(eid) + '">' + escapeHtml(u.employee_name || '—') + '</a>'
+              : escapeHtml(u.employee_name || '—');
+            return '<tr>'
+              + '<td class="td-ellipsis">' + escapeHtml(u.login || '—') + '</td>'
+              + '<td class="td-ellipsis">' + empCell + '</td>'
+              + '<td class="td-ellipsis"><a href="/client/' + escapeHtml(cid) + '">' + escapeHtml(u.client_name || '—') + '</a></td>'
+              + '<td class="td-ellipsis">' + escapeHtml(roleLabels(u.role_codes)) + '</td>'
+              + '<td>' + escapeHtml(u.status || '—') + '</td>'
+              + '<td class="row-actions">'
+              + '<button type="button" class="btn btn-sm btn-secondary" data-edit-user="' + escapeHtml(u.id) + '">Изменить</button>'
+              + '<button type="button" class="btn btn-sm btn-danger" data-del-user="' + escapeHtml(u.id) + '">Удалить</button>'
+              + '<a href="/client/' + escapeHtml(cid) + '" class="btn btn-sm btn-secondary">В организацию</a>'
+              + '</td></tr>';
+          }).join('')
+          + '</tbody></table>';
+        el.querySelectorAll('[data-edit-user]').forEach(function (btn) {
+          btn.onclick = function () { openEditUser(btn.getAttribute('data-edit-user')); };
         });
-        el.querySelectorAll('[data-del-user]').forEach(btn => {
-          btn.onclick = () => deleteUser(btn.getAttribute('data-del-user'));
+        el.querySelectorAll('[data-del-user]').forEach(function (btn) {
+          btn.onclick = function () { deleteUser(btn.getAttribute('data-del-user')); };
         });
       } catch (e) {
         const msg = e && e.message ? String(e.message) : 'Ошибка загрузки.';
@@ -206,56 +348,29 @@
       }
     }
 
-    document.getElementById('btnCreateUser').onclick = async () => {
-      await loadRoles();
-      const errEl = document.getElementById('modalUserAccountErr');
-      showErr(errEl, '');
-      try {
-        await loadClientsForSelect();
-        document.getElementById('userAccLogin').value = '';
-        document.getElementById('userAccPassword').value = '';
-        const rolesEl = document.getElementById('userAccRoles');
-        rolesEl.innerHTML = rolesCache.map(r =>
-          '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"> ' + escapeHtml(r.name) + '</label>'
-        ).join('');
-        await refreshEmployeesForClient();
-        document.getElementById('modalUserAccount').classList.add('show');
-      } catch (e) {
-        alert(e.message || String(e));
-      }
+    function onFilterChange() {
+      loadUsers().catch(function (e) { alert(e.message || String(e)); });
+    }
+
+    document.getElementById('filterClient').onchange = onFilterChange;
+    document.getElementById('filterRole').onchange = onFilterChange;
+    document.getElementById('filterStatus').onchange = onFilterChange;
+
+    document.getElementById('btnResetFilters').onclick = function () {
+      document.getElementById('filterClient').value = '';
+      document.getElementById('filterRole').value = '';
+      document.getElementById('filterStatus').value = '';
+      history.replaceState(null, '', '/users');
+      document.getElementById('presetBanner').classList.add('hidden');
+      onFilterChange();
     };
 
-    document.getElementById('userAccClient').onchange = () => {
-      refreshEmployeesForClient().catch(e => alert(e.message));
+    document.getElementById('btnCreatePlatformAccount').onclick = () => {
+      document.getElementById('modalPlatformAccount').classList.add('show');
     };
 
-    document.getElementById('btnUserAccountCancel').onclick = () => {
-      document.getElementById('modalUserAccount').classList.remove('show');
-    };
-
-    document.getElementById('btnUserAccountSave').onclick = async () => {
-      const employeeId = document.getElementById('userAccEmployee').value;
-      const login = document.getElementById('userAccLogin').value.trim();
-      const password = document.getElementById('userAccPassword').value;
-      const roleCodes = Array.from(document.querySelectorAll('#userAccRoles input:checked')).map(cb => cb.value);
-      const errEl = document.getElementById('modalUserAccountErr');
-      if (!employeeId || !login || !password) {
-        showErr(errEl, 'Заполните организацию, сотрудника без учётной записи, логин и пароль');
-        return;
-      }
-      try {
-        await api('POST', '/accounts', {
-          employee_id: employeeId,
-          login,
-          password,
-          status: 'active',
-          role_codes: roleCodes,
-        });
-        document.getElementById('modalUserAccount').classList.remove('show');
-        await loadUsers();
-      } catch (e) {
-        showErr(errEl, e.message || String(e));
-      }
+    document.getElementById('btnPlatformAccountCancel').onclick = () => {
+      document.getElementById('modalPlatformAccount').classList.remove('show');
     };
 
     async function openEditUser(id) {
@@ -271,7 +386,7 @@
         const rolesEl = document.getElementById('userAccEditRoles');
         const codes = acc.role_codes || [];
         rolesEl.innerHTML = rolesCache.map(r =>
-          '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"' + (codes.includes(r.code) ? ' checked' : '') + '> ' + escapeHtml(r.name) + '</label>'
+          '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"' + (codes.includes(r.code) ? ' checked' : '') + '> ' + escapeHtml(roleDisplayName(r.code, r.name)) + '</label>'
         ).join('');
         document.getElementById('modalUserAccountEdit').classList.add('show');
       } catch (e) {
@@ -307,7 +422,7 @@
     };
 
     async function deleteUser(id) {
-      if (!id || !confirm('Удалить пользователя (учётную запись)?')) return;
+      if (!id || !confirm('Удалить учётную запись?')) return;
       try {
         const r = await fetch('/api/accounts/' + encodeURIComponent(id), { method: 'DELETE' });
         if (!r.ok) {
@@ -322,7 +437,18 @@
       }
     }
 
-    loadRoles().then(() => loadUsers());
+    async function initPage() {
+      normalizePresetUrl();
+      await loadRoles();
+      const data = await api('GET', '/clients?limit=500&offset=0');
+      clientsCache = data.items || [];
+      populateFilterSelects();
+      await loadUsers();
+    }
+
+    initPage().catch(function (e) {
+      document.getElementById('usersList').innerHTML = '<p class="err">' + escapeHtml(e.message || String(e)) + '</p>';
+    });
   </script>
 </body>
 </html>
