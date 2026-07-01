@@ -1020,8 +1020,10 @@
       <select id="accPickPosition"></select>
       <label for="accEmployee">Сотрудник</label>
       <select id="accEmployee"></select>
-      <label>Логин</label>
+      <p class="meta hidden" id="accEmployeeHint" style="margin:0.25rem 0 0.5rem;"></p>
+      <label for="accLogin">Логин</label>
       <input type="text" id="accLogin" placeholder="ivanov">
+      <p class="meta hidden" id="accLoginHint" style="margin:0.25rem 0 0.5rem;"></p>
       <label>Пароль</label>
       <input type="password" id="accPassword" placeholder="••••••••">
       <label>Роли</label>
@@ -1204,6 +1206,7 @@
   <script src="/static/shared/org-tree.js?v=org-tree-actions-20260531"></script>
   <script src="/static/shared/psych-testing-ui.js?v=psych-ui-4"></script>
   <script src="/static/shared/account-employee-picker.js?v=account-employee-picker-1"></script>
+  <script src="/static/shared/account-create-form.js?v=account-create-form-1"></script>
   <script src="/static/shared/info-banner.js?v=info-banner-1"></script>
   <script>
     const API = '/api';
@@ -4433,6 +4436,8 @@
       positionId: '',
       nameQuery: '',
     };
+    let accountsLoginsCache = [];
+    let accLoginManuallyEdited = false;
 
     function accPickerDomState() {
       return {
@@ -4446,8 +4451,110 @@
 
     function resetAccAccountPickerFilters() {
       accPickerFilterState = { logGroup: '', orgUnitId: '', positionId: '', nameQuery: '' };
-      const nameEl = document.getElementById('accPickNameSearch');
-      if (nameEl) nameEl.value = '';
+      ['accPickNameSearch', 'accPickLogGroup', 'accPickOrgUnit', 'accPickPosition', 'accEmployee'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.tagName === 'SELECT') el.innerHTML = '';
+        else el.value = '';
+      });
+    }
+
+    function showAccFormHint(el, message, asError) {
+      if (!el) return;
+      if (!message) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        el.classList.remove('err');
+        return;
+      }
+      el.textContent = message;
+      el.classList.remove('hidden');
+      el.classList.toggle('err', !!asError);
+    }
+
+    function updateAccAccountFormHints() {
+      if (!window.AccountCreateForm) return;
+      const employeeId = document.getElementById('accEmployee') && document.getElementById('accEmployee').value;
+      const employee = AccountCreateForm.findEmployeeById(employeesAllCache, employeeId);
+      const login = document.getElementById('accLogin') ? document.getElementById('accLogin').value.trim() : '';
+      showAccFormHint(
+        document.getElementById('accEmployeeHint'),
+        AccountCreateForm.employeeAccountHint(employee),
+        true
+      );
+      showAccFormHint(
+        document.getElementById('accLoginHint'),
+        AccountCreateForm.loginDuplicateHint(login, accountsLoginsCache),
+        true
+      );
+    }
+
+    function resetAccAccountModalForm() {
+      resetAccAccountPickerFilters();
+      accLoginManuallyEdited = false;
+      const loginEl = document.getElementById('accLogin');
+      const passEl = document.getElementById('accPassword');
+      if (loginEl) loginEl.value = '';
+      if (passEl) passEl.value = '';
+      document.querySelectorAll('#accRoles input[type="checkbox"]').forEach(function (cb) {
+        cb.checked = false;
+      });
+      showAccFormHint(document.getElementById('accEmployeeHint'), '');
+      showAccFormHint(document.getElementById('accLoginHint'), '');
+      showErr(document.getElementById('modalAccountErr'), '');
+    }
+
+    function renderAccAccountRolesCheckboxes() {
+      const rolesEl = document.getElementById('accRoles');
+      if (!rolesEl || !window.AccountCreateForm) return;
+      const isGlobalAdmin = window.AuthContext && AuthContext.isGlobalAdmin && AuthContext.isGlobalAdmin();
+      const visibleRoles = AccountCreateForm.filterRolesForAccountForm(roles, !!isGlobalAdmin);
+      rolesEl.innerHTML = visibleRoles.map(function (r) {
+        return '<label><input type="checkbox" value="' + escapeHtml(r.code) + '"> ' + escapeHtml(r.name) + '</label>';
+      }).join('');
+    }
+
+    function onAccEmployeeSelected() {
+      if (!window.AccountCreateForm) return;
+      const empSel = document.getElementById('accEmployee');
+      const loginEl = document.getElementById('accLogin');
+      if (!empSel || !loginEl) return;
+      const employee = AccountCreateForm.findEmployeeById(employeesAllCache, empSel.value);
+      updateAccAccountFormHints();
+      if (!accLoginManuallyEdited && employee) {
+        loginEl.value = AccountCreateForm.suggestLogin(employee, accountsLoginsCache);
+        updateAccAccountFormHints();
+      }
+    }
+
+    function wireAccAccountFormHelpers() {
+      const empSel = document.getElementById('accEmployee');
+      const loginEl = document.getElementById('accLogin');
+      if (!empSel || empSel.dataset.accFormWired) return;
+      empSel.dataset.accFormWired = '1';
+      empSel.onchange = onAccEmployeeSelected;
+      if (loginEl) {
+        loginEl.addEventListener('input', function () {
+          accLoginManuallyEdited = true;
+          updateAccAccountFormHints();
+        });
+      }
+    }
+
+    function clearAccPickerCascadeFrom(changed) {
+      if (changed === 'logGroup' || changed === 'orgUnitId' || changed === 'positionId') {
+        const ouSel = document.getElementById('accPickOrgUnit');
+        const posSel = document.getElementById('accPickPosition');
+        const empSel = document.getElementById('accEmployee');
+        if (changed === 'logGroup') {
+          if (ouSel) ouSel.value = '';
+          if (posSel) posSel.value = '';
+        } else if (changed === 'orgUnitId') {
+          if (posSel) posSel.value = '';
+        }
+        if (empSel) empSel.value = '';
+        onAccEmployeeSelected();
+      }
     }
 
     function renderAccAccountEmployeePicker() {
@@ -4530,6 +4637,7 @@
         positionId: posSel.value,
         nameQuery: st.nameQuery,
       };
+      updateAccAccountFormHints();
     }
 
     function wireAccAccountPickerFilters() {
@@ -4544,14 +4652,18 @@
         accPickerFilterState = AccountEmployeePicker.resetOnChange('logGroup', Object.assign({}, accPickerDomState(), {
           logGroup: lgSel.value,
         }));
+        clearAccPickerCascadeFrom('logGroup');
         renderAccAccountEmployeePicker();
+        onAccEmployeeSelected();
       };
       ouSel.onchange = function () {
         accPickerFilterState = AccountEmployeePicker.resetOnChange('orgUnitId', Object.assign({}, accPickerDomState(), {
           logGroup: lgSel.value,
           orgUnitId: ouSel.value,
         }));
+        clearAccPickerCascadeFrom('orgUnitId');
         renderAccAccountEmployeePicker();
+        onAccEmployeeSelected();
       };
       posSel.onchange = function () {
         accPickerFilterState = AccountEmployeePicker.resetOnChange('positionId', Object.assign({}, accPickerDomState(), {
@@ -4559,7 +4671,9 @@
           orgUnitId: ouSel.value,
           positionId: posSel.value,
         }));
+        clearAccPickerCascadeFrom('positionId');
         renderAccAccountEmployeePicker();
+        onAccEmployeeSelected();
       };
       if (nameEl) {
         let nameTimer = null;
@@ -4569,6 +4683,21 @@
             renderAccAccountEmployeePicker();
           }, 200);
         });
+      }
+    }
+
+    async function refreshAccountsLoginsCache() {
+      if (!clientId) {
+        accountsLoginsCache = [];
+        return;
+      }
+      try {
+        const data = await fetchApi('/accounts?client_id=' + encodeURIComponent(clientId) + '&limit=2000');
+        accountsLoginsCache = (data.items || []).map(function (a) {
+          return a.login;
+        }).filter(Boolean);
+      } catch (_) {
+        accountsLoginsCache = [];
       }
     }
 
@@ -4600,6 +4729,7 @@
         if (fp) url += '&position_id=' + encodeURIComponent(fp);
         const data = await fetchApi(url);
         const items = data.items || [];
+        accountsLoginsCache = items.map(function (a) { return a.login; }).filter(Boolean);
         updateWorkspaceExportLinks();
         if (!items.length) {
           tbody.innerHTML = '<tr><td colspan="6" class="meta" style="padding:1rem;">Нет аккаунтов</td></tr>';
@@ -4634,16 +4764,14 @@
 
     document.getElementById('btnAddAccount').onclick = async () => {
       await loadEmployeesForSelect();
+      await refreshAccountsLoginsCache();
       if (!orgUnits.length) await loadOrgTree();
       if (!positionsCache.length) await loadPositionsForSelect();
-      resetAccAccountPickerFilters();
+      resetAccAccountModalForm();
       wireAccAccountPickerFilters();
+      wireAccAccountFormHelpers();
       renderAccAccountEmployeePicker();
-      const rolesEl = document.getElementById('accRoles');
-      rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"> ' + r.name + '</label>').join('');
-      document.getElementById('accLogin').value = '';
-      document.getElementById('accPassword').value = '';
-      showErr(document.getElementById('modalAccountErr'), '');
+      renderAccAccountRolesCheckboxes();
       document.getElementById('modalAccount').classList.add('show');
     };
 
@@ -4653,7 +4781,28 @@
       const password = document.getElementById('accPassword').value;
       const roleCodes = Array.from(document.querySelectorAll('#accRoles input:checked')).map(cb => cb.value);
       const errEl = document.getElementById('modalAccountErr');
-      if (!employeeId || !login || !password) { showErr(errEl, 'Заполните сотрудника, логин и пароль'); return; }
+      const employee = window.AccountCreateForm
+        ? AccountCreateForm.findEmployeeById(employeesAllCache, employeeId)
+        : null;
+      if (window.AccountCreateForm) {
+        const validation = AccountCreateForm.validateAccountCreateForm({
+          employeeId,
+          login,
+          password,
+          employee,
+          employees: employeesAllCache,
+          existingLogins: accountsLoginsCache,
+        });
+        if (!validation.ok) {
+          showErr(errEl, validation.error);
+          updateAccAccountFormHints();
+          return;
+        }
+      } else if (!employeeId || !login || !password) {
+        showErr(errEl, 'Заполните сотрудника, логин и пароль');
+        return;
+      }
+      showErr(errEl, '');
       try {
         await fetchApi('/accounts', {
           method: 'POST',
@@ -4677,7 +4826,10 @@
         document.getElementById('accEditLogin').value = acc.login || '';
         document.getElementById('accEditPassword').value = '';
         const rolesEl = document.getElementById('accEditRoles');
-        rolesEl.innerHTML = roles.map(r => '<label><input type="checkbox" value="' + r.code + '"' + (acc.role_codes && acc.role_codes.includes(r.code) ? ' checked' : '') + '> ' + r.name + '</label>').join('');
+        const visibleRoles = window.AccountCreateForm
+          ? AccountCreateForm.filterRolesForAccountForm(roles, !!(window.AuthContext && AuthContext.isGlobalAdmin && AuthContext.isGlobalAdmin()))
+          : roles;
+        rolesEl.innerHTML = visibleRoles.map(r => '<label><input type="checkbox" value="' + r.code + '"' + (acc.role_codes && acc.role_codes.includes(r.code) ? ' checked' : '') + '> ' + r.name + '</label>').join('');
         showErr(document.getElementById('modalAccountEditErr'), '');
         document.getElementById('modalAccountEdit').classList.add('show');
       } catch (e) { alert(e.message); }
