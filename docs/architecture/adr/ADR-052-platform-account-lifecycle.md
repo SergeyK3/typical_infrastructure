@@ -2,10 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| **Статус** | **Proposed** |
+| **Статус** | **Accepted** |
 | **Дата** | 2026-07-01 |
-| **Контекст** | PROJ-PLATFORM-ACCOUNT-LIFECYCLE Phase A; [assessment](../assessments/PROJ-PLATFORM-ACCOUNT-LIFECYCLE-assessment.md); PROJ-ACCESS-ADMIN Stage 2 closed |
-| **Связанные документы** | [ADR-049](./ADR-049-administrative-roles-and-responsibility-model.md), [PROJ-ACCESS-ADMIN Stage 2 Closure](../assessments/PROJ-ACCESS-ADMIN-stage-2-closure.md), [ARCHITECTURE_GOVERNANCE](../ARCHITECTURE_GOVERNANCE.md), [HR Domain Glossary](../reference/hr-domain-glossary.md), [документ №15 — RBAC](../../specs/документ_№_15.md) |
+| **Принято** | 2026-07-01 |
+| **Контекст** | PROJ-PLATFORM-ACCOUNT-LIFECYCLE Phase A; [assessment](../assessments/PROJ-PLATFORM-ACCOUNT-LIFECYCLE-assessment.md); PROJ-ACCESS-ADMIN Stage 2 closed; [PROJ-PERSONNEL-CONTOUR assessment](../assessments/PROJ-PERSONNEL-CONTOUR-assessment.md) (orthogonal HR contour) |
+| **Связанные документы** | [ADR-049](./ADR-049-administrative-roles-and-responsibility-model.md), [ADR-050](./ADR-050-personnel-lifecycle-architecture.md), [ADR-051](./ADR-051-personnel-order-workflow-architecture.md), [PROJ-ACCESS-ADMIN Stage 2 Closure](../assessments/PROJ-ACCESS-ADMIN-stage-2-closure.md), [PROJ-PERSONNEL-CONTOUR assessment](../assessments/PROJ-PERSONNEL-CONTOUR-assessment.md), [ARCHITECTURE_GOVERNANCE](../ARCHITECTURE_GOVERNANCE.md), [HR Domain Glossary](../reference/hr-domain-glossary.md), [документ №15 — RBAC](../../specs/документ_№_15.md) |
 | **Область действия** | Жизненный цикл **Platform Account** — учётных записей платформенного контура (`employee_id IS NULL`, platform roles) |
 | **Вне scope ADR** | Organization Account lifecycle; Local Admin contour (`/client/{id}#accounts`); RBAC role codes; Person/Employee lifecycle; реализация кода/API/БД/UI |
 
@@ -469,7 +470,7 @@ Platform Account **не связан** с Employee → смена ФИО **не 
 
 ## 19. Чеклист для реализации (Phase B)
 
-- [ ] ADR-052 **Accepted**
+- [x] ADR-052 **Accepted**
 - [ ] Platform Account: `employee_id IS NULL` enforced
 - [ ] `account_kind` enum seeded for bootstrap account
 - [ ] No hard delete platform endpoint
@@ -485,6 +486,11 @@ Platform Account **не связан** с Employee → смена ФИО **не 
 | Дата | Изменение |
 |------|-----------|
 | 2026-07-01 | Proposed — первый draft на основе [assessment](../assessments/PROJ-PLATFORM-ACCOUNT-LIFECYCLE-assessment.md) |
+| 2026-07-01 | **Accepted** — финальный review: согласовано с ADR-049/050/051, [PROJ-PERSONNEL-CONTOUR assessment](../assessments/PROJ-PERSONNEL-CONTOUR-assessment.md), [Stage 2 Closure](../assessments/PROJ-ACCESS-ADMIN-stage-2-closure.md); противоречий нет; amendment ADR-049 не требуется; Organization Account lifecycle / HR termination (ADR-054) вне scope; Phase B **не начата** |
+
+---
+
+*ADR-052 — Accepted. Жизненный цикл Platform Account (`employee_id IS NULL`, platform roles). Ортогонален кадровому контуру (ADR-050/051). Реализация — PROJ-PLATFORM-ACCOUNT-LIFECYCLE Phase B+ после Accept.*
 
 ---
 

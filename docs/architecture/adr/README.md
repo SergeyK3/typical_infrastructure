@@ -11,7 +11,7 @@
 | [ADR-049](./ADR-049-administrative-roles-and-responsibility-model.md) | Административные роли и модель ответственности | **Accepted** |
 | [ADR-050](./ADR-050-personnel-lifecycle-architecture.md) | Personnel Lifecycle Architecture (кадровый жизненный цикл) | **Accepted** |
 | [ADR-051](./ADR-051-personnel-order-workflow-architecture.md) | Personnel Order Workflow Architecture (workflow приказов) | **Accepted** |
-| [ADR-052](./ADR-052-platform-account-lifecycle.md) | Platform Account Lifecycle | **Proposed** |
+| [ADR-052](./ADR-052-platform-account-lifecycle.md) | Platform Account Lifecycle | **Accepted** |
 
 Документы ADR-001–048 могут существовать вне этого репозитория или в истории обсуждений; нумерация сквозная по программе.
 
@@ -22,7 +22,7 @@
 | **ADR-049** | UX-REF-001, док. №15, HR OS Agreement | **ADR-050** | Административные роли, три контура, матрица ответственности, принципы Person → Employee → Account → Access |
 | **ADR-050** | **ADR-049** | **ADR-051**, ADR-052…059, PROJ-* | **Accepted.** Lifecycle; Employee Aggregate Root |
 | **ADR-051** | **ADR-049**, **ADR-050** | PROJ-ORDERS, PROJ-ORDER-WORKFLOW, **ADR-052** | **Accepted.** Order workflow; Draft → Effective; OW/LR invariants |
-| **ADR-052** | **ADR-049**, [PROJ-PLATFORM-ACCOUNT-LIFECYCLE assessment](../assessments/PROJ-PLATFORM-ACCOUNT-LIFECYCLE-assessment.md) | PROJ-PLATFORM-ACCOUNT-LIFECYCLE Phase B–D | **Proposed.** Platform Account ownership, lifecycle, audit |
+| **ADR-052** | **ADR-049**, [PROJ-PLATFORM-ACCOUNT-LIFECYCLE assessment](../assessments/PROJ-PLATFORM-ACCOUNT-LIFECYCLE-assessment.md) | PROJ-PLATFORM-ACCOUNT-LIFECYCLE Phase B–D | **Accepted.** Platform Account ownership, lifecycle, audit; ортогонален ADR-050/051 |
 
 ## Формат
 
@@ -30,13 +30,15 @@
 - ADR описывает **что** и **почему**; реализация — отдельные проекты в backlog.
 - Статусы: *Proposed* → *Accepted* → *Superseded* (при замене новым ADR).
 
-## Базовый стек архитектуры (ADR-049 → ADR-050 → ADR-051, Accepted)
+## Базовый стек архитектуры (ADR-049 → ADR-050 → ADR-051 → ADR-052, Accepted)
 
 ```text
 Person → Employee → Employment → Personal File → Orders → Documents → Archive
          ↑ Aggregate Root (ADR-050)
          Order workflow (ADR-051): Draft → Review → Approved → Signed → Effective → Archived
          └────────────► Account → Access   (ADR-049, org-tech)
+
+Platform Account (ADR-052): employee_id IS NULL, system_admin / developer — отдельный контур Global Admin
 ```
 
 ## Architecture Reference (не ADR)
