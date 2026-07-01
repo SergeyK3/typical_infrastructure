@@ -1206,11 +1206,53 @@ _TEMPLATE_CODE_TABLES = (
     "regulation_instructions",
 )
 
+# Уникальные ключи (кроме template_code) для таблиц с bundle template_code.
+# Перед UPDATE hosp→medical удаляем legacy-строки, если medical-строка уже есть.
+_TEMPLATE_CODE_DEDUP_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "template_segment_codes": (("code",),),
+    "template_org_units": (("code",),),
+    "position_catalog": (("position_code",),),
+    "position_dept_types": (("position_code", "dept_type_code"),),
+    "kpi_templates": (("kpi_code",),),
+    "position_regulations": (
+        ("regulation_code",),
+        ("position_code", "dept_type_code", "version_no"),
+    ),
+}
+
+
+def _delete_hosp_rows_where_medical_exists(
+    conn,
+    table: str,
+    key_columns: tuple[str, ...],
+) -> None:
+    match = " AND ".join(f"m.{col} = {table}.{col}" for col in key_columns)
+    conn.execute(
+        text(
+            f"""
+            DELETE FROM {table}
+            WHERE template_code = 'hosp'
+            AND EXISTS (
+                SELECT 1 FROM {table} m
+                WHERE m.template_code = 'medical'
+                AND {match}
+            )
+            """
+        )
+    )
+
+
+def _column_exists_on_conn(conn, table: str, column: str) -> bool:
+    r = conn.execute(text(f"PRAGMA table_info({table})"))
+    return any(row[1] == column for row in r.fetchall())
+
 
 def migrate_hosp_template_code_to_medical() -> None:
     """Переименовать legacy bundle template_code=hosp в medical для существующих БД."""
     if not _table_exists("enterprise_templates"):
         return
+    tables_to_migrate = [t for t in _TEMPLATE_CODE_TABLES if _table_exists(t)]
+    clients_table_exists = _table_exists("clients")
     with engine.connect() as conn:
         med_row = conn.execute(
             text("SELECT id FROM enterprise_templates WHERE code='medical' LIMIT 1")
@@ -1230,14 +1272,16 @@ def migrate_hosp_template_code_to_medical() -> None:
             )
         elif hosp_row and med_row:
             conn.execute(text("UPDATE enterprise_templates SET is_active=0 WHERE code='hosp'"))
-            if _table_exists("clients"):
+            if clients_table_exists:
                 conn.execute(
                     text("UPDATE clients SET template_id=:med WHERE template_id=:hosp"),
                     {"med": med_row[0], "hosp": hosp_row[0]},
                 )
-        for table in _TEMPLATE_CODE_TABLES:
-            if not _table_exists(table) or not _column_exists(table, "template_code"):
+        for table in tables_to_migrate:
+            if not _column_exists_on_conn(conn, table, "template_code"):
                 continue
+            for key_columns in _TEMPLATE_CODE_DEDUP_KEYS.get(table, ()):
+                _delete_hosp_rows_where_medical_exists(conn, table, key_columns)
             conn.execute(
                 text(f"UPDATE {table} SET template_code='medical' WHERE template_code='hosp'")
             )
